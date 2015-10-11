@@ -338,7 +338,7 @@ ShaderCode GenerateVertexShaderCode(APIType api_type, const vertex_shader_uid_da
     default:
       if (uid_data->components & (VB_HAS_TEXMTXIDX0 << i))
       {
-        out.Write("int tmp = int(tex[%d].z);\n", i);
+        out.Write("int tmp = int(tex%d.z);\n", i);
         if (((uid_data->texMtxInfo_n_projection >> i) & 1) == XF_TEXPROJ_STQ)
           out.Write("o.tex[%d].xyz = float3(dot(coord, " I_TRANSFORMMATRICES
                     "[tmp]), dot(coord, " I_TRANSFORMMATRICES
