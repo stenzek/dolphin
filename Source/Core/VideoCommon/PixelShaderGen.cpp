@@ -569,7 +569,7 @@ ShaderCode GeneratePixelShaderCode(APIType ApiType, const pixel_shader_uid_data*
     if (g_ActiveConfig.backend_info.bSupportsGeometryShaders || ApiType == APIType::Vulkan)
     {
       for (unsigned int i = 0; i < uid_data->genMode_numtexgens; ++i)
-        out.Write("\tfloat3 uv%d = tex%d;\n", i, i);
+        out.Write("\tfloat3 uv%d = tex[%d];\n", i, i);
     }
 
     out.Write("\tfloat4 rawpos = gl_FragCoord;\n");

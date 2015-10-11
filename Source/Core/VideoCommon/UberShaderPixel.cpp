@@ -86,10 +86,7 @@ ShaderCode GenPixelShader(APIType ApiType, bool per_pixel_depth, bool dual_src_b
       out.Write("%s in float4 colors_1;\n", GetInterpolationQualifier(msaa, ssaa));
       // compute window position if needed because binding semantic WPOS is not widely supported
       // Let's set up attributes
-      for (unsigned int i = 0; i < numTexgen; ++i)
-      {
-        out.Write("%s in float3 uv%d;\n", GetInterpolationQualifier(msaa, ssaa), i);
-      }
+      out.Write("%s in float3 uv[%u];\n", GetInterpolationQualifier(msaa, ssaa), numTexgen);
       out.Write("%s in float4 clipPos;\n", GetInterpolationQualifier(msaa, ssaa));
       if (g_ActiveConfig.bEnablePixelLighting)
       {
