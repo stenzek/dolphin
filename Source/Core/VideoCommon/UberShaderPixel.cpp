@@ -193,7 +193,7 @@ ShaderCode GenPixelShader(APIType ApiType, bool per_pixel_depth, bool dual_src_b
     out.Write("		// Sample texture for stage\n"
               "		int4 texColor;\n"
               "		if((order & %du) != 0u) {\n",
-              1 << TwoTevStageOrders().enable0.offset);
+              1 << TwoTevStageOrders().enable0.StartBit());
     out.Write("			// Texture is enabled\n"
               "			uint sampler_num = %s;\n",
               BitfieldExtract("order", TwoTevStageOrders().texmap0).c_str());
