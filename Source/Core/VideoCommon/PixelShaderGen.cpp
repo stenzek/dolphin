@@ -333,32 +333,8 @@ PixelShaderUid GetPixelShaderUid()
   return out;
 }
 
-static void WriteStage(ShaderCode& out, const pixel_shader_uid_data* uid_data, int n,
-                       APIType ApiType, bool stereo);
-static void WriteTevRegular(ShaderCode& out, const char* components, int bias, int op, int clamp,
-                            int shift, bool alpha);
-static void SampleTexture(ShaderCode& out, const char* texcoords, const char* texswap, int texmap,
-                          bool stereo, APIType ApiType);
-static void WriteAlphaTest(ShaderCode& out, const pixel_shader_uid_data* uid_data, APIType ApiType,
-                           bool per_pixel_depth, bool use_dual_source);
-static void WriteFog(ShaderCode& out, const pixel_shader_uid_data* uid_data);
-static void WriteColor(ShaderCode& out, const pixel_shader_uid_data* uid_data,
-                       bool use_dual_source);
-
-ShaderCode GeneratePixelShaderCode(APIType ApiType, const pixel_shader_uid_data* uid_data)
+void WritePixelShaderCommonHeader(ShaderCode& out, APIType ApiType)
 {
-  ShaderCode out;
-
-  const bool per_pixel_lighting = g_ActiveConfig.bEnablePixelLighting;
-  const bool msaa = g_ActiveConfig.IsMSAAEnabled();
-  const bool ssaa = g_ActiveConfig.IsSSAAEnabled();
-  const bool stereo = g_ActiveConfig.IsStereoEnabled();
-  const u32 numStages = uid_data->genMode_numtevstages + 1;
-
-  out.Write("//Pixel Shader for TEV stages\n");
-  out.Write("//%i TEV stages, %i texgens, %i IND stages\n", numStages, uid_data->genMode_numtexgens,
-            uid_data->genMode_numindstages);
-
   // dot product for integer vectors
   out.Write("int idot(int3 x, int3 y)\n"
             "{\n"
@@ -420,6 +396,36 @@ ShaderCode GeneratePixelShaderCode(APIType ApiType, const pixel_shader_uid_data*
             "\tfloat4 " I_ZSLOPE ";\n"
             "\tfloat4 " I_EFBSCALE ";\n"
             "};\n");
+}
+
+static void WriteStage(ShaderCode& out, const pixel_shader_uid_data* uid_data, int n,
+                       APIType ApiType, bool stereo);
+static void WriteTevRegular(ShaderCode& out, const char* components, int bias, int op, int clamp,
+                            int shift, bool alpha);
+static void SampleTexture(ShaderCode& out, const char* texcoords, const char* texswap, int texmap,
+                          bool stereo, APIType ApiType);
+static void WriteAlphaTest(ShaderCode& out, const pixel_shader_uid_data* uid_data, APIType ApiType,
+                           bool per_pixel_depth, bool use_dual_source);
+static void WriteFog(ShaderCode& out, const pixel_shader_uid_data* uid_data);
+static void WriteColor(ShaderCode& out, const pixel_shader_uid_data* uid_data,
+                       bool use_dual_source);
+
+ShaderCode GeneratePixelShaderCode(APIType ApiType, const pixel_shader_uid_data* uid_data)
+{
+  ShaderCode out;
+
+  const bool per_pixel_lighting = g_ActiveConfig.bEnablePixelLighting;
+  const bool msaa = g_ActiveConfig.IsMSAAEnabled();
+  const bool ssaa = g_ActiveConfig.IsSSAAEnabled();
+  const bool stereo = g_ActiveConfig.IsStereoEnabled();
+  const u32 numStages = uid_data->genMode_numtevstages + 1;
+
+  out.Write("//Pixel Shader for TEV stages\n");
+  out.Write("//%i TEV stages, %i texgens, %i IND stages\n", numStages, uid_data->genMode_numtexgens,
+            uid_data->genMode_numindstages);
+
+  // Stuff that is shared between ubershaders and pixelgen.
+  WritePixelShaderCommonHeader(out, ApiType);
 
   if (per_pixel_lighting)
   {

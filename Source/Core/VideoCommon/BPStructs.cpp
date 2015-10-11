@@ -93,6 +93,8 @@ static void BPWritten(const BPCmd& bp)
              (u32)bpmem.genMode.cullmode, (u32)bpmem.genMode.numindstages,
              (u32)bpmem.genMode.zfreeze);
 
+    PixelShaderManager::UpdateBP(bp.address, bp.newvalue);
+
     // Only call SetGenerationMode when cull mode changes.
     if (bp.changes & 0xC000)
       SetGenerationMode();
@@ -561,6 +563,7 @@ static void BPWritten(const BPCmd& bp)
   // -------------------------
   case BPMEM_TREF:
   case BPMEM_TREF + 4:
+    PixelShaderManager::UpdateBP(bp.address, bp.newvalue);
     return;
   // ----------------------
   // Set wrap size
@@ -627,8 +630,39 @@ static void BPWritten(const BPCmd& bp)
   // BPMEM_TEV_COLOR_ENV - Dest, Shift, Clamp, Sub, Bias, Sel A, Sel B, Sel C, Sel D
   // BPMEM_TEV_ALPHA_ENV - Dest, Shift, Clamp, Sub, Bias, Sel A, Sel B, Sel C, Sel D, T Swap, R Swap
   // --------------------------------------------------
-  case BPMEM_TEV_COLOR_ENV:       // Texture Environment Color/Alpha 0-7
-  case BPMEM_TEV_COLOR_ENV + 16:  // Texture Environment Color/Alpha 8-15
+  case BPMEM_TEV_COLOR_ENV:  // Texture Environment 1
+  case BPMEM_TEV_ALPHA_ENV:
+  case BPMEM_TEV_COLOR_ENV + 2:  // Texture Environment 2
+  case BPMEM_TEV_ALPHA_ENV + 2:
+  case BPMEM_TEV_COLOR_ENV + 4:  // Texture Environment 3
+  case BPMEM_TEV_ALPHA_ENV + 4:
+  case BPMEM_TEV_COLOR_ENV + 6:  // Texture Environment 4
+  case BPMEM_TEV_ALPHA_ENV + 6:
+  case BPMEM_TEV_COLOR_ENV + 8:  // Texture Environment 5
+  case BPMEM_TEV_ALPHA_ENV + 8:
+  case BPMEM_TEV_COLOR_ENV + 10:  // Texture Environment 6
+  case BPMEM_TEV_ALPHA_ENV + 10:
+  case BPMEM_TEV_COLOR_ENV + 12:  // Texture Environment 7
+  case BPMEM_TEV_ALPHA_ENV + 12:
+  case BPMEM_TEV_COLOR_ENV + 14:  // Texture Environment 8
+  case BPMEM_TEV_ALPHA_ENV + 14:
+  case BPMEM_TEV_COLOR_ENV + 16:  // Texture Environment 9
+  case BPMEM_TEV_ALPHA_ENV + 16:
+  case BPMEM_TEV_COLOR_ENV + 18:  // Texture Environment 10
+  case BPMEM_TEV_ALPHA_ENV + 18:
+  case BPMEM_TEV_COLOR_ENV + 20:  // Texture Environment 11
+  case BPMEM_TEV_ALPHA_ENV + 20:
+  case BPMEM_TEV_COLOR_ENV + 22:  // Texture Environment 12
+  case BPMEM_TEV_ALPHA_ENV + 22:
+  case BPMEM_TEV_COLOR_ENV + 24:  // Texture Environment 13
+  case BPMEM_TEV_ALPHA_ENV + 24:
+  case BPMEM_TEV_COLOR_ENV + 26:  // Texture Environment 14
+  case BPMEM_TEV_ALPHA_ENV + 26:
+  case BPMEM_TEV_COLOR_ENV + 28:  // Texture Environment 15
+  case BPMEM_TEV_ALPHA_ENV + 28:
+  case BPMEM_TEV_COLOR_ENV + 30:  // Texture Environment 16
+  case BPMEM_TEV_ALPHA_ENV + 30:
+    PixelShaderManager::UpdateBP(bp.address, bp.newvalue);
     return;
   default:
     break;
