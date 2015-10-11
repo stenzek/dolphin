@@ -390,6 +390,7 @@ ShaderCode GenPixelShader(APIType ApiType, bool per_pixel_depth, bool dual_src_b
             "			} else {\n"
             "				// Write result to the correct input register of the next stage\n"
             "				AlphaInput[dest] = result;\n"
+            "				ColorInput[(dest << 1) + 1] = int3(result);\n"
             "			}\n"
             "		}\n");
 
