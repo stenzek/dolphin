@@ -446,6 +446,13 @@ Renderer::Renderer()
   // Clip distance support is useless without a method to clamp the depth range
   g_Config.backend_info.bSupportsDepthClamp = GLExtensions::Supports("GL_ARB_depth_clamp");
 
+  // Desktop OpenGL supports bitfield manulipation if it supports shader5
+  // OpenGL ES 3.1 supports it implicitly without an extension
+  g_Config.backend_info.bSupportsBitfield = GLExtensions::Supports("GL_ARB_gpu_shader5");
+
+  // OpenGL ES 3.1 and later also support this.
+  g_Config.backend_info.bSupportsDynamicSamplerIndexing = GLExtensions::Version() >= 400;
+
   g_ogl_config.bSupportsGLSLCache = GLExtensions::Supports("GL_ARB_get_program_binary");
   g_ogl_config.bSupportsGLPinnedMemory = GLExtensions::Supports("GL_AMD_pinned_memory");
   g_ogl_config.bSupportsGLSync = GLExtensions::Supports("GL_ARB_sync");
@@ -514,6 +521,8 @@ Renderer::Renderer()
       g_ogl_config.bSupportsMSAA = true;
       g_ogl_config.bSupportsTextureStorage = true;
       g_ogl_config.bSupports2DTextureStorageMultisample = true;
+      g_Config.backend_info.bSupportsBitfield = true;
+      g_Config.backend_info.bSupportsDynamicSamplerIndexing = true;
       if (g_ActiveConfig.iStereoMode > 0 && g_ActiveConfig.iMultisamples > 1 &&
           !g_ogl_config.bSupports3DTextureStorageMultisample)
       {
@@ -541,6 +550,8 @@ Renderer::Renderer()
       g_ogl_config.bSupportsTextureStorage = true;
       g_ogl_config.bSupports2DTextureStorageMultisample = true;
       g_ogl_config.bSupports3DTextureStorageMultisample = true;
+      g_Config.backend_info.bSupportsBitfield = true;
+      g_Config.backend_info.bSupportsDynamicSamplerIndexing = true;
     }
   }
   else
