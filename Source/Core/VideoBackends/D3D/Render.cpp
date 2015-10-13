@@ -953,8 +953,11 @@ void Renderer::ApplyState()
 
   ID3D11Buffer* vertexConstants = VertexShaderCache::GetConstantBuffer();
 
+  // Yeah, I'm just hacking this through. Need to think about resource managment
+  // at some point.
   D3D::stateman->SetPixelConstants(PixelShaderCache::GetConstantBuffer(),
-                                   g_ActiveConfig.bEnablePixelLighting ? vertexConstants : nullptr);
+                                   DX11::uber_bufffer);  // g_ActiveConfig.bEnablePixelLighting ?
+                                                         // vertexConstants : nullptr);
   D3D::stateman->SetVertexConstants(vertexConstants);
   D3D::stateman->SetGeometryConstants(GeometryShaderCache::GetConstantBuffer());
 

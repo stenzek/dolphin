@@ -177,7 +177,7 @@ ShaderCode GenerateVertexShaderCode(APIType api_type, const vertex_shader_uid_da
     {
       u32 hastexmtx = (uid_data->components & (VB_HAS_TEXMTXIDX0 << i));
       if ((uid_data->components & (VB_HAS_UV0 << i)) || hastexmtx)
-        out.Write("  float%d tex[%d] : TEXCOORD%d,\n", hastexmtx ? 3 : 2, i, i);
+        out.Write("  float%d tex%d : TEXCOORD%d,\n", hastexmtx ? 3 : 2, i, i);
     }
     if (uid_data->components & VB_HAS_POSMTXIDX)
       out.Write("  uint4 posmtx : BLENDINDICES,\n");

@@ -11,6 +11,9 @@
 
 namespace DX11
 {
+// HACK!
+extern ID3D11Buffer* uber_bufffer;
+
 class PixelShaderCache
 {
 public:
