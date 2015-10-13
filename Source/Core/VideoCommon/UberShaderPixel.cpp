@@ -118,10 +118,10 @@ ShaderCode GenPixelShader(APIType ApiType, bool per_pixel_depth, bool dual_src_b
             "	// Add/Subtract D (and bias)\n"
             "	if (bias == 1u) result += 128;\n"
             "	else if (bias == 2u) result -= 128;\n"
-            "	if(!op) // Add\n"
-            "		result = D + result;\n"
-            "	else // Subtract\n"
+            "	if(op) // Subtract\n"
             "		result = D - result;\n"
+            "	else // Add\n"
+            "		result = D + result;\n"
             "\n"
             "	// Most of the Shift was moved inside the lerp for improved percision\n"
             "	// But we still do the divide by 2 here\n"
@@ -485,23 +485,18 @@ ShaderCode GenPixelShader(APIType ApiType, bool per_pixel_depth, bool dual_src_b
   out.Write("	bool comp1 = alphaCompare(TevResult.a, " I_ALPHA ".g, %s);\n",
             BitfieldExtract("bpmem_alphaTest", AlphaTest().comp1).c_str());
   out.Write("\n"
-<<<<<<< HEAD
-            "	switch (%s) {\n",
-            BitfieldExtract("bpmem_alphaTest", AlphaTest().logic).c_str());
-=======
             "	// These if statements are written weirdly to work around intel and qualcom bugs "
             "with handling booleans.\n"
             "	switch (%s) {\n",
             BitfieldExtract("bpmem_alphaTest", AlphaTest().logic).c_str());
->>>>>>> 10e9c95... fixup! UberShader: Implement Alpha Test.
   out.Write("	case 0u: // AND\n"
-            "		if (!(comp0 && comp1)) { discard; } break;\n"
+            "		if (comp0 && comp1) break; else discard; break;\n"
             "	case 1u: // OR\n"
-            "		if (!(comp0 || comp1)) { discard; } break;\n"
+            "		if (comp0 || comp1) break; else discard; break;\n"
             "	case 2u: // XOR\n"
-            "		if (!(comp0 != comp1)) { discard; } break;\n"
+            "		if (comp0 != comp1) break; else discard; break;\n"
             "	case 3u: // XNOR\n"
-            "		if (!(comp0 == comp1)) { discard; } break;\n"
+            "		if (comp0 == comp1) break; else discard; break;\n"
             "	}\n");
 
   out.Write("	ocol0 = float4(TevResult) / 255.0;\n"
