@@ -16,6 +16,7 @@ struct pixel_ubershader_uid_data
   // This is the current state, not to be confused with the final state.
   // Currently: 16 diffrent ubershaders
   u32 numTexgens : 3;
+  u32 early_depth : 1;
   u32 per_pixel_depth : 1;
   u32 msaa : 1;
   u32 ssaa : 1;

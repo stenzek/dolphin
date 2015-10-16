@@ -21,10 +21,10 @@ PixelShaderUid GetPixelShaderUid()
   PixelShaderUid out;
   pixel_ubershader_uid_data* uid = out.GetUidData<pixel_ubershader_uid_data>();
   uid->numTexgens = xfmem.numTexGen.numTexGens;
+  uid->early_depth = bpmem.zcontrol.early_ztest && g_ActiveConfig.backend_info.bSupportsEarlyZ;
   uid->per_pixel_depth = false;   // TODO
   uid->msaa = g_ActiveConfig.iMultisamples > 1;
   uid->ssaa = g_ActiveConfig.iMultisamples > 1 && g_ActiveConfig.bSSAA;
-
   return out;
 }
 
@@ -325,6 +325,14 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
             "	}\n"
             "}\n"
             "\n");
+
+  if (uid_data->early_depth)
+  {
+    if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
+      out.Write("FORCE_EARLY_Z;\n");
+    else
+      out.Write("[earlydepthstencil]\n");
+  }
 
   if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
   {
