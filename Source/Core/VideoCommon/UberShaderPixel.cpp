@@ -92,10 +92,10 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
     // supports this in the future.
     out.Write("int4 sampleTexture(uint sampler_num, float2 uv) {\n");
     if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
-      out.Write("	return int4(texture(samp[sampler_num], float3(uv, 0.0)) * 255.0);\n");
+      out.Write("	return iround(texture(samp[sampler_num], float3(uv, 0.0)) * 255.0);\n");
     else if (ApiType == APIType::D3D)
       out.Write(
-          "	return int4(Tex[sampler_num].Sample(samp[sampler_num], float3(uv, 0.0)) * 255.0);\n");
+          "	return iround(Tex[sampler_num].Sample(samp[sampler_num], float3(uv, 0.0)) * 255.0);\n");
     out.Write("}\n\n");
   }
   else
@@ -414,8 +414,8 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
   }
 
   out.Write("	int AlphaBump = 0;\n"
-            "	int4 icolors_0 = int4(colors_0 * 255.0);\n"
-            "	int4 icolors_1 = int4(colors_1 * 255.0);\n"
+            "	int4 icolors_0 = iround(colors_0 * 255.0);\n"
+            "	int4 icolors_1 = iround(colors_1 * 255.0);\n"
             "	int4 TevResult;\n"
             "	State s;\n"
             "	s.TexColor = int4(0, 0, 0, 0);\n"
