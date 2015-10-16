@@ -148,6 +148,7 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
             "	if (shift != 3u) {\n"
             "		lerp = lerp << shift;\n"
             "		lerp = lerp + (op ? 127 : 128);\n"
+            "		D = D << shift;\n"
             "	}\n"
             "	int result = lerp >> 8;\n"
             "\n"
