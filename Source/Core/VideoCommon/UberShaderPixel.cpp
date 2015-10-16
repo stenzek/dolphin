@@ -464,7 +464,7 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
               "			// TODO: there is an optional perspective divide here (not to mention all of "
               "indirect)\n"
               "			int2 fixedPoint_uv = itrunc(tex[tex_coord].xy * " I_TEXDIMS
-              "[sampler_num].zw * 128.0);\n"
+              "[tex_coord].zw * 128.0);\n"
               "			float2 uv = (float2(fixedPoint_uv) / 128.0) * " I_TEXDIMS "[sampler_num].xy;\n"
               "\n"
               "			int4 color = sampleTexture(sampler_num, uv);\n"
@@ -752,7 +752,7 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
               "	// the alpha from ocol0 will be written to the framebuffer.\n"
               "	ocol1 = float4(TevResult) / 255.0; \n"
               "	if ((bpmem_dstalpha & %du) != 0u) {\n",
-              1 << ConstantAlpha().enable.offset);
+              1 << ConstantAlpha().enable.StartBit());
     out.Write("		ocol0.a = float(%s) / 255.0;\n",
               BitfieldExtract("bpmem_dstalpha", ConstantAlpha().alpha).c_str());
   }
