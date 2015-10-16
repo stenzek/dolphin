@@ -55,6 +55,7 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
             "	uint	bpmem_alphaTest;\n"
             "	uint	bpmem_fogParam3;\n"
             "	uint	bpmem_fogRangeBase;\n"
+            "	uint	bpmem_dstalpha;\n"
             "	uint	bpmem_tevorder[8];\n"
             "	uint2	bpmem_combiners[16];\n"
             "	uint	bpmem_tevksel[8];\n"
@@ -741,18 +742,22 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
             "	}\n"
             "\n");
 
-  out.Write("	ocol0 = float4(TevResult) / 255.0;\n"
-            "\n");
-  // Use dual-source color blending to perform dst alpha in a single pass
+  // TODO: Do we still want to support two pass alpha blending?
+  out.Write("	ocol0 = float4(TevResult) / 255.0;\n\n");
   if (use_dual_source)
   {
-    // Colors will be blended against the alpha from ocol1 and
-    // the alpha from ocol0 will be written to the framebuffer.
-    out.Write("	// dual source blending\n"
-              "	ocol1 = float4(TevResult) / 255.0;\n"
-              "	ocol0.a = float(" I_ALPHA ".a) / 255.0;\n"
-              "\n");
+    out.Write("	// Dest alpha override (dual source blening)\n"
+              "	// Colors will be blended against the alpha from ocol1 and\n"
+              "	// the alpha from ocol0 will be written to the framebuffer.\n"
+              "	ocol1 = float4(TevResult) / 255.0; \n"
+              "	if ((bpmem_dstalpha & %du) != 0u) {\n",
+              1 << ConstantAlpha().enable.offset);
+    out.Write("		ocol0.a = float(%s) / 255.0;\n",
+              BitfieldExtract("bpmem_dstalpha", ConstantAlpha().alpha).c_str());
   }
+
+  out.Write("	}\n"
+            "\n");
 
   out.Write("}");
 
