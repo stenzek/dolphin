@@ -17,9 +17,6 @@ struct pixel_ubershader_uid_data
   // Currently: 16 diffrent ubershaders
   u32 numTexgens : 3;
   u32 early_depth : 1;
-  u32 per_pixel_depth : 1;
-  u32 msaa : 1;
-  u32 ssaa : 1;
 
   u32 NumValues() const { return 1; }
 };
