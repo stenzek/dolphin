@@ -613,9 +613,8 @@ bool PixelShaderCache::SetShader()
 
   // Need to compile a new shader
   // ShaderCode code = GeneratePixelShaderCode(APIType::D3D, uid.GetUidData());
-  ShaderCode code =
-      UberShader::GenPixelShader(APIType::D3D, false, true, g_ActiveConfig.iMultisamples > 1,
-                                 g_ActiveConfig.iMultisamples > 1 && g_ActiveConfig.bSSAA);
+  UberShader::PixelShaderUid uber_uid = UberShader::GetPixelShaderUid();
+  ShaderCode code = UberShader::GenPixelShader(APIType::D3D, uber_uid.GetUidData());
 
   D3DBlob* pbytecode;
   if (!D3D::CompilePixelShader(code.GetBuffer(), &pbytecode))

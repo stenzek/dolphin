@@ -16,9 +16,23 @@ std::string BitfieldExtract(const std::string& source, T type)
                           static_cast<u32>(type.StartBit()), static_cast<u32>(type.NumBits()));
 }
 
-ShaderCode GenPixelShader(APIType ApiType, bool per_pixel_depth, bool dual_src_blend, bool msaa,
-                          bool ssaa)
+PixelShaderUid GetPixelShaderUid()
 {
+  PixelShaderUid out;
+  pixel_ubershader_uid_data* uid = out.GetUidData<pixel_ubershader_uid_data>();
+  uid->numTexgens = xfmem.numTexGen.numTexGens;
+  uid->per_pixel_depth = false;   // TODO
+  uid->msaa = g_ActiveConfig.iMultisamples > 1;
+  uid->ssaa = g_ActiveConfig.iMultisamples > 1 && g_ActiveConfig.bSSAA;
+
+  return out;
+}
+
+ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_data)
+{
+  const bool msaa = uid_data->msaa != 0;
+  const bool ssaa = uid_data->ssaa != 0;
+  const bool use_dual_source = g_ActiveConfig.backend_info.bSupportsDualSourceBlend;
   ShaderCode out;
 
   out.Write("// Pixel UberShader\n");
@@ -158,7 +172,7 @@ ShaderCode GenPixelShader(APIType ApiType, bool per_pixel_depth, bool dual_src_b
 
   if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
   {
-    if (dual_src_blend)
+    if (use_dual_source)
     {
       if (DriverDetails::HasBug(DriverDetails::BUG_BROKEN_FRAGMENT_SHADER_INDEX_DECORATION))
       {
@@ -176,7 +190,7 @@ ShaderCode GenPixelShader(APIType ApiType, bool per_pixel_depth, bool dual_src_b
       out.Write("FRAGMENT_OUTPUT_LOCATION(0) out vec4 ocol0;\n");
     }
 
-    if (per_pixel_depth)
+    if (uid_data->per_pixel_depth)
       out.Write("#define depth gl_FragDepth\n");
 
     if (g_ActiveConfig.backend_info.bSupportsGeometryShaders || ApiType == APIType::Vulkan)
@@ -221,7 +235,7 @@ ShaderCode GenPixelShader(APIType ApiType, bool per_pixel_depth, bool dual_src_b
     out.Write("  out float4 ocol0 : SV_Target0,\n"
               "  out float4 ocol1 : SV_Target1,\n%s"
               "  in float4 rawpos : SV_Position,\n",
-              per_pixel_depth ? "  out float depth : SV_Depth,\n" : "");
+              uid_data->per_pixel_depth ? "  out float depth : SV_Depth,\n" : "");
 
     out.Write("  in %s float4 colors_0 : COLOR0,\n", GetInterpolationQualifier(msaa, ssaa));
     out.Write("  in %s float4 colors_1 : COLOR1\n", GetInterpolationQualifier(msaa, ssaa));
@@ -502,7 +516,7 @@ ShaderCode GenPixelShader(APIType ApiType, bool per_pixel_depth, bool dual_src_b
   out.Write("	ocol0 = float4(TevResult) / 255.0;\n"
             "\n");
   // Use dual-source color blending to perform dst alpha in a single pass
-  if (dual_src_blend)
+  if (use_dual_source)
   {
     // Colors will be blended against the alpha from ocol1 and
     // the alpha from ocol0 will be written to the framebuffer.
