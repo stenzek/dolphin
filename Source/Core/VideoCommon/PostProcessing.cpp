@@ -63,7 +63,7 @@ std::string PostProcessingShaderConfiguration::LoadShader(std::string shader)
 	return code;
 }
 
-void PostProcessingShaderConfiguration::LoadOptions(const std::string& code)
+void PostProcessingShaderConfiguration::LoadOptions(std::string& code)
 {
 	const std::string config_start_delimiter = "[configuration]";
 	const std::string config_end_delimiter = "[/configuration]";
@@ -72,6 +72,7 @@ void PostProcessingShaderConfiguration::LoadOptions(const std::string& code)
 
 	m_options.clear();
 	m_any_options_dirty = true;
+	m_requires_depth_buffer = false;
 
 	if (configuration_start == std::string::npos ||
 	    configuration_end == std::string::npos)
@@ -123,13 +124,21 @@ void PostProcessingShaderConfiguration::LoadOptions(const std::string& code)
 				}
 				else
 				{
-					if (current_strings)
+					std::string key, value;
+					IniFile::ParseLine(line, &key, &value);
+					if (key.length() > 0 && value.length() > 0)
 					{
-						std::string key, value;
-						IniFile::ParseLine(line, &key, &value);
-
-						if (!(key == "" && value == ""))
+						if (current_strings)
+						{
+							// Option settings
 							current_strings->m_options.emplace_back(key, value);
+						}
+						else
+						{
+							// Global settings
+							if (key == "RequiresDepthBuffer")
+								TryParse(value, &m_requires_depth_buffer);
+						}
 					}
 				}
 			}
@@ -138,7 +147,10 @@ void PostProcessingShaderConfiguration::LoadOptions(const std::string& code)
 
 	for (const auto& it : option_strings)
 	{
+		// Initialize to default values, in case the configuration section is incomplete.
 		ConfigurationOption option;
+		option.m_bool_value = false;
+		option.m_type = ConfigurationOption::OPTION_FLOAT;
 		option.m_dirty = true;
 
 		if (it.m_type == "OptionBool")
@@ -211,6 +223,9 @@ void PostProcessingShaderConfiguration::LoadOptions(const std::string& code)
 		}
 		m_options[option.m_option_name] = option;
 	}
+
+	// Remove the configuration area from the source string, leaving only the GLSL code.
+	code.erase(configuration_start, (configuration_end - configuration_start + config_end_delimiter.length()));
 }
 
 void PostProcessingShaderConfiguration::LoadOptionsConfiguration()

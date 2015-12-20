@@ -63,6 +63,8 @@ public:
 	bool IsDirty() { return m_any_options_dirty; }
 	void SetDirty(bool dirty) { m_any_options_dirty = dirty; }
 
+	bool RequiresDepthBuffer() const { return m_requires_depth_buffer; }
+
 	bool HasOptions() { return m_options.size() > 0; }
 	ConfigMap& GetOptions() { return m_options; }
 	const ConfigurationOption& GetOption(const std::string& option) { return m_options[option]; }
@@ -74,10 +76,11 @@ public:
 
 private:
 	bool m_any_options_dirty;
+	bool m_requires_depth_buffer;
 	std::string m_current_shader;
 	ConfigMap m_options;
 
-	void LoadOptions(const std::string& code);
+	void LoadOptions(std::string& code);
 	void LoadOptionsConfiguration();
 };
 
@@ -90,8 +93,10 @@ public:
 	PostProcessingShaderConfiguration* GetConfig() { return &m_config; }
 
 	// Should be implemented by the backends for backend specific code
-	virtual void BlitFromTexture(TargetRectangle src, TargetRectangle dst,
-	                             int src_texture, int src_width, int src_height, int layer = 0) = 0;
+	virtual void BlitFromTexture(TargetRectangle dst,
+								 TargetRectangle src, int src_texture, int src_width, int src_height,
+								 TargetRectangle src_depth, int src_depth_texture, int src_depth_width, int src_depth_height,
+								 int layer = 0) = 0;
 	virtual void ApplyShader() = 0;
 
 protected:

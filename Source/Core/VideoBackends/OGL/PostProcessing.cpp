@@ -23,11 +23,14 @@ namespace OGL
 
 static const char s_vertex_shader[] =
 	"out vec2 uv0;\n"
+	"out vec2 uv1;\n"
 	"uniform vec4 src_rect;\n"
+	"uniform vec4 src_depth_rect;\n"
 	"void main(void) {\n"
 	"	vec2 rawpos = vec2(gl_VertexID&1, gl_VertexID&2);\n"
 	"	gl_Position = vec4(rawpos*2.0-1.0, 0.0, 1.0);\n"
 	"	uv0 = rawpos * src_rect.zw + src_rect.xy;\n"
+	"   uv1 = rawpos * src_depth_rect.zw + src_depth_rect.xy;\n"
 	"}\n";
 
 OpenGLPostProcessing::OpenGLPostProcessing()
@@ -41,8 +44,10 @@ OpenGLPostProcessing::~OpenGLPostProcessing()
 	m_shader.Destroy();
 }
 
-void OpenGLPostProcessing::BlitFromTexture(TargetRectangle src, TargetRectangle dst,
-                                           int src_texture, int src_width, int src_height, int layer)
+void OpenGLPostProcessing::BlitFromTexture(TargetRectangle dst,
+										   TargetRectangle src, int src_texture, int src_width, int src_height,
+										   TargetRectangle src_depth, int src_depth_texture, int src_depth_width, int src_depth_height,
+										   int layer)
 {
 	ApplyShader();
 
@@ -57,6 +62,8 @@ void OpenGLPostProcessing::BlitFromTexture(TargetRectangle src, TargetRectangle 
 	glUniform4f(m_uniform_resolution, (float)src_width, (float)src_height, 1.0f / (float)src_width, 1.0f / (float)src_height);
 	glUniform4f(m_uniform_src_rect, src.left / (float) src_width, src.bottom / (float) src_height,
 		    src.GetWidth() / (float) src_width, src.GetHeight() / (float) src_height);
+	glUniform4f(m_uniform_src_depth_rect, src_depth.left / (float) src_depth_width, src_depth.bottom / (float) src_depth_height,
+		    src_depth.GetWidth() / (float) src_depth_width, src_depth.GetHeight() / (float) src_depth_height);
 	glUniform1ui(m_uniform_time, (GLuint)m_timer.GetTimeElapsed());
 	glUniform1i(m_uniform_layer, layer);
 
@@ -133,6 +140,9 @@ void OpenGLPostProcessing::BlitFromTexture(TargetRectangle src, TargetRectangle 
 	glActiveTexture(GL_TEXTURE9);
 	glBindTexture(GL_TEXTURE_2D_ARRAY, src_texture);
 	g_sampler_cache->BindLinearSampler(9);
+	glActiveTexture(GL_TEXTURE10);
+	glBindTexture(GL_TEXTURE_2D_ARRAY, src_depth_texture);
+	g_sampler_cache->BindLinearSampler(10);
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
 
@@ -164,6 +174,7 @@ void OpenGLPostProcessing::ApplyShader()
 	m_uniform_resolution = glGetUniformLocation(m_shader.glprogid, "resolution");
 	m_uniform_time = glGetUniformLocation(m_shader.glprogid, "time");
 	m_uniform_src_rect = glGetUniformLocation(m_shader.glprogid, "src_rect");
+	m_uniform_src_depth_rect = glGetUniformLocation(m_shader.glprogid, "src_depth_rect");
 	m_uniform_layer = glGetUniformLocation(m_shader.glprogid, "layer");
 
 	for (const auto& it : m_config.GetOptions())
@@ -182,11 +193,13 @@ void OpenGLPostProcessing::CreateHeader()
 		// Texture sampler
 		"SAMPLER_BINDING(8) uniform sampler2D samp8;\n"
 		"SAMPLER_BINDING(9) uniform sampler2DArray samp9;\n"
+		"SAMPLER_BINDING(10) uniform sampler2DArray samp10;\n"
 
 		// Output variable
 		"out float4 ocol0;\n"
 		// Input coordinates
 		"in float2 uv0;\n"
+		"in float2 uv1;\n"
 		// Resolution
 		"uniform float4 resolution;\n"
 		// Time
@@ -211,6 +224,23 @@ void OpenGLPostProcessing::CreateHeader()
 		"}\n"
 
 		"#define SampleOffset(offset) textureOffset(samp9, float3(uv0, layer), offset)\n"
+
+		"float SampleDepth()\n"
+		"{\n"
+			"\treturn texture(samp10, float3(uv1, layer)).x;\n"
+		"}\n"
+
+		"float SampleDepthLocation(float2 location)\n"
+		"{\n"
+			"\treturn texture(samp10, float3(location, layer)).x;\n"
+		"}\n"
+
+		"float SampleDepthLayer(int layer)\n"
+		"{\n"
+			"\treturn texture(samp10, float3(uv1, layer)).x;\n"
+		"}\n"
+
+		"#define SampleDepthOffset(offset) (textureOffset(samp10, float3(uv1, layer), offset).x)\n"
 
 		"float4 SampleFontLocation(float2 location)\n"
 		"{\n"

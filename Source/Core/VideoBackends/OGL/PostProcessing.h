@@ -23,8 +23,10 @@ public:
 	OpenGLPostProcessing();
 	~OpenGLPostProcessing();
 
-	void BlitFromTexture(TargetRectangle src, TargetRectangle dst,
-	                     int src_texture, int src_width, int src_height, int layer) override;
+	void BlitFromTexture(TargetRectangle dst,
+						 TargetRectangle src, int src_texture, int src_width, int src_height,
+						 TargetRectangle src_depth, int src_depth_texture, int src_depth_width, int src_depth_height,
+						 int layer = 0) override;
 	void ApplyShader() override;
 
 private:
@@ -32,6 +34,7 @@ private:
 	SHADER m_shader;
 	GLuint m_uniform_resolution;
 	GLuint m_uniform_src_rect;
+	GLuint m_uniform_src_depth_rect;
 	GLuint m_uniform_time;
 	GLuint m_uniform_layer;
 	std::string m_glsl_header;

@@ -1097,7 +1097,8 @@ void Renderer::ClearScreen(const EFBRectangle& rc, bool colorEnable, bool alphaE
 	ClearEFBCache();
 }
 
-void Renderer::BlitScreen(TargetRectangle src, TargetRectangle dst, GLuint src_texture, int src_width, int src_height)
+void Renderer::BlitScreen(TargetRectangle dst, TargetRectangle src, GLuint src_texture, int src_width, int src_height,
+						  TargetRectangle src_depth, GLuint src_depth_texture, int src_depth_width, int src_depth_height)
 {
 	if (g_ActiveConfig.iStereoMode == STEREO_SBS || g_ActiveConfig.iStereoMode == STEREO_TAB)
 	{
@@ -1109,12 +1110,12 @@ void Renderer::BlitScreen(TargetRectangle src, TargetRectangle dst, GLuint src_t
 		else
 			ConvertStereoRectangle(dst, leftRc, rightRc);
 
-		m_post_processor->BlitFromTexture(src, leftRc, src_texture, src_width, src_height, 0);
-		m_post_processor->BlitFromTexture(src, rightRc, src_texture, src_width, src_height, 1);
+		m_post_processor->BlitFromTexture(leftRc, src, src_texture, src_width, src_height, src_depth, src_depth_texture, src_depth_width, src_depth_height, 0);
+		m_post_processor->BlitFromTexture(rightRc, src, src_texture, src_width, src_height, src_depth, src_depth_texture, src_depth_width, src_depth_height, 1);
 	}
 	else
 	{
-		m_post_processor->BlitFromTexture(src, dst, src_texture, src_width, src_height);
+		m_post_processor->BlitFromTexture(dst, src, src_texture, src_width, src_height, src_depth, src_depth_texture, src_depth_width, src_depth_height);
 	}
 }
 
@@ -1329,7 +1330,29 @@ void Renderer::SwapImpl(u32 xfbAddr, u32 fbWidth, u32 fbStride, u32 fbHeight, co
 			// Tell the OSD Menu about the current internal resolution
 			OSDInternalW = xfbSource->sourceRc.GetWidth(); OSDInternalH = xfbSource->sourceRc.GetHeight();
 
-			BlitScreen(sourceRc, drawRc, xfbSource->texture, xfbSource->texWidth, xfbSource->texHeight);
+			// Don't copy the depth buffer if the post processor does not require it.
+			if (m_post_processor->GetConfig()->RequiresDepthBuffer())
+			{
+				TargetRectangle depthSourceRc(sourceRc);
+				int depthWidth = xfbSource->texWidth;
+				int depthHeight = xfbSource->texHeight;
+				if (g_ActiveConfig.bUseRealXFB)
+				{
+					// GL (0,0) is bottom-left, and since the xfb copy clips extra pixels from the bottom,
+					// we need to adjust our EFB depth coordinates to include the clipped area.
+					depthWidth = EFB_WIDTH;
+					depthHeight = EFB_HEIGHT;
+					depthSourceRc.top += depthHeight - sourceRc.GetHeight();
+					depthSourceRc.bottom += depthHeight - sourceRc.GetHeight();
+				}
+
+				GLuint depthTex = FramebufferManager::GetEFBDepthTexture(depthSourceRc);
+				BlitScreen(drawRc, sourceRc, xfbSource->texture, xfbSource->texWidth, xfbSource->texHeight, depthSourceRc, depthTex, depthWidth, depthHeight);
+			}
+			else
+			{
+				BlitScreen(drawRc, sourceRc, xfbSource->texture, xfbSource->texWidth, xfbSource->texHeight, sourceRc, 0, xfbSource->texWidth, xfbSource->texHeight);
+			}
 		}
 	}
 	else
@@ -1338,7 +1361,11 @@ void Renderer::SwapImpl(u32 xfbAddr, u32 fbWidth, u32 fbStride, u32 fbHeight, co
 
 		// for msaa mode, we must resolve the efb content to non-msaa
 		GLuint tex = FramebufferManager::ResolveAndGetRenderTarget(rc);
-		BlitScreen(targetRc, flipped_trc, tex, s_target_width, s_target_height);
+		GLuint depth_tex = 0;
+		if (m_post_processor->GetConfig()->RequiresDepthBuffer())
+			depth_tex = FramebufferManager::ResolveAndGetDepthTarget(rc);
+
+		BlitScreen(flipped_trc, targetRc, tex, s_target_width, s_target_height, targetRc, depth_tex, s_target_width, s_target_height);
 	}
 
 	glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
