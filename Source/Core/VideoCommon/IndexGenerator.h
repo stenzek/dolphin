@@ -15,6 +15,7 @@ public:
 	// Init
 	static void Init();
 	static void Start(u16 *Indexptr);
+	static void Resume(u16* base_ptr, u16* current_ptr);
 
 	static void AddIndices(int primitive, u32 numVertices);
 

@@ -61,7 +61,7 @@ protected:
 
 	static PrimitiveType current_primitive_type;
 
-	virtual void ResetBuffer(u32 stride) = 0;
+	virtual void ResetBuffer(u32 stride, u32 min_vbuffer_space, u32 min_ibuffer_space) = 0;
 
 	static u8* s_pCurBufferPointer;
 	static u8* s_pBaseBufferPointer;

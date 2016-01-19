@@ -20,7 +20,7 @@ public:
 	void DestroyDeviceObjects() override;
 
 protected:
-	void ResetBuffer(u32 stride) override;
+	void ResetBuffer(u32 stride, u32 min_vbuffer_space, u32 min_ibuffer_space) override;
 	u16* GetIndexBuffer() { return &LocalIBuffer[0]; }
 
 private:
@@ -30,13 +30,14 @@ private:
 	// temp
 	void vFlush(bool useDstAlpha) override;
 
-	u32 m_vertexDrawOffset;
-	u32 m_indexDrawOffset;
-	u32 m_currentBuffer;
-	u32 m_bufferCursor;
+	ID3D11Buffer* m_vertex_buffer;
+	ID3D11Buffer* m_index_buffer;
 
-	enum { MAX_BUFFER_COUNT = 2 };
-	ID3D11Buffer* m_buffers[MAX_BUFFER_COUNT];
+	u32 m_vertex_buffer_cursor;		// in bytes
+	u32 m_index_buffer_cursor;		// in words
+
+	u32 m_base_vertex;
+	u32 m_base_index;
 
 	std::vector<u8> LocalVBuffer;
 	std::vector<u16> LocalIBuffer;

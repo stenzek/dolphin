@@ -74,7 +74,7 @@ void VertexManager::PrepareDrawBuffers(u32 stride)
 	ADDSTAT(stats.thisFrame.bytesIndexStreamed, index_data_size);
 }
 
-void VertexManager::ResetBuffer(u32 stride)
+void VertexManager::ResetBuffer(u32 stride, u32 min_vbuffer_space, u32 min_ibuffer_space)
 {
 	if (s_cull_all)
 	{
@@ -86,6 +86,7 @@ void VertexManager::ResetBuffer(u32 stride)
 	}
 	else
 	{
+		// TODO: Optimize here for min_vbuffer_space/min_ibuffer_space.
 		auto buffer = s_vertexBuffer->Map(MAXVBUFFERSIZE, stride);
 		s_pCurBufferPointer = s_pBaseBufferPointer = buffer.first;
 		s_pEndBufferPointer = buffer.first + MAXVBUFFERSIZE;

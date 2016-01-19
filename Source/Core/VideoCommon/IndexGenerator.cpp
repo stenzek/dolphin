@@ -50,6 +50,13 @@ void IndexGenerator::Start(u16* Indexptr)
 	base_index = 0;
 }
 
+void IndexGenerator::Resume(u16* base_ptr, u16* current_ptr)
+{
+	BASEIptr = base_ptr;
+	index_buffer_current = current_ptr;
+	base_index = 0;
+}
+
 void IndexGenerator::AddIndices(int primitive, u32 numVerts)
 {
 	index_buffer_current = primitive_table[primitive](index_buffer_current, numVerts, base_index);

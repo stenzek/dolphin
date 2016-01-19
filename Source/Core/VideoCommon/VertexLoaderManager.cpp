@@ -204,6 +204,7 @@ int RunVertices(int vtx_attr_group, int primitive, int count, DataReader src, bo
 	count = loader->RunVertices(src, dst, count);
 
 	IndexGenerator::AddIndices(primitive, count);
+	_assert_(IndexGenerator::GetIndexLen() < 300000);
 
 	VertexManagerBase::FlushData(count, loader->m_native_vtx_decl.stride);
 

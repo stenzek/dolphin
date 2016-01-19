@@ -427,6 +427,7 @@ int CD3DFont::DrawTextScaled(float x, float y, float size, float spacing, u32 dw
 			context->Unmap(m_pVB, 0);
 
 			D3D::stateman->SetVertexBuffer(m_pVB, stride, bufoffset);
+			D3D::stateman->SetIndexBuffer(nullptr);
 
 			D3D::stateman->Apply();
 			D3D::context->Draw(3 * dwNumTriangles, 0);
@@ -445,6 +446,7 @@ int CD3DFont::DrawTextScaled(float x, float y, float size, float spacing, u32 dw
 	if (dwNumTriangles > 0)
 	{
 		D3D::stateman->SetVertexBuffer(m_pVB, stride, bufoffset);
+		D3D::stateman->SetIndexBuffer(nullptr);
 
 		D3D::stateman->Apply();
 		D3D::context->Draw(3 * dwNumTriangles, 0);
@@ -589,6 +591,7 @@ void drawShadedTexQuad(ID3D11ShaderResourceView* texture,
 	D3D::stateman->SetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
 	D3D::stateman->SetInputLayout(layout);
 	D3D::stateman->SetVertexBuffer(util_vbuf->GetBuffer(), stride, offset);
+	D3D::stateman->SetIndexBuffer(nullptr);
 	D3D::stateman->SetPixelShader(PShader);
 	D3D::stateman->SetTexture(0, texture);
 	D3D::stateman->SetVertexShader(VShader);
@@ -639,6 +642,7 @@ void drawColorQuad(u32 Color, float z, float x1, float y1, float x2, float y2)
 	UINT offset = 0;
 	stateman->SetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
 	stateman->SetVertexBuffer(util_vbuf->GetBuffer(), stride, offset);
+	stateman->SetIndexBuffer(nullptr);
 
 	stateman->Apply();
 	context->Draw(4, cq_offset);
@@ -673,6 +677,7 @@ void drawClearQuad(u32 Color, float z)
 	UINT offset = 0;
 	stateman->SetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
 	stateman->SetVertexBuffer(util_vbuf->GetBuffer(), stride, offset);
+	stateman->SetIndexBuffer(nullptr);
 
 	stateman->Apply();
 	context->Draw(4, clearq_offset);
@@ -699,6 +704,7 @@ void DrawEFBPokeQuads(EFBAccessType type, const EfbPokeData* points, size_t num_
 	stateman->SetInputLayout(VertexShaderCache::GetClearInputLayout());
 	stateman->SetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	stateman->SetVertexBuffer(util_vbuf->GetBuffer(), sizeof(ColVertex), 0);
+	stateman->SetIndexBuffer(nullptr);
 	stateman->Apply();
 
 	// if drawing a large number of points at once, this will have to be split into multiple passes.

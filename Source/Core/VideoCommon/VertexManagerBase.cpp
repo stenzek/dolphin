@@ -80,15 +80,6 @@ DataReader VertexManagerBase::PrepareForAdditionalData(int primitive, u32 count,
 	     count > GetRemainingIndices(primitive) || needed_vertex_bytes > GetRemainingSize()))
 	{
 		Flush();
-
-		if (count > IndexGenerator::GetRemainingIndices())
-			ERROR_LOG(VIDEO, "Too little remaining index values. Use 32-bit or reset them on flush.");
-		if (count > GetRemainingIndices(primitive))
-			ERROR_LOG(VIDEO, "VertexManager: Buffer not large enough for all indices! "
-				"Increase MAXIBUFFERSIZE or we need primitive breaking after all.");
-		if (needed_vertex_bytes > GetRemainingSize())
-			ERROR_LOG(VIDEO, "VertexManager: Buffer not large enough for all vertices! "
-				"Increase MAXVBUFFERSIZE or we need primitive breaking after all.");
 	}
 
 	s_cull_all = cullall;
@@ -96,9 +87,19 @@ DataReader VertexManagerBase::PrepareForAdditionalData(int primitive, u32 count,
 	// need to alloc new buffer
 	if (s_is_flushed)
 	{
-		g_vertex_manager->ResetBuffer(stride);
+		// worst case of 6 indices per vertex (quads, no PR), plus end triangle
+		g_vertex_manager->ResetBuffer(stride, needed_vertex_bytes, count * 6 + 3);
 		s_is_flushed = false;
 	}
+
+	if (count > IndexGenerator::GetRemainingIndices())
+		ERROR_LOG(VIDEO, "Too little remaining index values. Use 32-bit or reset them on flush.");
+	if (count > GetRemainingIndices(primitive))
+		ERROR_LOG(VIDEO, "VertexManager: Buffer not large enough for all indices! "
+			"Increase MAXIBUFFERSIZE or we need primitive breaking after all.");
+	if (needed_vertex_bytes > GetRemainingSize())
+		ERROR_LOG(VIDEO, "VertexManager: Buffer not large enough for all vertices! "
+			"Increase MAXVBUFFERSIZE or we need primitive breaking after all.");
 
 	return DataReader(s_pCurBufferPointer, s_pEndBufferPointer);
 }
@@ -110,7 +111,8 @@ void VertexManagerBase::FlushData(u32 count, u32 stride)
 
 u32 VertexManagerBase::GetRemainingIndices(int primitive)
 {
-	u32 index_len = MAXIBUFFERSIZE - IndexGenerator::GetIndexLen();
+	s32 index_len = static_cast<s32>(MAXIBUFFERSIZE - IndexGenerator::GetIndexLen());
+	s32 remaining_count;
 
 	if (g_Config.backend_info.bSupportsPrimitiveRestart)
 	{
@@ -118,24 +120,36 @@ u32 VertexManagerBase::GetRemainingIndices(int primitive)
 		{
 		case GX_DRAW_QUADS:
 		case GX_DRAW_QUADS_2:
-			return index_len / 5 * 4;
+			remaining_count = index_len / 5 * 4;
+			break;
+
 		case GX_DRAW_TRIANGLES:
-			return index_len / 4 * 3;
+			remaining_count = index_len / 4 * 3;
+			break;
+
 		case GX_DRAW_TRIANGLE_STRIP:
-			return index_len / 1 - 1;
+			remaining_count = index_len / 1 - 1;
+			break;
+
 		case GX_DRAW_TRIANGLE_FAN:
-			return index_len / 6 * 4 + 1;
+			remaining_count = index_len / 6 * 4 + 1;
+			break;
 
 		case GX_DRAW_LINES:
-			return index_len;
+			remaining_count = index_len;
+			break;
+
 		case GX_DRAW_LINE_STRIP:
-			return index_len / 2 + 1;
+			remaining_count = index_len / 2 + 1;
+			break;
 
 		case GX_DRAW_POINTS:
-			return index_len;
+			remaining_count = index_len;
+			break;
 
 		default:
-			return 0;
+			remaining_count = 0;
+			break;
 		}
 	}
 	else
@@ -144,26 +158,39 @@ u32 VertexManagerBase::GetRemainingIndices(int primitive)
 		{
 		case GX_DRAW_QUADS:
 		case GX_DRAW_QUADS_2:
-			return index_len / 6 * 4;
+			remaining_count = index_len / 6 * 4;
+			break;
+
 		case GX_DRAW_TRIANGLES:
-			return index_len;
+			remaining_count = index_len;
+			break;
+
 		case GX_DRAW_TRIANGLE_STRIP:
-			return index_len / 3 + 2;
+			remaining_count = index_len / 3 + 2;
+			break;
+
 		case GX_DRAW_TRIANGLE_FAN:
-			return index_len / 3 + 2;
+			remaining_count = index_len / 3 + 2;
+			break;
 
 		case GX_DRAW_LINES:
-			return index_len;
+			remaining_count = index_len;
+			break;
 		case GX_DRAW_LINE_STRIP:
-			return index_len / 2 + 1;
+			remaining_count = index_len / 2 + 1;
+			break;
 
 		case GX_DRAW_POINTS:
-			return index_len;
+			remaining_count = index_len;
+			break;
 
 		default:
-			return 0;
+			remaining_count = 0;
+			break;
 		}
 	}
+
+	return std::max(remaining_count, 0);
 }
 
 void VertexManagerBase::Flush()

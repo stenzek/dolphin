@@ -298,6 +298,7 @@ void XFBEncoder::Encode(u8* dst, u32 width, u32 height, const EFBRectangle& srcR
 	UINT stride = sizeof(QuadVertex);
 	UINT offset = 0;
 	D3D::stateman->SetVertexBuffer(m_quad, stride, offset);
+	D3D::stateman->SetIndexBuffer(nullptr);
 
 	TargetRectangle targetRect = g_renderer->ConvertEFBRectangle(srcRect);
 
