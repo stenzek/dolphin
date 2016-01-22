@@ -36,6 +36,7 @@
   <PropertyGroup Label="UserMacros" />
   <ItemGroup>
     <ClCompile Include="BoundingBox.cpp" />
+    <ClCompile Include="CommandStream.cpp" />
     <ClCompile Include="D3DBase.cpp" />
     <ClCompile Include="D3DBlob.cpp" />
     <ClCompile Include="D3DShader.cpp" />
@@ -58,6 +59,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="BoundingBox.h" />
+    <ClInclude Include="CommandStream.h" />
     <ClInclude Include="D3DBase.h" />
     <ClInclude Include="D3DBlob.h" />
     <ClInclude Include="D3DShader.h" />

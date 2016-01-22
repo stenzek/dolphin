@@ -10,6 +10,7 @@
 
 #include "Core/ConfigManager.h"
 
+#include "VideoBackends/D3D/CommandStream.h"
 #include "VideoBackends/D3D/D3DBase.h"
 #include "VideoBackends/D3D/D3DShader.h"
 #include "VideoBackends/D3D/FramebufferManager.h"
@@ -40,19 +41,17 @@ ID3D11GeometryShader* GeometryShaderCache::GetCopyGeometryShader() { return (g_A
 
 ID3D11Buffer* gscbuf = nullptr;
 
-ID3D11Buffer* &GeometryShaderCache::GetConstantBuffer()
+void GeometryShaderCache::SetConstants()
 {
-	// TODO: divide the global variables of the generated shaders into about 5 constant buffers to speed this up
 	if (GeometryShaderManager::dirty)
 	{
-		D3D11_MAPPED_SUBRESOURCE map;
-		D3D::context->Map(gscbuf, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
-		memcpy(map.pData, &GeometryShaderManager::constants, sizeof(GeometryShaderConstants));
-		D3D::context->Unmap(gscbuf, 0);
+		g_command_stream->LoadGeometryConstants(&GeometryShaderManager::constants);
 		GeometryShaderManager::dirty = false;
-
-		ADDSTAT(stats.thisFrame.bytesUniformStreamed, sizeof(GeometryShaderConstants));
 	}
+}
+
+ID3D11Buffer* GeometryShaderCache::GetConstantBuffer()
+{
 	return gscbuf;
 }
 

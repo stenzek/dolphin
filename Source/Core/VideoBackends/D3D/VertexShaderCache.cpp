@@ -11,6 +11,7 @@
 
 #include "Core/ConfigManager.h"
 
+#include "VideoBackends/D3D/CommandStream.h"
 #include "VideoBackends/D3D/D3DShader.h"
 #include "VideoBackends/D3D/VertexShaderCache.h"
 
@@ -40,19 +41,17 @@ ID3D11InputLayout* VertexShaderCache::GetClearInputLayout() { return ClearLayout
 
 ID3D11Buffer* vscbuf = nullptr;
 
-ID3D11Buffer* &VertexShaderCache::GetConstantBuffer()
+void VertexShaderCache::SetConstants()
 {
-	// TODO: divide the global variables of the generated shaders into about 5 constant buffers to speed this up
 	if (VertexShaderManager::dirty)
 	{
-		D3D11_MAPPED_SUBRESOURCE map;
-		D3D::context->Map(vscbuf, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
-		memcpy(map.pData, &VertexShaderManager::constants, sizeof(VertexShaderConstants));
-		D3D::context->Unmap(vscbuf, 0);
+		g_command_stream->LoadVertexConstants(&VertexShaderManager::constants);
 		VertexShaderManager::dirty = false;
-
-		ADDSTAT(stats.thisFrame.bytesUniformStreamed, sizeof(VertexShaderConstants));
 	}
+}
+
+ID3D11Buffer *VertexShaderCache::GetConstantBuffer()
+{
 	return vscbuf;
 }
 

@@ -19,14 +19,17 @@ public:
 	void CreateDeviceObjects() override;
 	void DestroyDeviceObjects() override;
 
+	static void Draw(PrimitiveType primitive, const u8* vertexData, u32 vertexDataSize, u32 vertexStride, const u16* indices, u32 indexCount);
+
 protected:
 	void ResetBuffer(u32 stride) override;
 	u16* GetIndexBuffer() { return &LocalIBuffer[0]; }
 
 private:
 
-	void PrepareDrawBuffers(u32 stride);
-	void Draw(u32 stride);
+	void PrepareDrawBuffers(const u8* vertexData, u32 vertexDataSize, u32 vertexStride, const u16* indices, u32 indexCount);
+	void Draw(PrimitiveType primitive, u32 vertexStride, u32 indexCount);
+
 	// temp
 	void vFlush(bool useDstAlpha) override;
 

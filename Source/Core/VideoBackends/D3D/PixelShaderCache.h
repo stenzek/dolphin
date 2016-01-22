@@ -23,8 +23,12 @@ public:
 	static bool SetShader(DSTALPHA_MODE dstAlphaMode); // TODO: Should be renamed to LoadShader
 	static bool InsertByteCode(const PixelShaderUid &uid, const void* bytecode, unsigned int bytecodelen);
 
+	// Frontend
 	static ID3D11PixelShader* GetActiveShader() { return last_entry->shader; }
-	static ID3D11Buffer* &GetConstantBuffer();
+	static void SetConstants();
+
+	// Backend
+	static ID3D11Buffer* GetConstantBuffer();
 
 	static ID3D11PixelShader* GetColorMatrixProgram(bool multisampled);
 	static ID3D11PixelShader* GetColorCopyProgram(bool multisampled);

@@ -67,6 +67,9 @@
     <ClCompile Include="BoundingBox.cpp">
       <Filter>Render</Filter>
     </ClCompile>
+    <ClCompile Include="CommandStream.cpp">
+      <Filter>D3D</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="D3DBase.h">
@@ -126,6 +129,9 @@
     <ClInclude Include="VideoBackend.h" />
     <ClInclude Include="BoundingBox.h">
       <Filter>Render</Filter>
+    </ClInclude>
+    <ClInclude Include="CommandStream.h">
+      <Filter>D3D</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

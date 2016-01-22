@@ -31,9 +31,6 @@ public:
 	void ApplyState(bool bUseDstAlpha) override;
 	void RestoreState() override;
 
-	void ApplyCullDisable();
-	void RestoreCull();
-
 	void RenderText(const std::string& text, int left, int top, u32 color) override;
 
 	u32 AccessEFB(EFBAccessType type, u32 x, u32 y, u32 poke_data) override;
@@ -48,6 +45,7 @@ public:
 	TargetRectangle ConvertEFBRectangle(const EFBRectangle& rc) override;
 
 	void SwapImpl(u32 xfbAddr, u32 fbWidth, u32 fbStride, u32 fbHeight, const EFBRectangle& rc, float Gamma) override;
+	void RealSwapImpl(u32 xfbAddr, u32 fbWidth, u32 fbStride, u32 fbHeight, const EFBRectangle& rc, float Gamma);
 
 	void ClearScreen(const EFBRectangle& rc, bool colorEnable, bool alphaEnable, bool zEnable, u32 color, u32 z) override;
 

@@ -13,6 +13,7 @@
 #include "Core/Host.h"
 
 #include "VideoBackends/D3D/BoundingBox.h"
+#include "VideoBackends/D3D/CommandStream.h"
 #include "VideoBackends/D3D/D3DBase.h"
 #include "VideoBackends/D3D/D3DUtil.h"
 #include "VideoBackends/D3D/GeometryShaderCache.h"
@@ -137,6 +138,47 @@ void InitBackendInfo()
 	DX11::D3D::UnloadD3D();
 }
 
+static void BackendThreadInit(void* window_handle, bool on_thread)
+{
+	// internal interfaces
+	g_renderer = std::make_unique<Renderer>(window_handle);
+	g_texture_cache = std::make_unique<TextureCache>();
+	g_vertex_manager = std::make_unique<VertexManager>();
+	g_perf_query = std::make_unique<PerfQuery>();
+	CommandStream::Setup(on_thread);
+	VertexShaderCache::Init();
+	PixelShaderCache::Init();
+	GeometryShaderCache::Init();
+	BBox::Init();
+	D3D::InitUtils();
+}
+
+static void BackendThreadCleanup()
+{
+	// internal interfaces
+	CommandStream::Cleanup();
+	D3D::ShutdownUtils();
+	PixelShaderCache::Shutdown();
+	VertexShaderCache::Shutdown();
+	GeometryShaderCache::Shutdown();
+	BBox::Shutdown();
+
+	g_perf_query.reset();
+	g_vertex_manager.reset();
+	g_texture_cache.reset();
+	g_renderer.reset();
+}
+
+static void BackendThread(void* window_handle, Common::Event* ready_event)
+{
+	BackendThreadInit(window_handle, true);
+
+	ready_event->Set();
+	g_command_stream->BackendThreadLoop();
+
+	BackendThreadCleanup();
+}
+
 void VideoBackend::ShowConfig(void *hParent)
 {
 	InitBackendInfo();
@@ -169,17 +211,21 @@ bool VideoBackend::Initialize(void *window_handle)
 	return true;
 }
 
+static std::thread s_backend_thread;
+
 void VideoBackend::Video_Prepare()
 {
-	// internal interfaces
-	g_renderer = std::make_unique<Renderer>(m_window_handle);
-	g_texture_cache = std::make_unique<TextureCache>();
-	g_vertex_manager = std::make_unique<VertexManager>();
-	g_perf_query = std::make_unique<PerfQuery>();
-	VertexShaderCache::Init();
-	PixelShaderCache::Init();
-	GeometryShaderCache::Init();
-	D3D::InitUtils();
+	static bool use_thread = true;
+	if (use_thread)
+	{
+		Common::Event ready_event;
+		s_backend_thread = std::thread(BackendThread, m_window_handle, &ready_event);
+		ready_event.Wait();
+	}
+	else
+	{
+		BackendThreadInit(m_window_handle, false);
+	}
 
 	// VideoCommon
 	BPInit();
@@ -192,7 +238,6 @@ void VideoBackend::Video_Prepare()
 	GeometryShaderManager::Init();
 	CommandProcessor::Init();
 	PixelEngine::Init();
-	BBox::Init();
 
 	// Tell the host that the window is ready
 	Host_Message(WM_USER_CREATE);
@@ -205,6 +250,16 @@ void VideoBackend::Shutdown()
 	// TODO: should be in Video_Cleanup
 	if (g_renderer)
 	{
+		if (s_backend_thread.joinable())
+		{
+			CommandStream::Shutdown();
+			s_backend_thread.join();
+		}
+		else
+		{
+			BackendThreadCleanup();
+		}
+
 		// VideoCommon
 		Fifo::Shutdown();
 		CommandProcessor::Shutdown();
@@ -213,18 +268,6 @@ void VideoBackend::Shutdown()
 		VertexShaderManager::Shutdown();
 		OpcodeDecoder_Shutdown();
 		VertexLoaderManager::Shutdown();
-
-		// internal interfaces
-		D3D::ShutdownUtils();
-		PixelShaderCache::Shutdown();
-		VertexShaderCache::Shutdown();
-		GeometryShaderCache::Shutdown();
-		BBox::Shutdown();
-
-		g_perf_query.reset();
-		g_vertex_manager.reset();
-		g_texture_cache.reset();
-		g_renderer.reset();
 	}
 }
 

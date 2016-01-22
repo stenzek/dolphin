@@ -16,7 +16,6 @@ public:
 	TextureCache();
 	~TextureCache();
 
-private:
 	struct TCacheEntry : TCacheEntryBase
 	{
 		D3DTexture2D *const texture;

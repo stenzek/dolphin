@@ -104,20 +104,17 @@ void PSTextureEncoder::Encode(u8* dst, u32 format, u32 native_width, u32 bytes_p
 			// expecting the blurred edges around multisampled shapes.
 			FramebufferManager::GetResolvedEFBColorTexture()->GetSRV();
 
-	// Reset API
-	g_renderer->ResetAPIState();
-
 	// Set up all the state for EFB encoding
 	{
 		const u32 words_per_row = bytes_per_row / sizeof(u32);
 
 		D3D11_VIEWPORT vp = CD3D11_VIEWPORT(0.f, 0.f, FLOAT(words_per_row), FLOAT(num_blocks_y));
-		D3D::context->RSSetViewports(1, &vp);
+		D3D::stateman->SetViewport(vp);
 
 		constexpr EFBRectangle fullSrcRect(0, 0, EFB_WIDTH, EFB_HEIGHT);
 		TargetRectangle targetRect = g_renderer->ConvertEFBRectangle(fullSrcRect);
 
-		D3D::context->OMSetRenderTargets(1, &m_outRTV, nullptr);
+		D3D::stateman->SetRenderTarget(m_outRTV, nullptr);
 
 		EFBEncodeParams params;
 		params.SrcLeft = srcRect.left;
@@ -161,12 +158,6 @@ void PSTextureEncoder::Encode(u8* dst, u32 format, u32 native_width, u32 bytes_p
 
 		D3D::context->Unmap(m_outStage, 0);
 	}
-
-	// Restore API
-	g_renderer->RestoreAPIState();
-	D3D::context->OMSetRenderTargets(1,
-		&FramebufferManager::GetEFBColorTexture()->GetRTV(),
-		FramebufferManager::GetEFBDepthTexture()->GetDSV());
 }
 
 ID3D11PixelShader* PSTextureEncoder::SetStaticShader(unsigned int dstFormat, PEControl::PixelFormat srcFormat,

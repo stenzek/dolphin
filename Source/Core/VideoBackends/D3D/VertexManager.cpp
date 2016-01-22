@@ -5,6 +5,7 @@
 #include "Common/CommonTypes.h"
 
 #include "VideoBackends/D3D/BoundingBox.h"
+#include "VideoBackends/D3D/CommandStream.h"
 #include "VideoBackends/D3D/D3DBase.h"
 #include "VideoBackends/D3D/D3DState.h"
 #include "VideoBackends/D3D/GeometryShaderCache.h"
@@ -74,19 +75,18 @@ VertexManager::~VertexManager()
 	DestroyDeviceObjects();
 }
 
-void VertexManager::PrepareDrawBuffers(u32 stride)
+void VertexManager::PrepareDrawBuffers(const u8* vertexData, u32 vertexDataSize, u32 vertexStride, const u16* indices, u32 indexCount)
 {
 	D3D11_MAPPED_SUBRESOURCE map;
 
-	u32 vertexBufferSize = u32(s_pCurBufferPointer - s_pBaseBufferPointer);
-	u32 indexBufferSize = IndexGenerator::GetIndexLen() * sizeof(u16);
-	u32 totalBufferSize = vertexBufferSize + indexBufferSize;
+	u32 indexSize = indexCount * sizeof(u16);
+	u32 totalBufferSize = vertexDataSize + indexSize;
 
 	u32 cursor = m_bufferCursor;
-	u32 padding = m_bufferCursor % stride;
+	u32 padding = m_bufferCursor % vertexStride;
 	if (padding)
 	{
-		cursor += stride - padding;
+		cursor += vertexStride - padding;
 	}
 
 	D3D11_MAP MapType = D3D11_MAP_WRITE_NO_OVERWRITE;
@@ -99,39 +99,35 @@ void VertexManager::PrepareDrawBuffers(u32 stride)
 	}
 
 	m_vertexDrawOffset = cursor;
-	m_indexDrawOffset = cursor + vertexBufferSize;
+	m_indexDrawOffset = cursor + vertexDataSize;
 
 	D3D::context->Map(m_buffers[m_currentBuffer], 0, MapType, 0, &map);
 	u8* mappedData = reinterpret_cast<u8*>(map.pData);
-	memcpy(mappedData + m_vertexDrawOffset, s_pBaseBufferPointer, vertexBufferSize);
-	memcpy(mappedData + m_indexDrawOffset, GetIndexBuffer(), indexBufferSize);
+	memcpy(mappedData + m_vertexDrawOffset, vertexData, vertexDataSize);
+	memcpy(mappedData + m_indexDrawOffset, indices, indexSize);
 	D3D::context->Unmap(m_buffers[m_currentBuffer], 0);
 
 	m_bufferCursor = cursor + totalBufferSize;
 
-	ADDSTAT(stats.thisFrame.bytesVertexStreamed, vertexBufferSize);
-	ADDSTAT(stats.thisFrame.bytesIndexStreamed, indexBufferSize);
+	ADDSTAT(stats.thisFrame.bytesVertexStreamed, vertexDataSize);
+	ADDSTAT(stats.thisFrame.bytesIndexStreamed, indexSize);
 }
 
-void VertexManager::Draw(u32 stride)
+void VertexManager::Draw(PrimitiveType primitive, u32 vertexStride, u32 indexCount)
 {
-	u32 indices = IndexGenerator::GetIndexLen();
-
-	D3D::stateman->SetVertexBuffer(m_buffers[m_currentBuffer], stride, 0);
+	D3D::stateman->SetVertexBuffer(m_buffers[m_currentBuffer], vertexStride, 0);
 	D3D::stateman->SetIndexBuffer(m_buffers[m_currentBuffer]);
 
-	u32 baseVertex = m_vertexDrawOffset / stride;
+	u32 baseVertex = m_vertexDrawOffset / vertexStride;
 	u32 startIndex = m_indexDrawOffset / sizeof(u16);
 
-	switch (current_primitive_type)
+	switch (primitive)
 	{
 		case PRIMITIVE_POINTS:
 			D3D::stateman->SetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_POINTLIST);
-			static_cast<Renderer*>(g_renderer.get())->ApplyCullDisable();
 			break;
 		case PRIMITIVE_LINES:
 			D3D::stateman->SetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
-			static_cast<Renderer*>(g_renderer.get())->ApplyCullDisable();
 			break;
 		case PRIMITIVE_TRIANGLES:
 			D3D::stateman->SetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
@@ -139,12 +135,15 @@ void VertexManager::Draw(u32 stride)
 	}
 
 	D3D::stateman->Apply();
-	D3D::context->DrawIndexed(indices, startIndex, baseVertex);
+	D3D::context->DrawIndexed(indexCount, startIndex, baseVertex);
 
 	INCSTAT(stats.thisFrame.numDrawCalls);
+}
 
-	if (current_primitive_type != PRIMITIVE_TRIANGLES)
-		static_cast<Renderer*>(g_renderer.get())->RestoreCull();
+void VertexManager::Draw(PrimitiveType primitive, const u8* vertexData, u32 vertexDataSize, u32 vertexStride, const u16* indices, u32 indexCount)
+{
+	static_cast<VertexManager*>(g_vertex_manager.get())->PrepareDrawBuffers(vertexData, vertexDataSize, vertexStride, indices, indexCount);
+	static_cast<VertexManager*>(g_vertex_manager.get())->Draw(primitive, vertexStride, indexCount);
 }
 
 void VertexManager::vFlush(bool useDstAlpha)
@@ -168,21 +167,23 @@ void VertexManager::vFlush(bool useDstAlpha)
 		return;
 	}
 
+#if 0
+	// FIXME
 	if (g_ActiveConfig.backend_info.bSupportsBBox && BoundingBox::active)
 	{
 		D3D::context->OMSetRenderTargetsAndUnorderedAccessViews(D3D11_KEEP_RENDER_TARGETS_AND_DEPTH_STENCIL, nullptr, nullptr, 2, 1, &BBox::GetUAV(), nullptr);
 	}
-
-	u32 stride = VertexLoaderManager::GetCurrentVertexFormat()->GetVertexStride();
-
-	PrepareDrawBuffers(stride);
+#endif
 
 	VertexLoaderManager::GetCurrentVertexFormat()->SetupVertexPointers();
+
+	u32 stride = VertexLoaderManager::GetCurrentVertexFormat()->GetVertexStride();
+	u32 vertexBufferSize = u32(s_pCurBufferPointer - s_pBaseBufferPointer);
+	u32 indexBufferSize = IndexGenerator::GetIndexLen();
+
 	g_renderer->ApplyState(useDstAlpha);
 
-	Draw(stride);
-
-	g_renderer->RestoreState();
+	g_command_stream->Draw(current_primitive_type, s_pBaseBufferPointer, vertexBufferSize, stride, GetIndexBuffer(), indexBufferSize);
 }
 
 void VertexManager::ResetBuffer(u32 stride)

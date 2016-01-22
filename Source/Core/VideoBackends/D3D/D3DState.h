@@ -77,37 +77,34 @@ private:
 namespace D3D
 {
 
-template<typename T> class AutoState
-{
-public:
-	AutoState(const T* object);
-	AutoState(const AutoState<T> &source);
-	~AutoState();
-
-	const inline T* GetPtr() const { return state; }
-
-private:
-	const T* state;
-};
-
-typedef AutoState<ID3D11BlendState> AutoBlendState;
-typedef AutoState<ID3D11DepthStencilState> AutoDepthStencilState;
-typedef AutoState<ID3D11RasterizerState> AutoRasterizerState;
-
 class StateManager
 {
 public:
 	StateManager();
 
-	// call any of these to change the affected states
-	void PushBlendState(const ID3D11BlendState* state);
-	void PushDepthState(const ID3D11DepthStencilState* state);
-	void PushRasterizerState(const ID3D11RasterizerState* state);
+	void SetBlendState(ID3D11BlendState* state)
+	{
+		if (m_current.blendState != state)
+			m_dirtyFlags |= DirtyFlag_BlendState;
 
-	// call these after drawing
-	void PopBlendState();
-	void PopDepthState();
-	void PopRasterizerState();
+		m_pending.blendState = state;
+	}
+
+	void SetDepthState(ID3D11DepthStencilState* state)
+	{
+		if (m_current.depthState != state)
+			m_dirtyFlags |= DirtyFlag_DepthState;
+
+		m_pending.depthState = state;
+	}
+
+	void SetRasterizerState(ID3D11RasterizerState* state)
+	{
+		if (m_current.rasterizerState != state)
+			m_dirtyFlags |= DirtyFlag_RasterizerState;
+		
+		m_pending.rasterizerState = state;
+	}
 
 	void SetTexture(u32 index, ID3D11ShaderResourceView* texture)
 	{
@@ -145,9 +142,9 @@ public:
 	void SetGeometryConstants(ID3D11Buffer* buffer)
 	{
 		if (m_current.geometryConstants != buffer)
-			m_dirtyFlags |= DirtyFlag_GeometryConstants;
+			m_pending.geometryConstants = buffer;
 
-		m_pending.geometryConstants = buffer;
+		m_dirtyFlags |= DirtyFlag_GeometryConstants;
 	}
 
 	void SetVertexBuffer(ID3D11Buffer* buffer, u32 stride, u32 offset)
@@ -155,7 +152,9 @@ public:
 		if (m_current.vertexBuffer != buffer ||
 			m_current.vertexBufferStride != stride ||
 			m_current.vertexBufferOffset != offset)
+		{
 			m_dirtyFlags |= DirtyFlag_VertexBuffer;
+		}
 
 		m_pending.vertexBuffer = buffer;
 		m_pending.vertexBufferStride = stride;
@@ -182,7 +181,7 @@ public:
 	{
 		if (m_current.inputLayout != layout)
 			m_dirtyFlags |= DirtyFlag_InputAssembler;
-
+		
 		m_pending.inputLayout = layout;
 	}
 
@@ -191,13 +190,6 @@ public:
 		if (m_current.pixelShader != shader)
 			m_dirtyFlags |= DirtyFlag_PixelShader;
 
-		m_pending.pixelShader = shader;
-	}
-
-	void SetPixelShaderDynamic(ID3D11PixelShader* shader, ID3D11ClassInstance * const * classInstances, u32 classInstancesCount)
-	{
-		D3D::context->PSSetShader(shader, classInstances, classInstancesCount);
-		m_current.pixelShader = shader;
 		m_pending.pixelShader = shader;
 	}
 
@@ -217,22 +209,62 @@ public:
 		m_pending.geometryShader = shader;
 	}
 
+	void SetViewport(const D3D11_VIEWPORT &viewport)
+	{
+		if (memcmp(&m_current.viewport, &viewport, sizeof(D3D11_VIEWPORT)))
+			m_dirtyFlags |= DirtyFlag_Viewport;
+
+		memcpy(&m_pending.viewport, &viewport, sizeof(D3D11_VIEWPORT));
+	}
+
+	void SetScissorRect(const D3D11_RECT &rect)
+	{
+		if (memcmp(&m_current.scissorRect, &rect, sizeof(D3D11_RECT)))
+			m_dirtyFlags |= DirtyFlag_ScissorRect;
+
+		memcpy(&m_pending.scissorRect, &rect, sizeof(D3D11_RECT));
+	}
+
+	void SetRenderTarget(ID3D11RenderTargetView* rtv, ID3D11DepthStencilView* dsv)
+	{
+		u32 count = (rtv) ? 1 : 0;
+		if (m_current.renderTargetCount != count || m_current.renderTargets[0] != rtv || m_current.depthBuffer != dsv)
+			m_dirtyFlags |= DirtyFlag_RenderTargets;
+
+		m_pending.renderTargets[0] = rtv;
+		for (u32 i = 1; i < 8; i++)
+			m_pending.renderTargets[i] = nullptr;
+
+		m_pending.depthBuffer = dsv;
+		m_pending.renderTargetCount = count;
+	}
+
+	void SetRenderTargets(u32 count, ID3D11RenderTargetView** rtvs, ID3D11DepthStencilView* dsv)
+	{
+		if (m_current.renderTargetCount != count ||
+			memcmp(m_current.renderTargets, rtvs, sizeof(ID3D11RenderTargetView*) * count) ||
+			m_current.depthBuffer != dsv)
+		{
+			m_dirtyFlags |= DirtyFlag_RenderTargets;
+		}
+
+		for (u32 i = 0; i < count; i++)
+			m_pending.renderTargets[i] = rtvs[i];
+		for (u32 i = count; i < 8; i++)
+			m_pending.renderTargets[i] = nullptr;
+
+		m_pending.depthBuffer = dsv;
+		m_pending.renderTargetCount = count;
+	}
+
 	// removes currently set texture from all slots, returns mask of previously bound slots
 	u32 UnsetTexture(ID3D11ShaderResourceView* srv);
 	void SetTextureByMask(u32 textureSlotMask, ID3D11ShaderResourceView* srv);
 
 	// call this immediately before any drawing operation or to explicitly apply pending resource state changes
-	void Apply();
+	void Apply(bool reapply = false);
 
 private:
-
-	std::stack<AutoBlendState> m_blendStates;
-	std::stack<AutoDepthStencilState> m_depthStates;
-	std::stack<AutoRasterizerState> m_rasterizerStates;
-
-	ID3D11BlendState* m_currentBlendState;
-	ID3D11DepthStencilState* m_currentDepthState;
-	ID3D11RasterizerState* m_currentRasterizerState;
 
 	enum DirtyFlags
 	{
@@ -266,6 +298,15 @@ private:
 		DirtyFlag_GeometryShader = 1 << 23,
 
 		DirtyFlag_InputAssembler = 1 << 24,
+
+		DirtyFlag_RasterizerState = 1 << 25,
+		DirtyFlag_DepthState = 1 << 26,
+		DirtyFlag_BlendState = 1 << 27,
+
+		DirtyFlag_Viewport = 1 << 28,
+		DirtyFlag_ScissorRect = 1 << 29,
+
+		DirtyFlag_RenderTargets = 1 << 30
 	};
 
 	u32 m_dirtyFlags;
@@ -286,6 +327,15 @@ private:
 		ID3D11PixelShader* pixelShader;
 		ID3D11VertexShader* vertexShader;
 		ID3D11GeometryShader* geometryShader;
+		ID3D11BlendState* blendState;
+		ID3D11DepthStencilState* depthState;
+		ID3D11RasterizerState* rasterizerState;
+		D3D11_VIEWPORT viewport;
+		D3D11_RECT scissorRect;
+
+		ID3D11RenderTargetView* renderTargets[8];
+		ID3D11DepthStencilView* depthBuffer;
+		u32 renderTargetCount;
 	};
 
 	Resources m_pending;

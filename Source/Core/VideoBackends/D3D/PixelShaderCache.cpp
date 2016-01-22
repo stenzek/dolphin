@@ -11,6 +11,7 @@
 
 #include "Core/ConfigManager.h"
 
+#include "VideoBackends/D3D/CommandStream.h"
 #include "VideoBackends/D3D/D3DBase.h"
 #include "VideoBackends/D3D/D3DShader.h"
 #include "VideoBackends/D3D/PixelShaderCache.h"
@@ -436,19 +437,17 @@ ID3D11PixelShader* PixelShaderCache::GetDepthResolveProgram()
 	return s_DepthResolveProgram;
 }
 
-ID3D11Buffer* &PixelShaderCache::GetConstantBuffer()
+void PixelShaderCache::SetConstants()
 {
-	// TODO: divide the global variables of the generated shaders into about 5 constant buffers to speed this up
 	if (PixelShaderManager::dirty)
 	{
-		D3D11_MAPPED_SUBRESOURCE map;
-		D3D::context->Map(pscbuf, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
-		memcpy(map.pData, &PixelShaderManager::constants, sizeof(PixelShaderConstants));
-		D3D::context->Unmap(pscbuf, 0);
+		g_command_stream->LoadPixelConstants(&PixelShaderManager::constants);
 		PixelShaderManager::dirty = false;
-
-		ADDSTAT(stats.thisFrame.bytesUniformStreamed, sizeof(PixelShaderConstants));
 	}
+}
+
+ID3D11Buffer* PixelShaderCache::GetConstantBuffer()
+{
 	return pscbuf;
 }
 

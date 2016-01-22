@@ -8,6 +8,7 @@
 #include "Common/MsgHandler.h"
 #include "Common/StringUtil.h"
 #include "Common/Logging/Log.h"
+#include "VideoBackends/D3D/CommandStream.h"
 #include "VideoBackends/D3D/D3DBase.h"
 #include "VideoBackends/D3D/D3DState.h"
 #include "VideoBackends/D3D/D3DTexture.h"
@@ -277,16 +278,27 @@ HRESULT Create(HWND wnd)
 	swap_chain_desc.SampleDesc.Quality = 0;
 	swap_chain_desc.Windowed = !g_Config.bFullscreen;
 
-	DXGI_OUTPUT_DESC out_desc = {};
-	output->GetDesc(&out_desc);
+	if (!swap_chain_desc.Windowed)
+	{
+		DXGI_OUTPUT_DESC out_desc = {};
+		output->GetDesc(&out_desc);
 
-	DXGI_MODE_DESC mode_desc = {};
-	mode_desc.Width = out_desc.DesktopCoordinates.right - out_desc.DesktopCoordinates.left;
-	mode_desc.Height = out_desc.DesktopCoordinates.bottom - out_desc.DesktopCoordinates.top;
-	mode_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-	mode_desc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
-	hr = output->FindClosestMatchingMode(&mode_desc, &swap_chain_desc.BufferDesc, nullptr);
-	if (FAILED(hr)) MessageBox(wnd, _T("Failed to find a supported video mode"), _T("Dolphin Direct3D 11 backend"), MB_OK | MB_ICONERROR);
+		DXGI_MODE_DESC mode_desc = {};
+		mode_desc.Width = out_desc.DesktopCoordinates.right - out_desc.DesktopCoordinates.left;
+		mode_desc.Height = out_desc.DesktopCoordinates.bottom - out_desc.DesktopCoordinates.top;
+		mode_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+		mode_desc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
+		hr = output->FindClosestMatchingMode(&mode_desc, &swap_chain_desc.BufferDesc, nullptr);
+		if (SUCCEEDED(hr))
+		{
+			swap_chain_desc.BufferDesc = mode_desc;
+		}
+		else
+		{
+			MessageBox(wnd, _T("Failed to find a supported video mode. Reverting to windowed mode."), _T("Dolphin Direct3D 11 backend"), MB_OK | MB_ICONERROR);
+			swap_chain_desc.Windowed = TRUE;
+		}
+	}
 
 	if (swap_chain_desc.Windowed)
 	{
@@ -294,6 +306,7 @@ HRESULT Create(HWND wnd)
 		// this is not a problem as long as we're in windowed mode
 		swap_chain_desc.BufferDesc.Width = xres;
 		swap_chain_desc.BufferDesc.Height = yres;
+		swap_chain_desc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
 	}
 
 #if defined(_DEBUG) || defined(DEBUGFAST)
@@ -301,7 +314,7 @@ HRESULT Create(HWND wnd)
 	// version of the DirectX SDK. If it does, simply fallback to a non-debug device.
 	{
 		hr = PD3D11CreateDeviceAndSwapChain(adapter, D3D_DRIVER_TYPE_UNKNOWN, nullptr,
-											D3D11_CREATE_DEVICE_SINGLETHREADED | D3D11_CREATE_DEVICE_DEBUG,
+											D3D11_CREATE_DEVICE_DEBUG,
 											supported_feature_levels, NUM_SUPPORTED_FEATURE_LEVELS,
 											D3D11_SDK_VERSION, &swap_chain_desc, &swapchain, &device,
 											&featlevel, &context);
@@ -332,7 +345,7 @@ HRESULT Create(HWND wnd)
 #endif
 	{
 		hr = PD3D11CreateDeviceAndSwapChain(adapter, D3D_DRIVER_TYPE_UNKNOWN, nullptr,
-											D3D11_CREATE_DEVICE_SINGLETHREADED,
+											0,
 											supported_feature_levels, NUM_SUPPORTED_FEATURE_LEVELS,
 											D3D11_SDK_VERSION, &swap_chain_desc, &swapchain, &device,
 											&featlevel, &context);
@@ -482,6 +495,10 @@ unsigned int GetMaxTextureSize()
 
 void Reset()
 {
+	// unbind first
+	D3D::stateman->SetRenderTarget(nullptr, nullptr);
+	D3D::stateman->Apply();
+
 	// release all back buffer references
 	SAFE_RELEASE(backbuf);
 

@@ -4,6 +4,7 @@
 
 #include <memory>
 
+#include "VideoBackends/D3D/CommandStream.h"
 #include "VideoBackends/D3D/D3DBase.h"
 #include "VideoBackends/D3D/D3DShader.h"
 #include "VideoBackends/D3D/D3DState.h"
@@ -34,11 +35,14 @@ TextureCache::TCacheEntry::~TCacheEntry()
 
 void TextureCache::TCacheEntry::Bind(unsigned int stage)
 {
-	D3D::stateman->SetTexture(stage, texture->GetSRV());
+	g_command_stream->BindTexture(stage, texture->GetSRV());
 }
 
 bool TextureCache::TCacheEntry::Save(const std::string& filename, unsigned int level)
 {
+	PanicAlert("Not implemented");
+	return false;
+#if 0
 	// TODO: Somehow implement this (D3DX11 doesn't support dumping individual LODs)
 	static bool warn_once = true;
 	if (level && warn_once)
@@ -76,6 +80,7 @@ bool TextureCache::TCacheEntry::Save(const std::string& filename, unsigned int l
 	}
 
 	return saved_png;
+#endif
 }
 
 void TextureCache::TCacheEntry::CopyRectangleFromTexture(
@@ -83,6 +88,9 @@ void TextureCache::TCacheEntry::CopyRectangleFromTexture(
 	const MathUtil::Rectangle<int> &srcrect,
 	const MathUtil::Rectangle<int> &dstrect)
 {
+	PanicAlert("Not implemented");
+
+#if 0
 	TCacheEntry* srcentry = (TCacheEntry*)source;
 	if (srcrect.GetWidth() == dstrect.GetWidth()
 		&& srcrect.GetHeight() == dstrect.GetHeight())
@@ -139,13 +147,15 @@ void TextureCache::TCacheEntry::CopyRectangleFromTexture(
 		FramebufferManager::GetEFBDepthTexture()->GetDSV());
 
 	g_renderer->RestoreAPIState();
+#endif
 }
 
 void TextureCache::TCacheEntry::Load(unsigned int width, unsigned int height,
 	unsigned int expanded_width, unsigned int level)
 {
 	unsigned int src_pitch = 4 * expanded_width;
-	D3D::ReplaceRGBATexture2D(texture->GetTex(), TextureCache::temp, width, height, src_pitch, level, usage);
+	//D3D::ReplaceRGBATexture2D(texture->GetTex(), TextureCache::temp, width, height, src_pitch, level, usage);
+	g_command_stream->UploadTexture(this, width, height, src_pitch, level, TextureCache::temp);
 }
 
 TextureCacheBase::TCacheEntryBase* TextureCache::CreateTexture(const TCacheEntryConfig& config)
@@ -190,75 +200,90 @@ TextureCacheBase::TCacheEntryBase* TextureCache::CreateTexture(const TCacheEntry
 void TextureCache::TCacheEntry::FromRenderTarget(u8* dst, PEControl::PixelFormat srcFormat, const EFBRectangle& srcRect,
 	bool scaleByHalf, unsigned int cbufid, const float *colmat)
 {
+	// EFB2TEX
+	g_command_stream->CopyEFBToTexture(this, srcFormat, srcRect, scaleByHalf, colmat, cbufid);
+}
+
+void CommandStream::ExecCopyEFBToTexture(const CopyEFBToTextureData* data)
+{
+	ResetAPIState();
+
 	// When copying at half size, in multisampled mode, resolve the color/depth buffer first.
 	// This is because multisampled texture reads go through Load, not Sample, and the linear
 	// filter is ignored.
 	bool multisampled = (g_ActiveConfig.iMultisamples > 1);
-	ID3D11ShaderResourceView* efbTexSRV = (srcFormat == PEControl::Z24) ?
+	ID3D11ShaderResourceView* efbTexSRV = (data->SrcFormat == PEControl::Z24) ?
 		FramebufferManager::GetEFBDepthTexture()->GetSRV() :
 		FramebufferManager::GetEFBColorTexture()->GetSRV();
-	if (multisampled && scaleByHalf)
+	if (multisampled && data->ScaleByHalf)
 	{
 		multisampled = false;
-		efbTexSRV = (srcFormat == PEControl::Z24) ?
+		efbTexSRV = (data->SrcFormat == PEControl::Z24) ?
 			FramebufferManager::GetResolvedEFBDepthTexture()->GetSRV() :
 			FramebufferManager::GetResolvedEFBColorTexture()->GetSRV();
 	}
 
-	g_renderer->ResetAPIState();
-
 	// stretch picture with increased internal resolution
-	const D3D11_VIEWPORT vp = CD3D11_VIEWPORT(0.f, 0.f, (float)config.width, (float)config.height);
-	D3D::context->RSSetViewports(1, &vp);
+	const D3D11_VIEWPORT vp = CD3D11_VIEWPORT(0.f, 0.f, (float)data->TextureWidth, (float)data->TextureHeight);
+	D3D::stateman->SetViewport(vp);
 
 	// set transformation
-	if (nullptr == efbcopycbuf[cbufid])
+	if (nullptr == efbcopycbuf[data->ColMatIdx])
 	{
 		const D3D11_BUFFER_DESC cbdesc = CD3D11_BUFFER_DESC(28 * sizeof(float), D3D11_BIND_CONSTANT_BUFFER, D3D11_USAGE_DEFAULT);
-		D3D11_SUBRESOURCE_DATA data;
-		data.pSysMem = colmat;
-		HRESULT hr = D3D::device->CreateBuffer(&cbdesc, &data, &efbcopycbuf[cbufid]);
-		CHECK(SUCCEEDED(hr), "Create efb copy constant buffer %d", cbufid);
-		D3D::SetDebugObjectName((ID3D11DeviceChild*)efbcopycbuf[cbufid], "a constant buffer used in TextureCache::CopyRenderTargetToTexture");
+		D3D11_SUBRESOURCE_DATA cbdata;
+		cbdata.pSysMem = data->ColMat.data();
+		HRESULT hr = D3D::device->CreateBuffer(&cbdesc, &cbdata, &efbcopycbuf[data->ColMatIdx]);
+		CHECK(SUCCEEDED(hr), "Create efb copy constant buffer %d", data->ColMatIdx);
+		D3D::SetDebugObjectName((ID3D11DeviceChild*)efbcopycbuf[data->ColMatIdx], "a constant buffer used in TextureCache::CopyRenderTargetToTexture");
 	}
-	D3D::stateman->SetPixelConstants(efbcopycbuf[cbufid]);
+	D3D::stateman->SetPixelConstants(efbcopycbuf[data->ColMatIdx]);
 
-	const TargetRectangle targetSource = g_renderer->ConvertEFBRectangle(srcRect);
+	const TargetRectangle targetSource = g_renderer->ConvertEFBRectangle(data->SrcRect);
 	// TODO: try targetSource.asRECT();
 	const D3D11_RECT sourcerect = CD3D11_RECT(targetSource.left, targetSource.top, targetSource.right, targetSource.bottom);
 
 	// Use linear filtering if (bScaleByHalf), use point filtering otherwise
-	if (scaleByHalf)
+	if (data->ScaleByHalf)
 		D3D::SetLinearCopySampler();
 	else
 		D3D::SetPointCopySampler();
 
 	// Make sure we don't draw with the texture set as both a source and target.
 	// (This can happen because we don't unbind textures when we free them.)
-	D3D::stateman->UnsetTexture(texture->GetSRV());
+	D3D::stateman->UnsetTexture(data->DstTextureSRV);
 
-	D3D::context->OMSetRenderTargets(1, &texture->GetRTV(), nullptr);
+	D3D::stateman->SetRenderTarget(data->DstTextureRTV, nullptr);
 
 	// Create texture copy
 	D3D::drawShadedTexQuad(
 		efbTexSRV,
 		&sourcerect, Renderer::GetTargetWidth(),
 		Renderer::GetTargetHeight(),
-		srcFormat == PEControl::Z24 ? PixelShaderCache::GetDepthMatrixProgram(multisampled) : PixelShaderCache::GetColorMatrixProgram(multisampled),
+		data->SrcFormat == PEControl::Z24 ? PixelShaderCache::GetDepthMatrixProgram(multisampled) : PixelShaderCache::GetColorMatrixProgram(multisampled),
 		VertexShaderCache::GetSimpleVertexShader(),
 		VertexShaderCache::GetSimpleInputLayout(),
 		GeometryShaderCache::GetCopyGeometryShader());
 
-	D3D::context->OMSetRenderTargets(1, &FramebufferManager::GetEFBColorTexture()->GetRTV(), FramebufferManager::GetEFBDepthTexture()->GetDSV());
+	RestoreAPIState();
 
-	g_renderer->RestoreAPIState();
+	// Release references we added
+	if (data->DstTextureSRV != nullptr)
+		data->DstTextureSRV->Release();
+	if (data->DstTextureRTV != nullptr)
+		data->DstTextureRTV->Release();
 }
 
 void TextureCache::CopyEFB(u8* dst, u32 format, u32 native_width, u32 bytes_per_row, u32 num_blocks_y, u32 memory_stride,
 	PEControl::PixelFormat srcFormat, const EFBRectangle& srcRect,
 	bool isIntensity, bool scaleByHalf)
 {
+	// EFB2RAM
+	PanicAlert("Not implemented");
+
+#if 0
 	g_encoder->Encode(dst, format, native_width, bytes_per_row, num_blocks_y, memory_stride, srcFormat, srcRect, isIntensity, scaleByHalf);
+#endif
 }
 
 const char palette_shader[] =
@@ -343,6 +368,9 @@ void main(
 
 void TextureCache::ConvertTexture(TCacheEntryBase* entry, TCacheEntryBase* unconverted, void* palette, TlutFormat format)
 {
+	PanicAlert("Not implemented");
+
+#if 0
 	g_renderer->ResetAPIState();
 
 	// stretch picture with increased internal resolution
@@ -380,6 +408,7 @@ void TextureCache::ConvertTexture(TCacheEntryBase* entry, TCacheEntryBase* uncon
 	D3D::context->OMSetRenderTargets(1, &FramebufferManager::GetEFBColorTexture()->GetRTV(), FramebufferManager::GetEFBDepthTexture()->GetDSV());
 
 	g_renderer->RestoreAPIState();
+#endif
 }
 
 ID3D11PixelShader *GetConvertShader(const char* Type)

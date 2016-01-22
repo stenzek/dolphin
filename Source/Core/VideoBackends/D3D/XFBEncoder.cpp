@@ -286,12 +286,12 @@ void XFBEncoder::Encode(u8* dst, u32 width, u32 height, const EFBRectangle& srcR
 	D3D::stateman->SetVertexShader(m_vShader);
 	D3D::stateman->SetGeometryShader(nullptr);
 
-	D3D::stateman->PushBlendState(m_xfbEncodeBlendState);
-	D3D::stateman->PushDepthState(m_xfbEncodeDepthState);
-	D3D::stateman->PushRasterizerState(m_xfbEncodeRastState);
+	D3D::stateman->SetBlendState(m_xfbEncodeBlendState);
+	D3D::stateman->SetDepthState(m_xfbEncodeDepthState);
+	D3D::stateman->SetRasterizerState(m_xfbEncodeRastState);
 
 	D3D11_VIEWPORT vp = CD3D11_VIEWPORT(0.f, 0.f, FLOAT(width/2), FLOAT(height));
-	D3D::context->RSSetViewports(1, &vp);
+	D3D::stateman->SetViewport(vp);
 
 	D3D::stateman->SetInputLayout(m_quadLayout);
 	D3D::stateman->SetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
@@ -311,7 +311,7 @@ void XFBEncoder::Encode(u8* dst, u32 width, u32 height, const EFBRectangle& srcR
 	params.Gamma = gamma;
 	D3D::context->UpdateSubresource(m_encodeParams, 0, nullptr, &params, 0, 0);
 
-	D3D::context->OMSetRenderTargets(1, &m_outRTV, nullptr);
+	D3D::stateman->SetRenderTarget(m_outRTV, nullptr);
 
 	ID3D11ShaderResourceView* pEFB = FramebufferManager::GetResolvedEFBColorTexture()->GetSRV();
 
@@ -341,10 +341,6 @@ void XFBEncoder::Encode(u8* dst, u32 width, u32 height, const EFBRectangle& srcR
 
 	D3D::stateman->SetPixelShader(nullptr);
 	D3D::stateman->SetVertexShader(nullptr);
-
-	D3D::stateman->PopRasterizerState();
-	D3D::stateman->PopDepthState();
-	D3D::stateman->PopBlendState();
 
 	// Transfer staging buffer to GameCube/Wii RAM
 

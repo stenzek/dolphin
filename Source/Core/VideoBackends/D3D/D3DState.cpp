@@ -18,77 +18,20 @@ namespace D3D
 
 StateManager* stateman;
 
-
-template<typename T> AutoState<T>::AutoState(const T* object) : state(object)
-{
-	((IUnknown*)state)->AddRef();
-}
-
-template<typename T> AutoState<T>::AutoState(const AutoState<T> &source)
-{
-	state = source.GetPtr();
-	((T*)state)->AddRef();
-}
-
-template<typename T> AutoState<T>::~AutoState()
-{
-	if (state) ((T*)state)->Release();
-	state = nullptr;
-}
-
 StateManager::StateManager()
-	: m_currentBlendState(nullptr)
-	, m_currentDepthState(nullptr)
-	, m_currentRasterizerState(nullptr)
-	, m_dirtyFlags(~0u)
+	: m_dirtyFlags(~0u)
 	, m_pending()
 	, m_current()
 {
 }
 
-void StateManager::PushBlendState(const ID3D11BlendState* state) { m_blendStates.push(AutoBlendState(state)); }
-void StateManager::PushDepthState(const ID3D11DepthStencilState* state) { m_depthStates.push(AutoDepthStencilState(state)); }
-void StateManager::PushRasterizerState(const ID3D11RasterizerState* state) { m_rasterizerStates.push(AutoRasterizerState(state)); }
-void StateManager::PopBlendState() { m_blendStates.pop(); }
-void StateManager::PopDepthState() { m_depthStates.pop(); }
-void StateManager::PopRasterizerState() { m_rasterizerStates.pop(); }
-
-void StateManager::Apply()
+void StateManager::Apply(bool force)
 {
-	if (!m_blendStates.empty())
-	{
-		if (m_currentBlendState != m_blendStates.top().GetPtr())
-		{
-			m_currentBlendState = (ID3D11BlendState*)m_blendStates.top().GetPtr();
-			D3D::context->OMSetBlendState(m_currentBlendState, nullptr, 0xFFFFFFFF);
-		}
-	}
-	else ERROR_LOG(VIDEO, "Tried to apply without blend state!");
-
-	if (!m_depthStates.empty())
-	{
-		if (m_currentDepthState != m_depthStates.top().GetPtr())
-		{
-			m_currentDepthState = (ID3D11DepthStencilState*)m_depthStates.top().GetPtr();
-			D3D::context->OMSetDepthStencilState(m_currentDepthState, 0);
-		}
-	}
-	else ERROR_LOG(VIDEO, "Tried to apply without depth state!");
-
-	if (!m_rasterizerStates.empty())
-	{
-		if (m_currentRasterizerState != m_rasterizerStates.top().GetPtr())
-		{
-			m_currentRasterizerState = (ID3D11RasterizerState*)m_rasterizerStates.top().GetPtr();
-			D3D::context->RSSetState(m_currentRasterizerState);
-		}
-	}
-	else ERROR_LOG(VIDEO, "Tried to apply without rasterizer state!");
+	if (force)
+		m_dirtyFlags = ~0u;
 
 	if (!m_dirtyFlags)
-	{
 		return;
-	}
 
 	int textureMaskShift = LeastSignificantSetBit((u32)DirtyFlag_Texture0);
 	int samplerMaskShift = LeastSignificantSetBit((u32)DirtyFlag_Sampler0);
@@ -100,6 +43,15 @@ void StateManager::Apply()
 	u32 dirtyConstants = m_dirtyFlags & (DirtyFlag_PixelConstants | DirtyFlag_VertexConstants | DirtyFlag_GeometryConstants);
 	u32 dirtyShaders = m_dirtyFlags & (DirtyFlag_PixelShader | DirtyFlag_VertexShader | DirtyFlag_GeometryShader);
 	u32 dirtyBuffers = m_dirtyFlags & (DirtyFlag_VertexBuffer | DirtyFlag_IndexBuffer);
+
+	// Render targets must come before textures
+	if (m_dirtyFlags & DirtyFlag_RenderTargets)
+	{
+		D3D::context->OMSetRenderTargets(m_pending.renderTargetCount, m_pending.renderTargets, m_pending.depthBuffer);
+		memcpy(m_current.renderTargets, m_pending.renderTargets, sizeof(m_current.renderTargets));
+		m_current.depthBuffer = m_pending.depthBuffer;
+		m_current.renderTargetCount = m_pending.renderTargetCount;
+	}
 
 	if (dirtyConstants)
 	{
@@ -179,25 +131,52 @@ void StateManager::Apply()
 		dirtySamplers &= ~(1 << index);
 	}
 
-	if (dirtyShaders)
+	if (m_dirtyFlags & DirtyFlag_VertexShader)
 	{
-		if (m_current.pixelShader != m_pending.pixelShader)
-		{
-			D3D::context->PSSetShader(m_pending.pixelShader, nullptr, 0);
-			m_current.pixelShader = m_pending.pixelShader;
-		}
+		D3D::context->VSSetShader(m_pending.vertexShader, nullptr, 0);
+		m_current.vertexShader = m_pending.vertexShader;
+	}
 
-		if (m_current.vertexShader != m_pending.vertexShader)
-		{
-			D3D::context->VSSetShader(m_pending.vertexShader, nullptr, 0);
-			m_current.vertexShader = m_pending.vertexShader;
-		}
+	if (m_dirtyFlags & DirtyFlag_GeometryShader)
+	{
+		D3D::context->GSSetShader(m_pending.geometryShader, nullptr, 0);
+		m_current.geometryShader = m_pending.geometryShader;
+	}
 
-		if (m_current.geometryShader != m_pending.geometryShader)
-		{
-			D3D::context->GSSetShader(m_pending.geometryShader, nullptr, 0);
-			m_current.geometryShader = m_pending.geometryShader;
-		}
+	if (m_dirtyFlags & DirtyFlag_PixelShader)
+	{
+		D3D::context->PSSetShader(m_pending.pixelShader, nullptr, 0);
+		m_current.pixelShader = m_pending.pixelShader;
+	}
+
+	if (m_dirtyFlags & DirtyFlag_RasterizerState)
+	{
+		D3D::context->RSSetState(m_pending.rasterizerState);
+		m_current.rasterizerState = m_pending.rasterizerState;
+	}
+
+	if (m_dirtyFlags & DirtyFlag_DepthState)
+	{
+		D3D::context->OMSetDepthStencilState(m_pending.depthState, 0);
+		m_current.depthState = m_pending.depthState;
+	}
+
+	if (m_dirtyFlags & DirtyFlag_BlendState)
+	{
+		D3D::context->OMSetBlendState(m_pending.blendState, nullptr, 0xFFFFFFFF);
+		m_current.blendState = m_pending.blendState;
+	}
+
+	if (m_dirtyFlags & DirtyFlag_Viewport)
+	{
+		D3D::context->RSSetViewports(1, &m_pending.viewport);
+		memcpy(&m_current.viewport, &m_pending.viewport, sizeof(D3D11_VIEWPORT));
+	}
+
+	if (m_dirtyFlags & DirtyFlag_ScissorRect)
+	{
+		D3D::context->RSSetScissorRects(1, &m_pending.scissorRect);
+		memcpy(&m_current.scissorRect, &m_pending.scissorRect, sizeof(D3D11_RECT));
 	}
 
 	m_dirtyFlags = 0;

@@ -12,8 +12,11 @@
 namespace DX11
 {
 
+static ID3D11InputLayout* last_input_layout;
+
 class D3DVertexFormat : public NativeVertexFormat
 {
+public:
 	D3D11_INPUT_ELEMENT_DESC m_elems[32];
 	UINT m_num_elems;
 
@@ -138,7 +141,13 @@ void D3DVertexFormat::SetupVertexPointers()
 		if (FAILED(hr)) PanicAlert("Failed to create input layout, %s %d\n", __FILE__, __LINE__);
 		DX11::D3D::SetDebugObjectName((ID3D11DeviceChild*)m_layout, "input layout used to emulate the GX pipeline");
 	}
-	DX11::D3D::stateman->SetInputLayout(m_layout);
+
+	last_input_layout = m_layout;
+}
+
+ID3D11InputLayout* VertexShaderCache::GetActiveInputLayout()
+{
+	return last_input_layout;
 }
 
 } // namespace DX11

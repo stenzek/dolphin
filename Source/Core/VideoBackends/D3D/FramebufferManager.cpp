@@ -49,6 +49,7 @@ D3DTexture2D* &FramebufferManager::GetResolvedEFBDepthTexture()
 {
 	if (g_ActiveConfig.iMultisamples > 1)
 	{
+#if 0
 		// ResolveSubresource does not work with depth textures.
 		// Instead, we use a shader that selects the minimum depth from all samples.
 
@@ -71,7 +72,9 @@ D3DTexture2D* &FramebufferManager::GetResolvedEFBDepthTexture()
 		D3D::context->OMSetRenderTargets(1, &FramebufferManager::GetEFBColorTexture()->GetRTV(), FramebufferManager::GetEFBDepthTexture()->GetDSV());
 		D3D::stateman->PopDepthState();
 		g_renderer->RestoreAPIState();
+#endif
 
+		PanicAlert("Not implemented");
 		return m_efb.resolved_depth_tex;
 	}
 	else
@@ -187,6 +190,8 @@ FramebufferManager::FramebufferManager()
 	}
 
 	s_xfbEncoder.Init();
+
+	D3D::stateman->SetRenderTarget(m_efb.color_tex->GetRTV(), m_efb.depth_tex->GetDSV());
 }
 
 FramebufferManager::~FramebufferManager()
@@ -206,9 +211,12 @@ FramebufferManager::~FramebufferManager()
 
 void FramebufferManager::CopyToRealXFB(u32 xfbAddr, u32 fbStride, u32 fbHeight, const EFBRectangle& sourceRc,float Gamma)
 {
+	PanicAlert("Not implemented");
+#if 0
 	u8* dst = Memory::GetPointer(xfbAddr);
 	// below div2 due to dx using pixel width
 	s_xfbEncoder.Encode(dst, fbStride/2, fbHeight, sourceRc, Gamma);
+#endif
 }
 
 std::unique_ptr<XFBSourceBase> FramebufferManager::CreateXFBSource(unsigned int target_width, unsigned int target_height, unsigned int layers)
@@ -232,6 +240,8 @@ void XFBSource::DecodeToTexture(u32 xfbAddr, u32 fbWidth, u32 fbHeight)
 
 void XFBSource::CopyEFB(float Gamma)
 {
+	PanicAlert("Not implemented");
+#if 0
 	g_renderer->ResetAPIState(); // reset any game specific settings
 
 	// Copy EFB data to XFB and restore render target again
@@ -251,6 +261,7 @@ void XFBSource::CopyEFB(float Gamma)
 		FramebufferManager::GetEFBDepthTexture()->GetDSV());
 
 	g_renderer->RestoreAPIState();
+#endif
 }
 
 }  // namespace DX11
