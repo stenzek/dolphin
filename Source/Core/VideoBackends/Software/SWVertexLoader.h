@@ -44,4 +44,13 @@ private:
 public:
 
 	void SetFormat(u8 attributeIndex, u8 primitiveType);
+
+	virtual CacheEntryBase* CreateCacheEntry() override;
+
+	virtual void DeleteCacheEntry(CacheEntryBase* entry) override;
+
+	virtual void PopulateCacheEntry(CacheEntryBase* entry) override;
+
+	virtual void DrawCacheEntry(CacheEntryBase* entry, bool useDstAlpha) override;
+
 };

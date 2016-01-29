@@ -43,6 +43,14 @@ private:
 	void vFlush(bool useDstAlpha) override;
 	void PrepareDrawBuffers(u32 stride);
 
+	virtual CacheEntryBase* CreateCacheEntry() override;
+
+	virtual void DeleteCacheEntry(CacheEntryBase* entry) override;
+
+	virtual void PopulateCacheEntry(CacheEntryBase* entry) override;
+
+	virtual void DrawCacheEntry(CacheEntryBase* entry, bool useDstAlpha) override;
+
 	// Alternative buffers in CPU memory for primatives we are going to discard.
 	std::vector<u8> m_cpu_v_buffer;
 	std::vector<u16> m_cpu_i_buffer;

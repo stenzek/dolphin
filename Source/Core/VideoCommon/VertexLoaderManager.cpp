@@ -198,14 +198,35 @@ int RunVertices(int vtx_attr_group, int primitive, int count, DataReader src, bo
 	// They still need to go through vertex loading, because we need to calculate a zfreeze refrence slope.
 	bool cullall = (bpmem.genMode.cullmode == GenMode::CULL_ALL && primitive < 5);
 
-	DataReader dst = VertexManagerBase::PrepareForAdditionalData(primitive, count,
-			loader->m_native_vtx_decl.stride, cullall);
+	VertexManagerBase::CacheEntryBase* cache_entry = g_vertex_manager->FindCacheEntry(loader, primitive, count, src.GetPointer());
+	if (cache_entry && cache_entry->IsPopulated)
+	{
+		VertexManagerBase::Flush();
+		g_vertex_manager->DrawCacheEntry(cache_entry);
+		src.Skip(cache_entry->SrcDataSize);
+	}
+	else
+	{
+		u8* data_start = src.GetPointer();
+		if (cache_entry)
+			VertexManagerBase::Flush();
 
-	count = loader->RunVertices(src, dst, count);
+		DataReader dst = VertexManagerBase::PrepareForAdditionalData(primitive, count,
+				loader->m_native_vtx_decl.stride, cullall);
 
-	IndexGenerator::AddIndices(primitive, count);
+		count = loader->RunVertices(src, dst, count);
 
-	VertexManagerBase::FlushData(count, loader->m_native_vtx_decl.stride);
+		IndexGenerator::AddIndices(primitive, count);
+
+		VertexManagerBase::FlushData(count, loader->m_native_vtx_decl.stride);
+
+		if (cache_entry)
+		{
+			cache_entry->SrcDataSize = u32(src.GetPointer() - data_start);
+			g_vertex_manager->PopulateCacheEntry(cache_entry);
+			VertexManagerBase::Flush();
+		}
+	}
 
 	ADDSTAT(stats.thisFrame.numPrims, count);
 	INCSTAT(stats.thisFrame.numPrimitiveJoins);

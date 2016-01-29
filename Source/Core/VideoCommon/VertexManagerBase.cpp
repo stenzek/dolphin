@@ -20,6 +20,7 @@
 #include "VideoCommon/PixelShaderManager.h"
 #include "VideoCommon/RenderBase.h"
 #include "VideoCommon/TextureCacheBase.h"
+#include "VideoCommon/VertexLoaderBase.h"
 #include "VideoCommon/VertexLoaderManager.h"
 #include "VideoCommon/VertexManagerBase.h"
 #include "VideoCommon/VertexShaderManager.h"
@@ -54,10 +55,15 @@ VertexManagerBase::VertexManagerBase()
 {
 	s_is_flushed = true;
 	s_cull_all = false;
+
+	m_cache_lru_head = nullptr;
+	m_cache_lru_tail = nullptr;
 }
 
 VertexManagerBase::~VertexManagerBase()
 {
+	for (auto& it : m_cache_entries)
+		delete it.second;
 }
 
 u32 VertexManagerBase::GetRemainingSize()
@@ -274,6 +280,113 @@ void VertexManagerBase::Flush()
 	s_cull_all = false;
 }
 
+void VertexManagerBase::DrawCacheEntry(CacheEntryBase* entry)
+{
+	// loading a state will invalidate BP, so check for it
+	g_video_backend->CheckInvalidState();
+
+#if defined(_DEBUG) || defined(DEBUGFAST)
+	PRIM_LOG("frame%d:\n texgen=%d, numchan=%d, dualtex=%d, ztex=%d, cole=%d, alpe=%d, ze=%d", g_ActiveConfig.iSaveTargetId, xfmem.numTexGen.numTexGens,
+		xfmem.numChan.numColorChans, xfmem.dualTexTrans.enabled, bpmem.ztex2.op,
+		(int)bpmem.blendmode.colorupdate, (int)bpmem.blendmode.alphaupdate, (int)bpmem.zmode.updateenable);
+
+	for (unsigned int i = 0; i < xfmem.numChan.numColorChans; ++i)
+	{
+		LitChannel* ch = &xfmem.color[i];
+		PRIM_LOG("colchan%d: matsrc=%d, light=0x%x, ambsrc=%d, diffunc=%d, attfunc=%d", i, ch->matsource, ch->GetFullLightMask(), ch->ambsource, ch->diffusefunc, ch->attnfunc);
+		ch = &xfmem.alpha[i];
+		PRIM_LOG("alpchan%d: matsrc=%d, light=0x%x, ambsrc=%d, diffunc=%d, attfunc=%d", i, ch->matsource, ch->GetFullLightMask(), ch->ambsource, ch->diffusefunc, ch->attnfunc);
+	}
+
+	for (unsigned int i = 0; i < xfmem.numTexGen.numTexGens; ++i)
+	{
+		TexMtxInfo tinfo = xfmem.texMtxInfo[i];
+		if (tinfo.texgentype != XF_TEXGEN_EMBOSS_MAP) tinfo.hex &= 0x7ff;
+		if (tinfo.texgentype != XF_TEXGEN_REGULAR) tinfo.projection = 0;
+
+		PRIM_LOG("txgen%d: proj=%d, input=%d, gentype=%d, srcrow=%d, embsrc=%d, emblght=%d, postmtx=%d, postnorm=%d",
+			i, tinfo.projection, tinfo.inputform, tinfo.texgentype, tinfo.sourcerow, tinfo.embosssourceshift, tinfo.embosslightshift,
+			xfmem.postMtxInfo[i].index, xfmem.postMtxInfo[i].normalize);
+	}
+
+	PRIM_LOG("pixel: tev=%d, ind=%d, texgen=%d, dstalpha=%d, alphatest=0x%x", (int)bpmem.genMode.numtevstages+1, (int)bpmem.genMode.numindstages,
+		(int)bpmem.genMode.numtexgens, (u32)bpmem.dstalpha.enable, (bpmem.alpha_test.hex>>16)&0xff);
+#endif
+
+	// If the primitave is marked CullAll. All we need to do is update the vertex constants and calculate the zfreeze refrence slope
+	if (!s_cull_all)
+	{
+		BitSet32 usedtextures;
+		for (u32 i = 0; i < bpmem.genMode.numtevstages + 1u; ++i)
+			if (bpmem.tevorders[i / 2].getEnable(i & 1))
+				usedtextures[bpmem.tevorders[i/2].getTexMap(i & 1)] = true;
+
+		if (bpmem.genMode.numindstages > 0)
+			for (unsigned int i = 0; i < bpmem.genMode.numtevstages + 1u; ++i)
+				if (bpmem.tevind[i].IsActive() && bpmem.tevind[i].bt < bpmem.genMode.numindstages)
+					usedtextures[bpmem.tevindref.getTexMap(bpmem.tevind[i].bt)] = true;
+
+		TextureCacheBase::UnbindTextures();
+		for (unsigned int i : usedtextures)
+		{
+			const TextureCacheBase::TCacheEntryBase* tentry = TextureCacheBase::Load(i);
+
+			if (tentry)
+			{
+				g_renderer->SetSamplerState(i & 3, i >> 2, tentry->is_custom_tex);
+				PixelShaderManager::SetTexDims(i, tentry->native_width, tentry->native_height);
+			}
+			else
+			{
+				ERROR_LOG(VIDEO, "error loading texture");
+			}
+		}
+		TextureCacheBase::BindTextures();
+	}
+
+	// set global vertex constants
+	VertexShaderManager::SetConstants();
+
+	// Calculate ZSlope for zfreeze
+	if (!bpmem.genMode.zfreeze)
+	{
+		// Must be done after VertexShaderManager::SetConstants()
+		CalculateZSlope(VertexLoaderManager::GetCurrentVertexFormat());
+	}
+	else if (s_zslope.dirty && !s_cull_all) // or apply any dirty ZSlopes
+	{
+		PixelShaderManager::SetZSlope(s_zslope.dfdx, s_zslope.dfdy, s_zslope.f0);
+		s_zslope.dirty = false;
+	}
+
+	if (!s_cull_all)
+	{
+		// set the rest of the global constants
+		GeometryShaderManager::SetConstants();
+		PixelShaderManager::SetConstants();
+
+		bool useDstAlpha = bpmem.dstalpha.enable &&
+		                   bpmem.blendmode.alphaupdate &&
+		                   bpmem.zcontrol.pixel_format == PEControl::RGBA6_Z24;
+
+		if (PerfQueryBase::ShouldEmulate())
+			g_perf_query->EnableQuery(bpmem.zcontrol.early_ztest ? PQG_ZCOMP_ZCOMPLOC : PQG_ZCOMP);
+
+		g_vertex_manager->DrawCacheEntry(entry, useDstAlpha);
+		
+		if (PerfQueryBase::ShouldEmulate())
+			g_perf_query->DisableQuery(bpmem.zcontrol.early_ztest ? PQG_ZCOMP_ZCOMPLOC : PQG_ZCOMP);
+	}
+
+	GFX_DEBUGGER_PAUSE_AT(NEXT_FLUSH, true);
+
+	if (xfmem.numTexGen.numTexGens != bpmem.genMode.numtexgens)
+		ERROR_LOG(VIDEO, "xf.numtexgens (%d) does not match bp.numtexgens (%d). Error in command stream.", xfmem.numTexGen.numTexGens, bpmem.genMode.numtexgens.Value());
+
+	s_is_flushed = true;
+	s_cull_all = false;
+}
+
 void VertexManagerBase::DoState(PointerWrap& p)
 {
 	p.Do(s_zslope);
@@ -339,3 +452,92 @@ void VertexManagerBase::CalculateZSlope(NativeVertexFormat* format)
 	s_zslope.f0 = out[2] - (out[0] * s_zslope.dfdx + out[1] * s_zslope.dfdy);
 	s_zslope.dirty = true;
 }
+
+VertexManagerBase::CacheEntryKey VertexManagerBase::CreateCacheKey(const VertexLoaderBase* loader, int primitive, int count, const u8* src_data)
+{
+	CacheEntryKey key;
+	key.Loader = loader;
+	key.Primitive = primitive;
+	key.Count = count;
+	
+	u32 src_size = count * loader->m_VertexSize;
+	key.SrcHash = GetHash64(src_data, src_size, src_size / 8);
+	key.ArrayHash = GetHash64((u8*)VertexLoaderManager::cached_arraybases, sizeof(VertexLoaderManager::cached_arraybases), sizeof(VertexLoaderManager::cached_arraybases) / 8);
+	// TODO: Hash the actual vertex array contents, it is needed.
+
+	return key;
+}
+
+VertexManagerBase::CacheEntryBase* VertexManagerBase::FindCacheEntry(const VertexLoaderBase* loader, int primitive, int count, const u8* src_data)
+{
+	// TODO: For batching, assuming things get drawn in the same order.
+	// Multiple map entries for one buffer
+	// if first, store start buffer
+	// else if start buffer == current start buffer, don't flush yet
+	// else flush, re-lookup
+
+	CacheEntryKey key = CreateCacheKey(loader, primitive, count, src_data);
+	auto it = m_cache_entries.find(key);
+	if (it == m_cache_entries.end())
+	{
+		// Insert empty entry so we populate on second time around.
+		CacheEntryBase* entry = CreateCacheEntry();
+		entry->IsPopulated = false;
+		entry->Primitive = 0;
+		entry->SrcDataSize = 0;
+		entry->LRU_Prev = nullptr;
+		entry->LRU_Next = nullptr;
+		entry->Key = key;
+		if (entry)
+		{
+			m_cache_entries[key] = entry;
+
+			if (m_cache_lru_head)
+			{
+				m_cache_lru_head->LRU_Prev = entry;
+				entry->LRU_Next = m_cache_lru_head;
+				m_cache_lru_head = entry;
+			}
+			else
+			{
+				m_cache_lru_head = entry;
+				m_cache_lru_tail = entry;
+			}
+
+			if (m_cache_entries.size() >= 65536)
+			{
+				CacheEntryBase* temp = m_cache_lru_tail;
+				m_cache_lru_tail->LRU_Next = nullptr;
+				m_cache_lru_tail = temp->LRU_Prev;
+				m_cache_entries.erase(temp->Key);
+				DeleteCacheEntry(temp);
+			}
+		}
+
+		return nullptr;
+	}
+	else
+	{
+		CacheEntryBase* entry = it->second;
+		if (entry != m_cache_lru_head)
+		{
+			if (entry->LRU_Next)
+				entry->LRU_Next->LRU_Prev = entry->LRU_Prev;
+			else
+				m_cache_lru_tail = entry->LRU_Prev;
+
+			if (entry->LRU_Prev)
+				entry->LRU_Prev->LRU_Next = entry->LRU_Next;
+
+			if (m_cache_lru_head)
+				m_cache_lru_head->LRU_Prev = entry;
+
+			entry->LRU_Prev = nullptr;
+			entry->LRU_Next = m_cache_lru_head;
+			m_cache_lru_head = entry;
+		}
+
+		return it->second;
+	}
+}
+

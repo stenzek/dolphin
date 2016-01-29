@@ -165,6 +165,26 @@ void SWVertexLoader::SetFormat(u8 attributeIndex, u8 primitiveType)
 		(xfmem.texMtxInfo[0].projection == XF_TEXPROJ_ST);
 }
 
+SWVertexLoader::CacheEntryBase* SWVertexLoader::CreateCacheEntry()
+{
+	return nullptr;
+}
+
+void SWVertexLoader::DeleteCacheEntry(CacheEntryBase* entry)
+{
+	
+}
+
+void SWVertexLoader::PopulateCacheEntry(CacheEntryBase* entry)
+{
+	
+}
+
+void SWVertexLoader::DrawCacheEntry(CacheEntryBase* entry, bool useDstAlpha)
+{
+	
+}
+
 template <typename T, typename I>
 static T ReadNormalized(I value)
 {

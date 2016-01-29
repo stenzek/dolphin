@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <map>
 #include <memory>
 #include <vector>
 
@@ -13,6 +14,7 @@
 
 class NativeVertexFormat;
 class PointerWrap;
+class VertexLoaderBase;
 struct PortableVertexDeclaration;
 
 enum PrimitiveType {
@@ -78,10 +80,63 @@ protected:
 private:
 	static bool s_is_flushed;
 
+	static void PrepareForFlush();
+
 	virtual void vFlush(bool useDstAlpha) = 0;
 
 	virtual void CreateDeviceObjects() {}
 	virtual void DestroyDeviceObjects() {}
+
+public:
+	struct CacheEntryKey
+	{
+		const VertexLoaderBase* Loader;
+		int Primitive;
+		int Count;
+		u64 SrcHash;
+		u64 ArrayHash;
+
+		std::tuple<const VertexLoaderBase*, int, int, u64, u64> AsTuple() const { return std::tie(Loader, Primitive, Count, SrcHash, ArrayHash); }
+
+		bool operator<(const CacheEntryKey& other) const { return AsTuple() < other.AsTuple(); }
+		bool operator<=(const CacheEntryKey& other) const { return AsTuple() <= other.AsTuple(); }
+		bool operator>(const CacheEntryKey& other) const { return AsTuple() > other.AsTuple(); }
+		bool operator>=(const CacheEntryKey& other) const { return AsTuple() >= other.AsTuple(); }
+		bool operator==(const CacheEntryKey& other) const { return AsTuple() == other.AsTuple(); }
+		bool operator!=(const CacheEntryKey& other) const { return AsTuple() != other.AsTuple(); }
+	};
+
+	struct CacheEntryBase
+	{
+		bool IsPopulated;
+		u32 Primitive;
+		u32 SrcDataSize;
+
+		CacheEntryKey Key;
+		CacheEntryBase* LRU_Prev;
+		CacheEntryBase* LRU_Next;
+	};
+
+	CacheEntryKey CreateCacheKey(const VertexLoaderBase* loader, int primitive, int count, const u8* src_data);
+
+	CacheEntryBase* FindCacheEntry(const VertexLoaderBase* loader, int primitive, int count, const u8* src_data);
+
+	virtual CacheEntryBase* CreateCacheEntry() = 0;
+	virtual void DeleteCacheEntry(CacheEntryBase* entry) = 0;
+
+	virtual void PopulateCacheEntry(CacheEntryBase* entry) = 0;
+
+	static void DrawCacheEntry(CacheEntryBase* entry);
+
+	virtual void DrawCacheEntry(CacheEntryBase* entry, bool useDstAlpha) = 0;
+
+private:
+	typedef std::map<CacheEntryKey, CacheEntryBase*> EntryMap;
+	EntryMap m_cache_entries;
+
+	CacheEntryBase* m_cache_lru_head;
+	CacheEntryBase* m_cache_lru_tail;
 };
 
 extern std::unique_ptr<VertexManagerBase> g_vertex_manager;
+

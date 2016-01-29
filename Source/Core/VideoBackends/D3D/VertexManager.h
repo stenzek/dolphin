@@ -40,6 +40,23 @@ private:
 
 	std::vector<u8> LocalVBuffer;
 	std::vector<u16> LocalIBuffer;
+
+public:
+	struct CacheEntry : CacheEntryBase
+	{
+		//ID3D11Buffer* VertexAndIndexBuffer;
+		ID3D11Buffer* VertexBuffer;
+		ID3D11Buffer* IndexBuffer;
+		u32 VertexCount;
+		u32 VertexStride;
+		u32 StartIndex;
+		u32 IndexCount;
+	};
+
+	CacheEntryBase* CreateCacheEntry() override;
+	void DeleteCacheEntry(CacheEntryBase* entry) override;
+	void PopulateCacheEntry(CacheEntryBase* entry) override;
+	void DrawCacheEntry(CacheEntryBase* entry, bool useDstAlpha) override;
 };
 
 }  // namespace

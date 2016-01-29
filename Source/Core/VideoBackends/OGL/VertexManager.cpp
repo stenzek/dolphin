@@ -74,6 +74,26 @@ void VertexManager::PrepareDrawBuffers(u32 stride)
 	ADDSTAT(stats.thisFrame.bytesIndexStreamed, index_data_size);
 }
 
+VertexManager::CacheEntryBase* VertexManager::CreateCacheEntry()
+{
+	return nullptr;
+}
+
+void VertexManager::DeleteCacheEntry(CacheEntryBase* entry)
+{
+	
+}
+
+void VertexManager::PopulateCacheEntry(CacheEntryBase* entry)
+{
+	
+}
+
+void VertexManager::DrawCacheEntry(CacheEntryBase* entry, bool useDstAlpha)
+{
+	
+}
+
 void VertexManager::ResetBuffer(u32 stride)
 {
 	if (s_cull_all)
