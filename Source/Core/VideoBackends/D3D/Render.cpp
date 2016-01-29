@@ -1129,6 +1129,9 @@ void Renderer::SetSamplerState(int stage, int texindex, bool custom_tex)
 	if (texindex)
 		stage += 4;
 
+	SamplerState old_state;
+	old_state.packed = gx_state.sampler[stage].packed;
+
 	if (g_ActiveConfig.bForceFiltering)
 	{
 		gx_state.sampler[stage].min_filter = 6; // 4 (linear mip) | 2 (linear min)
@@ -1152,7 +1155,8 @@ void Renderer::SetSamplerState(int stage, int texindex, bool custom_tex)
 		gx_state.sampler[stage].max_lod = 255;
 	}
 
-	gx_state.samplers_changed |= (1 << stage);
+	if (old_state.packed != gx_state.sampler[stage].packed)
+		gx_state.samplers_changed |= (1 << stage);
 }
 
 void Renderer::SetInterlacingMode()

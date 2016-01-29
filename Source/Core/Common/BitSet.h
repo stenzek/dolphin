@@ -45,6 +45,30 @@ static inline int LeastSignificantSetBit(u64 val)
 	_BitScanForward64(&index, val);
 	return (int)index;
 }
+static inline int MostSignificantSetBit(u8 val)
+{
+	unsigned long index;
+	_BitScanReverse(&index, val);
+	return (int)index;
+}
+static inline int MostSignificantSetBit(u16 val)
+{
+	unsigned long index;
+	_BitScanReverse(&index, val);
+	return (int)index;
+}
+static inline int MostSignificantSetBit(u32 val)
+{
+	unsigned long index;
+	_BitScanReverse(&index, val);
+	return (int)index;
+}
+static inline int MostSignificantSetBit(u64 val)
+{
+	unsigned long index;
+	_BitScanReverse64(&index, val);
+	return (int)index;
+}
 #else
 static inline int CountSetBits(u8 val) { return __builtin_popcount(val); }
 static inline int CountSetBits(u16 val) { return __builtin_popcount(val); }
@@ -54,6 +78,10 @@ static inline int LeastSignificantSetBit(u8 val) { return __builtin_ctz(val); }
 static inline int LeastSignificantSetBit(u16 val) { return __builtin_ctz(val); }
 static inline int LeastSignificantSetBit(u32 val) { return __builtin_ctz(val); }
 static inline int LeastSignificantSetBit(u64 val) { return __builtin_ctzll(val); }
+static inline int MostSignificantSetBit(u8 val) { return __builtin_clz(val); }
+static inline int MostSignificantSetBit(u16 val) { return __builtin_clz(val); }
+static inline int MostSignificantSetBit(u32 val) { return __builtin_clz(val); }
+static inline int MostSignificantSetBit(u64 val) { return __builtin_clzll(val); }
 #endif
 
 // namespace avoids conflict with OS X Carbon; don't use BitSet<T> directly

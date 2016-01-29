@@ -147,17 +147,17 @@ void CommandStream::DeleteStateObjects()
 }
 
 template<class T>
-T* CommandStream::AllocateCommand(size_t required_aux_space /*= 0*/)
+T* CommandStream::AllocateCommand(u32 required_aux_space /*= 0*/)
 {
-	size_t required = sizeof(T) + required_aux_space + COMMAND_ALLOCATION_ALIGNMENT;
-	size_t start_wpos = m_command_buffer_wpos.load();
-	size_t space = COMMAND_BUFFER_SIZE - start_wpos;
+	u32 required = sizeof(T) + required_aux_space + COMMAND_ALLOCATION_ALIGNMENT;
+	u32 start_wpos = m_command_buffer_wpos;
+	u32 space = COMMAND_BUFFER_SIZE - start_wpos;
 	if (space < required)
 	{
 		// This is really terrible.
 		WARN_LOG(VIDEO, "Command stream buffer overflow, flushing.");
 		ResetBuffer();
-		start_wpos = m_command_buffer_wpos.load();
+		start_wpos = m_command_buffer_wpos;
 	}
 
 	T* ptr = new (m_command_buffer + start_wpos) T();
@@ -165,9 +165,9 @@ T* CommandStream::AllocateCommand(size_t required_aux_space /*= 0*/)
 	return ptr;
 }
 
-void* CommandStream::AllocateCommandAux(BaseData* cmd, size_t count)
+void* CommandStream::AllocateCommandAux(BaseData* cmd, u32 count)
 {
-	size_t start_wpos = m_command_buffer_wpos.load() + cmd->Size;
+	size_t start_wpos = m_command_buffer_wpos + cmd->Size;
 	_assert_((start_wpos + count + COMMAND_ALLOCATION_ALIGNMENT) <= COMMAND_BUFFER_SIZE);
 	cmd->Size += count;
 	return (m_command_buffer + start_wpos);
@@ -175,18 +175,19 @@ void* CommandStream::AllocateCommandAux(BaseData* cmd, size_t count)
 
 void CommandStream::EnqueueCommand(BaseData* cmd)
 {
-	size_t start_wpos = m_command_buffer_wpos.load();
-	size_t end_wpos = start_wpos + cmd->Size;
-	size_t padding = end_wpos % COMMAND_ALLOCATION_ALIGNMENT;
+	u32 start_wpos = m_command_buffer_wpos;
+	u32 end_wpos = start_wpos + cmd->Size;
+	u32 padding = end_wpos % COMMAND_ALLOCATION_ALIGNMENT;
 	if (padding)
 		end_wpos += COMMAND_ALLOCATION_ALIGNMENT - padding;
 
 	cmd->Size = end_wpos - start_wpos;
-	m_command_buffer_wpos.fetch_add(cmd->Size);
+	m_command_buffer_wpos += cmd->Size;
 
 	if (m_use_worker_thread)
 	{
-		m_worker_control.Wakeup();
+		if (m_command_buffer_rpos == start_wpos)
+			m_worker_control.Wakeup();
 	}
 	else
 	{
@@ -198,8 +199,8 @@ void CommandStream::EnqueueCommand(BaseData* cmd)
 
 bool CommandStream::DequeueCommand(BaseData** cmd)
 {
-	size_t rpos = m_command_buffer_rpos.load();
-	size_t wpos = m_command_buffer_wpos.load();
+	u32 rpos = m_command_buffer_rpos;
+	u32 wpos = m_command_buffer_wpos;
 	if (rpos == wpos)
 		return false;
 
@@ -210,28 +211,24 @@ bool CommandStream::DequeueCommand(BaseData** cmd)
 void CommandStream::DeallocateCommand(BaseData* cmd)
 {
 	cmd->~BaseData();
-	m_command_buffer_rpos.fetch_add(cmd->Size);
+	m_command_buffer_rpos += cmd->Size;
 }
 
 void CommandStream::ResetBuffer()
 {
 	if (m_use_worker_thread)
 	{
-		do
-		{
-			m_worker_control.Wait();
-		}
-		while (m_command_buffer_rpos.load() != m_command_buffer_wpos.load());
+		while (m_command_buffer_rpos != m_command_buffer_wpos)
+			m_worker_control.Wait();	
 	}
 
-	_assert_(m_command_buffer_rpos.load() == m_command_buffer_wpos.load());
-	m_command_buffer_rpos.store(0);
-	m_command_buffer_wpos.store(0);
+	m_command_buffer_rpos = 0;
+	m_command_buffer_wpos = 0;
 }
 
 void CommandStream::BackendThreadLoop()
 {
-	static const u32 MAX_SPIN_COUNT = 100;
+	static const u32 MAX_SPIN_COUNT = 1000;
 	u32 spin_count = 0;
 
 	m_worker_control.Run([this, &spin_count]

@@ -40,9 +40,6 @@ void StateManager::Apply(bool force)
 		| DirtyFlag_Texture4 | DirtyFlag_Texture5 | DirtyFlag_Texture6 | DirtyFlag_Texture7)) >> textureMaskShift;
 	u32 dirtySamplers = (m_dirtyFlags & (DirtyFlag_Sampler0 | DirtyFlag_Sampler1 | DirtyFlag_Sampler2 | DirtyFlag_Sampler3
 		| DirtyFlag_Sampler4 | DirtyFlag_Sampler5 | DirtyFlag_Sampler6 | DirtyFlag_Sampler7)) >> samplerMaskShift;
-	u32 dirtyConstants = m_dirtyFlags & (DirtyFlag_PixelConstants | DirtyFlag_VertexConstants | DirtyFlag_GeometryConstants);
-	u32 dirtyShaders = m_dirtyFlags & (DirtyFlag_PixelShader | DirtyFlag_VertexShader | DirtyFlag_GeometryShader);
-	u32 dirtyBuffers = m_dirtyFlags & (DirtyFlag_VertexBuffer | DirtyFlag_IndexBuffer);
 
 	// Render targets must come before textures
 	if (m_dirtyFlags & DirtyFlag_RenderTargets)
@@ -53,47 +50,40 @@ void StateManager::Apply(bool force)
 		m_current.renderTargetCount = m_pending.renderTargetCount;
 	}
 
-	if (dirtyConstants)
+	if (m_dirtyFlags & DirtyFlag_RasterizerState)
 	{
-		if (m_current.pixelConstants[0] != m_pending.pixelConstants[0] ||
-			m_current.pixelConstants[1] != m_pending.pixelConstants[1])
-		{
-			D3D::context->PSSetConstantBuffers(0, m_pending.pixelConstants[1] ? 2 : 1, m_pending.pixelConstants);
-			m_current.pixelConstants[0] = m_pending.pixelConstants[0];
-			m_current.pixelConstants[1] = m_pending.pixelConstants[1];
-		}
-
-		if (m_current.vertexConstants != m_pending.vertexConstants)
-		{
-			D3D::context->VSSetConstantBuffers(0, 1, &m_pending.vertexConstants);
-			m_current.vertexConstants = m_pending.vertexConstants;
-		}
-
-		if (m_current.geometryConstants != m_pending.geometryConstants)
-		{
-			D3D::context->GSSetConstantBuffers(0, 1, &m_pending.geometryConstants);
-			m_current.geometryConstants = m_pending.geometryConstants;
-		}
+		D3D::context->RSSetState(m_pending.rasterizerState);
+		m_current.rasterizerState = m_pending.rasterizerState;
 	}
 
-	if (dirtyBuffers || (m_dirtyFlags & DirtyFlag_InputAssembler))
+	if (m_dirtyFlags & DirtyFlag_DepthState)
 	{
-		if (m_current.vertexBuffer != m_pending.vertexBuffer ||
-			m_current.vertexBufferStride != m_pending.vertexBufferStride ||
-			m_current.vertexBufferOffset != m_pending.vertexBufferOffset)
-		{
-			D3D::context->IASetVertexBuffers(0, 1, &m_pending.vertexBuffer, &m_pending.vertexBufferStride, &m_pending.vertexBufferOffset);
-			m_current.vertexBuffer = m_pending.vertexBuffer;
-			m_current.vertexBufferStride = m_pending.vertexBufferStride;
-			m_current.vertexBufferOffset = m_pending.vertexBufferOffset;
-		}
+		D3D::context->OMSetDepthStencilState(m_pending.depthState, 0);
+		m_current.depthState = m_pending.depthState;
+	}
 
-		if (m_current.indexBuffer != m_pending.indexBuffer)
-		{
-			D3D::context->IASetIndexBuffer(m_pending.indexBuffer, DXGI_FORMAT_R16_UINT, 0);
-			m_current.indexBuffer = m_pending.indexBuffer;
-		}
+	if (m_dirtyFlags & DirtyFlag_BlendState)
+	{
+		D3D::context->OMSetBlendState(m_pending.blendState, nullptr, 0xFFFFFFFF);
+		m_current.blendState = m_pending.blendState;
+	}
 
+	if (m_dirtyFlags & DirtyFlag_VertexBuffer)
+	{
+		D3D::context->IASetVertexBuffers(0, 1, &m_pending.vertexBuffer, &m_pending.vertexBufferStride, &m_pending.vertexBufferOffset);
+		m_current.vertexBuffer = m_pending.vertexBuffer;
+		m_current.vertexBufferStride = m_pending.vertexBufferStride;
+		m_current.vertexBufferOffset = m_pending.vertexBufferOffset;
+	}
+
+	if (m_dirtyFlags & DirtyFlag_IndexBuffer)
+	{
+		D3D::context->IASetIndexBuffer(m_pending.indexBuffer, DXGI_FORMAT_R16_UINT, 0);
+		m_current.indexBuffer = m_pending.indexBuffer;
+	}
+
+	if (m_dirtyFlags & DirtyFlag_InputAssembler)
+	{
 		if (m_current.topology != m_pending.topology)
 		{
 			D3D::context->IASetPrimitiveTopology(m_pending.topology);
@@ -105,30 +95,6 @@ void StateManager::Apply(bool force)
 			D3D::context->IASetInputLayout(m_pending.inputLayout);
 			m_current.inputLayout = m_pending.inputLayout;
 		}
-	}
-
-	while (dirtyTextures)
-	{
-		int index = LeastSignificantSetBit(dirtyTextures);
-		if (m_current.textures[index] != m_pending.textures[index])
-		{
-			D3D::context->PSSetShaderResources(index, 1, &m_pending.textures[index]);
-			m_current.textures[index] = m_pending.textures[index];
-		}
-
-		dirtyTextures &= ~(1 << index);
-	}
-
-	while (dirtySamplers)
-	{
-		int index = LeastSignificantSetBit(dirtySamplers);
-		if (m_current.samplers[index] != m_pending.samplers[index])
-		{
-			D3D::context->PSSetSamplers(index, 1, &m_pending.samplers[index]);
-			m_current.samplers[index] = m_pending.samplers[index];
-		}
-
-		dirtySamplers &= ~(1 << index);
 	}
 
 	if (m_dirtyFlags & DirtyFlag_VertexShader)
@@ -149,22 +115,41 @@ void StateManager::Apply(bool force)
 		m_current.pixelShader = m_pending.pixelShader;
 	}
 
-	if (m_dirtyFlags & DirtyFlag_RasterizerState)
+	if (m_dirtyFlags & DirtyFlag_VertexConstants)
 	{
-		D3D::context->RSSetState(m_pending.rasterizerState);
-		m_current.rasterizerState = m_pending.rasterizerState;
+		D3D::context->VSSetConstantBuffers(0, 1, &m_pending.vertexConstants);
+		m_current.vertexConstants = m_pending.vertexConstants;
 	}
 
-	if (m_dirtyFlags & DirtyFlag_DepthState)
+	if (m_dirtyFlags & DirtyFlag_GeometryConstants)
 	{
-		D3D::context->OMSetDepthStencilState(m_pending.depthState, 0);
-		m_current.depthState = m_pending.depthState;
+		D3D::context->GSSetConstantBuffers(0, 1, &m_pending.geometryConstants);
+		m_current.geometryConstants = m_pending.geometryConstants;
 	}
 
-	if (m_dirtyFlags & DirtyFlag_BlendState)
+	if (m_dirtyFlags & DirtyFlag_PixelConstants)
 	{
-		D3D::context->OMSetBlendState(m_pending.blendState, nullptr, 0xFFFFFFFF);
-		m_current.blendState = m_pending.blendState;
+		D3D::context->PSSetConstantBuffers(0, m_pending.pixelConstants[1] ? 2 : 1, m_pending.pixelConstants);
+		m_current.pixelConstants[0] = m_pending.pixelConstants[0];
+		m_current.pixelConstants[1] = m_pending.pixelConstants[1];
+	}
+
+	if (dirtyTextures)
+	{
+		int startIndex = LeastSignificantSetBit(dirtyTextures);
+		int endIndex = MostSignificantSetBit(dirtyTextures);
+		int count = endIndex - startIndex + 1;
+		D3D::context->PSSetShaderResources(startIndex, count, &m_pending.textures[startIndex]);
+		memcpy(&m_current.textures[startIndex], &m_pending.textures[startIndex], sizeof(ID3D11ShaderResourceView*) * count);
+	}
+
+	if (dirtySamplers)
+	{
+		int startIndex = LeastSignificantSetBit(dirtySamplers);
+		int endIndex = MostSignificantSetBit(dirtySamplers);
+		int count = endIndex - startIndex + 1;
+		D3D::context->PSSetSamplers(startIndex, count, &m_pending.samplers[startIndex]);
+		memcpy(&m_current.samplers[startIndex], &m_pending.samplers[startIndex], sizeof(ID3D11SamplerState*) * count);
 	}
 
 	if (m_dirtyFlags & DirtyFlag_Viewport)

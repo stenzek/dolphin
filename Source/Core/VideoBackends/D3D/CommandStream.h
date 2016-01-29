@@ -51,7 +51,7 @@ public:
 		BaseData(Command type) : Type(type) {}
 		virtual ~BaseData() {}
 
-		size_t Size;
+		u32 Size;
 		Command Type;
 	};
 
@@ -220,10 +220,10 @@ private:
 	void DeleteStateObjects();
 
 	// Command allocator
-	template<class T> T* AllocateCommand(size_t required_aux_space = 0);
+	template<class T> T* AllocateCommand(u32 required_aux_space = 0);
 
 	// Aux buffer allocator for command
-	void* AllocateCommandAux(BaseData* cmd, size_t count);
+	void* AllocateCommandAux(BaseData* cmd, u32 count);
 
 	// Command enqueue
 	void EnqueueCommand(BaseData* cmd);
@@ -286,11 +286,11 @@ private:
 
 	// Command buffer
 	// TODO: Replace with a lock-free ring buffer
-	static const size_t COMMAND_ALLOCATION_ALIGNMENT = sizeof(void*);
-	static const size_t COMMAND_BUFFER_SIZE = 32 * 1024 * 1024;
+	static const u32 COMMAND_ALLOCATION_ALIGNMENT = sizeof(void*);
+	static const u32 COMMAND_BUFFER_SIZE = 32 * 1024 * 1024;
 	u8* m_command_buffer;
-	std::atomic_size_t m_command_buffer_rpos;
-	std::atomic_size_t m_command_buffer_wpos;
+	u32 m_command_buffer_rpos;
+	u32 m_command_buffer_wpos;
 	bool m_use_worker_thread;
 
 	// Worker thread

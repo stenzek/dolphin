@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 14
-VisualStudioVersion = 14.0.23107.0
+VisualStudioVersion = 14.0.24720.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Dolphin", "Core\DolphinWX\DolphinWX.vcxproj", "{47411FDB-1BF2-48D0-AB4E-C7C41160F898}"
 EndProject
@@ -69,7 +69,15 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "UnitTests", "UnitTests\Unit
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "enet", "..\Externals\enet\enet.vcxproj", "{CBC76802-C128-4B17-BF6C-23B08C313E5E}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{F4E76725-4C0A-472D-A00E-B1DB38D864C3}"
+	ProjectSection(SolutionItems) = preProject
+		Performance1.psess = Performance1.psess
+	EndProjectSection
+EndProject
 Global
+	GlobalSection(Performance) = preSolution
+		HasPerformanceSessions = true
+	EndGlobalSection
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
 		Release|x64 = Release|x64
@@ -79,10 +87,6 @@ Global
 		{47411FDB-1BF2-48D0-AB4E-C7C41160F898}.Debug|x64.Build.0 = Debug|x64
 		{47411FDB-1BF2-48D0-AB4E-C7C41160F898}.Release|x64.ActiveCfg = Release|x64
 		{47411FDB-1BF2-48D0-AB4E-C7C41160F898}.Release|x64.Build.0 = Release|x64
-		{69D2B16E-122A-4E5D-8C37-8EC7B0F7CEB0}.Debug|x64.ActiveCfg = Debug|x64
-		{69D2B16E-122A-4E5D-8C37-8EC7B0F7CEB0}.Debug|x64.Build.0 = Debug|x64
-		{69D2B16E-122A-4E5D-8C37-8EC7B0F7CEB0}.Release|x64.ActiveCfg = Release|x64
-		{69D2B16E-122A-4E5D-8C37-8EC7B0F7CEB0}.Release|x64.Build.0 = Release|x64
 		{E54CF649-140E-4255-81A5-30A673C1FB36}.Debug|x64.ActiveCfg = Debug|x64
 		{E54CF649-140E-4255-81A5-30A673C1FB36}.Debug|x64.Build.0 = Debug|x64
 		{E54CF649-140E-4255-81A5-30A673C1FB36}.Release|x64.ActiveCfg = Release|x64
