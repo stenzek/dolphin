@@ -212,9 +212,9 @@ std::unique_ptr<VertexLoaderBase> VertexLoaderBase::CreateVertexLoader(const TVt
 	if (loader->IsInitialized())
 		return loader;
 #elif defined(_M_X86_64)
-	/*loader = std::make_unique<VertexLoaderX64>(vtx_desc, vtx_attr);
+	loader = std::make_unique<VertexLoaderX64>(vtx_desc, vtx_attr);
 	if (loader->IsInitialized())
-		return loader;*/
+		return loader;
 #elif defined(_M_ARM_64)
 	loader = std::make_unique<VertexLoaderARM64>(vtx_desc, vtx_attr);
 	if (loader->IsInitialized())

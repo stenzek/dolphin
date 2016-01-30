@@ -45,9 +45,12 @@ public:
 
 	void SetFormat(u8 attributeIndex, u8 primitiveType);
 
-	virtual CacheBufferBase* CreateCacheBuffer() override;
-	virtual void DeleteCacheBuffer(CacheBufferBase* buffer) override;
-	virtual void FillCacheBuffer(CacheBufferBase* buffer) override;
-	virtual void DrawCacheBuffer(CacheBufferBase* buffer, u32 startIndex, u32 endIndex, bool useDstAlpha) override;
+	virtual CacheEntryBase* CreateCacheEntry() override;
+
+	virtual void DeleteCacheEntry(CacheEntryBase* entry) override;
+
+	virtual void PopulateCacheEntry(CacheEntryBase* entry) override;
+
+	virtual void DrawCacheEntry(CacheEntryBase* entry, u32 startIndex, bool useDstAlpha) override;
 
 };

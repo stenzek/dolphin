@@ -191,50 +191,48 @@ void VertexManager::ResetBuffer(u32 stride)
 	IndexGenerator::Start(GetIndexBuffer());
 }
 
-VertexManager::CacheBufferBase* VertexManager::CreateCacheBuffer()
+VertexManager::CacheEntryBase* VertexManager::CreateCacheEntry()
 {
 #if 1
-	CacheBuffer* buffer = new CacheBuffer();
-	buffer->RefCount = 0;
-	buffer->Primitive = 0;
-	buffer->VertexCount = 0;
-	buffer->VertexStride = 0;
-	buffer->IndexCount = 0;
-	buffer->VertexBuffer = nullptr;
-	buffer->IndexBuffer = nullptr;
-
-	return buffer;
+	CacheEntry* entry = new CacheEntry();
+	entry->VertexBuffer = nullptr;
+	entry->IndexBuffer = nullptr;
+	entry->VertexCount = 0;
+	entry->VertexStride = 0;
+	entry->IndexCount = 0;
+	return entry;
 #else
 	return nullptr;
 #endif
 }
 
-void VertexManager::DeleteCacheBuffer(CacheBufferBase* buffer)
+VertexManager::CacheEntry::~CacheEntry()
 {
-	CacheBuffer* realBuffer = static_cast<CacheBuffer*>(buffer);
+	if (VertexBuffer)
+		VertexBuffer->Release();
 
-	if (realBuffer->VertexBuffer)
-		realBuffer->VertexBuffer->Release();
-
-	if (realBuffer->IndexBuffer)
-		realBuffer->IndexBuffer->Release();
-
-	delete realBuffer;
+	if (IndexBuffer)
+		IndexBuffer->Release();
 }
 
-void VertexManager::FillCacheBuffer(CacheBufferBase* buffer)
+void VertexManager::DeleteCacheEntry(CacheEntryBase* entry)
 {
-	CacheBuffer* realBuffer = static_cast<CacheBuffer*>(buffer);
-	//DEBUG_LOG(VIDEO, "Populating cache buffer %p", realBuffer);
+
+}
+
+void VertexManager::PopulateCacheEntry(CacheEntryBase* entry)
+{
+	CacheEntry* d3d_entry = static_cast<CacheEntry*>(entry);
+	//WARN_LOG(VIDEO, "Populating cache entry %p", d3d_entry);
 
 	u32 vertexBufferSize = u32(s_pCurBufferPointer - s_pBaseBufferPointer) + 1;
 	u32 indexBufferSize = IndexGenerator::GetIndexLen() * sizeof(u16);
 
-	if (realBuffer->VertexBuffer)
-		realBuffer->VertexBuffer->Release();
+	if (d3d_entry->VertexBuffer)
+		d3d_entry->VertexBuffer->Release();
 
-	if (realBuffer->IndexBuffer)
-		realBuffer->IndexBuffer->Release();
+	if (d3d_entry->IndexBuffer)
+		d3d_entry->IndexBuffer->Release();
 
 #if 0
 	u32 totalBufferSize = vertexBufferSize + indexBufferSize;
@@ -251,28 +249,31 @@ void VertexManager::FillCacheBuffer(CacheBufferBase* buffer)
 
 	CD3D11_BUFFER_DESC vertex_buffer_desc(vertexBufferSize, D3D11_BIND_VERTEX_BUFFER, D3D11_USAGE_DEFAULT, 0, 0, 0);
 	D3D11_SUBRESOURCE_DATA vertex_buffer_data = { s_pBaseBufferPointer, vertexBufferSize, 0 };
-	HRESULT hr = D3D::device->CreateBuffer(&vertex_buffer_desc, &vertex_buffer_data, &realBuffer->VertexBuffer);
-	CHECK(SUCCEEDED(hr), "Create cache vertex buffer");
+	HRESULT hr = D3D::device->CreateBuffer(&vertex_buffer_desc, &vertex_buffer_data, &d3d_entry->VertexBuffer);
+	CHECK(SUCCEEDED(hr), "Create cache entry vertex buffer");
 
 	CD3D11_BUFFER_DESC index_buffer_desc(indexBufferSize, D3D11_BIND_INDEX_BUFFER, D3D11_USAGE_DEFAULT, 0, 0, 0);
 	D3D11_SUBRESOURCE_DATA index_buffer_data = { GetIndexBuffer(), indexBufferSize, 0 };
-	hr = D3D::device->CreateBuffer(&index_buffer_desc, &index_buffer_data, &realBuffer->IndexBuffer);
-	CHECK(SUCCEEDED(hr), "Create cache index buffer");
+	hr = D3D::device->CreateBuffer(&index_buffer_desc, &index_buffer_data, &d3d_entry->IndexBuffer);
+	CHECK(SUCCEEDED(hr), "Create cache entry index buffer");
 
 	u32 stride = VertexLoaderManager::GetCurrentVertexFormat()->GetVertexStride();
 
-	realBuffer->VertexStride = stride;
-	realBuffer->VertexCount = vertexBufferSize / stride;
-	realBuffer->IndexCount = IndexGenerator::GetIndexLen();
-	realBuffer->Primitive = current_primitive_type;
+	d3d_entry->VertexStride = stride;
+	d3d_entry->VertexCount = vertexBufferSize / stride;
+	d3d_entry->StartIndex = 0;
+	d3d_entry->IndexCount = IndexGenerator::GetIndexLen();
+
+	d3d_entry->IsPopulated = true;
+	d3d_entry->Primitive = current_primitive_type;
 
 #endif
 }
 
-void VertexManager::DrawCacheBuffer(CacheBufferBase* buffer, u32 startIndex, u32 endIndex, bool useDstAlpha)
+void VertexManager::DrawCacheEntry(CacheEntryBase* entry, u32 indexCount, bool useDstAlpha)
 {
-	CacheBuffer* realBuffer = static_cast<CacheBuffer*>(buffer);
-	DEBUG_LOG(VIDEO, "Drawing %.2f%% of cache buffer %p", float(endIndex - startIndex) / float(realBuffer->IndexCount) * 100.0f, realBuffer);
+	CacheEntry* d3d_entry = static_cast<CacheEntry*>(entry);
+	//WARN_LOG(VIDEO, "Drawing cache entry %p", d3d_entry);
 
 	if (!PixelShaderCache::SetShader(
 		useDstAlpha ? DSTALPHA_DUAL_SOURCE_BLEND : DSTALPHA_NONE))
@@ -287,7 +288,7 @@ void VertexManager::DrawCacheBuffer(CacheBufferBase* buffer, u32 startIndex, u32
 		return;
 	}
 
-	if (!GeometryShaderCache::SetShader(realBuffer->Primitive))
+	if (!GeometryShaderCache::SetShader(entry->Primitive))
 	{
 		GFX_DEBUGGER_PAUSE_LOG_AT(NEXT_ERROR, true, { printf("Fail to set pixel shader\n"); });
 		return;
@@ -301,10 +302,10 @@ void VertexManager::DrawCacheBuffer(CacheBufferBase* buffer, u32 startIndex, u32
 	VertexLoaderManager::GetCurrentVertexFormat()->SetupVertexPointers();
 	g_renderer->ApplyState(useDstAlpha);
 
-	D3D::stateman->SetVertexBuffer(realBuffer->VertexBuffer, realBuffer->VertexStride, 0);
-	D3D::stateman->SetIndexBuffer(realBuffer->IndexBuffer);
+	D3D::stateman->SetVertexBuffer(d3d_entry->VertexBuffer, d3d_entry->VertexStride, 0);
+	D3D::stateman->SetIndexBuffer(d3d_entry->IndexBuffer);
 
-	switch (realBuffer->Primitive)
+	switch (d3d_entry->Primitive)
 	{
 	case PRIMITIVE_POINTS:
 		D3D::stateman->SetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_POINTLIST);
@@ -320,7 +321,7 @@ void VertexManager::DrawCacheBuffer(CacheBufferBase* buffer, u32 startIndex, u32
 	}
 
 	D3D::stateman->Apply();
-	D3D::context->DrawIndexed(endIndex - startIndex, startIndex, 0);
+	D3D::context->DrawIndexed(indexCount, d3d_entry->StartIndex, 0);
 
 	INCSTAT(stats.thisFrame.numDrawCalls);
 

@@ -58,24 +58,14 @@ VertexManagerBase::VertexManagerBase()
 
 	m_cache_lru_head = nullptr;
 	m_cache_lru_tail = nullptr;
-
-	m_start_cache_entry = nullptr;
-	m_end_cache_entry = nullptr;
+	m_current_entry = nullptr;
+	m_current_entry_subindex = 0;
 }
 
 VertexManagerBase::~VertexManagerBase()
 {
 	for (auto& it : m_cache_entries)
-	{
-		if (it.second->Buffer)
-		{
-			// virtual call here is dangerous.
-			//if ((--it.second->Buffer->RefCount) == 0)
-				//DeleteCacheBuffer(it.second->Buffer);
-		}
-
 		delete it.second;
-	}
 }
 
 u32 VertexManagerBase::GetRemainingSize()
@@ -279,46 +269,21 @@ void VertexManagerBase::Flush()
 		if (PerfQueryBase::ShouldEmulate())
 			g_perf_query->EnableQuery(bpmem.zcontrol.early_ztest ? PQG_ZCOMP_ZCOMPLOC : PQG_ZCOMP);
 
-		// draw cache vs draw streamed
-		if (g_vertex_manager->m_start_cache_entry)
+		if (g_vertex_manager->m_current_entry)
 		{
-			// populate cache entry if not done already
-			if (!g_vertex_manager->m_start_cache_entry->Buffer)
+			if (!g_vertex_manager->m_current_entry->IsPopulated)
 			{
-				// no buffer, so populate everything from start->finish with the same buffer
-				CacheBufferBase* buffer = g_vertex_manager->CreateCacheBuffer();
-				CacheEntry* entry = g_vertex_manager->m_start_cache_entry;
-				u32 count = 0;
-				while (entry)
-				{
-					_assert_(g_vertex_manager->m_end_cache_entry == entry ||
-							 entry->Join_Next != nullptr);
-
-					buffer->RefCount++;
-					entry->Buffer = buffer;
-					entry = entry->Join_Next;
-					count++;
-				}
-
-				DEBUG_LOG(VIDEO, "Joining %u entries to buffer %p", count, buffer);
-				g_vertex_manager->FillCacheBuffer(buffer);
+				g_vertex_manager->PopulateCacheEntry(g_vertex_manager->m_current_entry);
 				g_vertex_manager->vFlush(useDstAlpha);
 			}
 			else
 			{
-				// start->end, inclusive
-				g_vertex_manager->DrawCacheBuffer(g_vertex_manager->m_start_cache_entry->Buffer,
-												  g_vertex_manager->m_start_cache_entry->StartIndex,
-												  g_vertex_manager->m_end_cache_entry->EndIndex,
-												  useDstAlpha);
+				u32 indicesToDraw = g_vertex_manager->m_current_entry->Indices[g_vertex_manager->m_current_entry_subindex];
+				g_vertex_manager->DrawCacheEntry(g_vertex_manager->m_current_entry, indicesToDraw, useDstAlpha);
 			}
 
-			g_vertex_manager->m_start_cache_entry = nullptr;
-			g_vertex_manager->m_end_cache_entry = nullptr;
-		}
-		else
-		{
-			g_vertex_manager->vFlush(useDstAlpha);
+			g_vertex_manager->m_current_entry = nullptr;
+			g_vertex_manager->m_current_entry_subindex = 0;
 		}
 
 		if (PerfQueryBase::ShouldEmulate())
@@ -333,7 +298,6 @@ void VertexManagerBase::Flush()
 	s_is_flushed = true;
 	s_cull_all = false;
 }
-
 
 void VertexManagerBase::DoState(PointerWrap& p)
 {
@@ -401,9 +365,9 @@ void VertexManagerBase::CalculateZSlope(NativeVertexFormat* format)
 	s_zslope.dirty = true;
 }
 
-VertexManagerBase::CacheKey VertexManagerBase::CreateCacheKey(const VertexLoaderBase* loader, int primitive, int count, const u8* src_data)
+VertexManagerBase::CacheEntryKey VertexManagerBase::CreateCacheKey(const VertexLoaderBase* loader, int primitive, int count, const u8* src_data)
 {
-	CacheKey key;
+	CacheEntryKey key;
 	key.Loader = loader;
 	key.Primitive = primitive;
 	key.Count = count;
@@ -416,7 +380,7 @@ VertexManagerBase::CacheKey VertexManagerBase::CreateCacheKey(const VertexLoader
 	return key;
 }
 
-VertexManagerBase::CacheEntry* VertexManagerBase::FindCacheEntry(const VertexLoaderBase* loader, int primitive, int count, const u8* src_data)
+VertexManagerBase::CacheEntryBase* VertexManagerBase::FindCacheEntry(const CacheEntryKey& key)
 {
 	// TODO: For batching, assuming things get drawn in the same order.
 	// Multiple map entries for one buffer
@@ -424,22 +388,19 @@ VertexManagerBase::CacheEntry* VertexManagerBase::FindCacheEntry(const VertexLoa
 	// else if start buffer == current start buffer, don't flush yet
 	// else flush, re-lookup
 
-	CacheKey key = CreateCacheKey(loader, primitive, count, src_data);
 	auto it = m_cache_entries.find(key);
 	if (it == m_cache_entries.end())
 	{
 		// Insert empty entry so we populate on second time around.
-		CacheEntry* entry = new CacheEntry();
-		entry->Buffer = nullptr;
-		entry->SrcDataSize = 0;
-		entry->StartIndex = 0;
-		entry->EndIndex = 0;
-		entry->Join_Next = nullptr;
-		entry->LRU_Prev = nullptr;
-		entry->LRU_Next = nullptr;
-		entry->Key = key;
+		CacheEntryBase* entry = CreateCacheEntry();
 		if (entry)
 		{
+			entry->IsPopulated = false;
+			entry->Primitive = 0;
+			entry->LRU_Prev = nullptr;
+			entry->LRU_Next = nullptr;
+			entry->Keys.push_back(key);
+
 			m_cache_entries[key] = entry;
 
 			if (m_cache_lru_head)
@@ -454,29 +415,22 @@ VertexManagerBase::CacheEntry* VertexManagerBase::FindCacheEntry(const VertexLoa
 				m_cache_lru_tail = entry;
 			}
 
-			if (m_cache_entries.size() >= 65536)
+			if (m_cache_entries.size() >= 32768)
 			{
-				CacheEntry* temp = m_cache_lru_tail;
+				CacheEntryBase* temp = m_cache_lru_tail;
 				m_cache_lru_tail->LRU_Next = nullptr;
 				m_cache_lru_tail = temp->LRU_Prev;
-				m_cache_entries.erase(temp->Key);
-
-				if (temp->Buffer)
-				{
-					if ((--temp->Buffer->RefCount) == 0)
-						DeleteCacheBuffer(temp->Buffer);
-				}
-
+				m_cache_entries.erase(temp->Keys[0]);
 				delete temp;
 			}
 		}
 
-		return nullptr;
-		//return entry;
+		//return nullptr;
+		return entry;
 	}
 	else
 	{
-		CacheEntry* entry = it->second;
+		CacheEntryBase* entry = it->second;
 		if (entry != m_cache_lru_head)
 		{
 			if (entry->LRU_Next)

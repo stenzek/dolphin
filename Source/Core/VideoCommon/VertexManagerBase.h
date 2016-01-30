@@ -80,22 +80,15 @@ protected:
 private:
 	static bool s_is_flushed;
 
+	static void PrepareForFlush();
+
 	virtual void vFlush(bool useDstAlpha) = 0;
 
 	virtual void CreateDeviceObjects() {}
 	virtual void DestroyDeviceObjects() {}
 
 public:
-	struct CacheBufferBase
-	{
-		u32 RefCount;
-		u32 Primitive;
-		u32 VertexCount;
-		u32 VertexStride;
-		u32 IndexCount;
-	};
-
-	struct CacheKey
+	struct CacheEntryKey
 	{
 		const VertexLoaderBase* Loader;
 		int Primitive;
@@ -105,55 +98,52 @@ public:
 
 		std::tuple<const VertexLoaderBase*, int, int, u64, u64> AsTuple() const { return std::tie(Loader, Primitive, Count, SrcHash, ArrayHash); }
 
-		bool operator<(const CacheKey& other) const { return AsTuple() < other.AsTuple(); }
-		bool operator<=(const CacheKey& other) const { return AsTuple() <= other.AsTuple(); }
-		bool operator>(const CacheKey& other) const { return AsTuple() > other.AsTuple(); }
-		bool operator>=(const CacheKey& other) const { return AsTuple() >= other.AsTuple(); }
-		bool operator==(const CacheKey& other) const { return AsTuple() == other.AsTuple(); }
-		bool operator!=(const CacheKey& other) const { return AsTuple() != other.AsTuple(); }
+		bool operator<(const CacheEntryKey& other) const { return AsTuple() < other.AsTuple(); }
+		bool operator<=(const CacheEntryKey& other) const { return AsTuple() <= other.AsTuple(); }
+		bool operator>(const CacheEntryKey& other) const { return AsTuple() > other.AsTuple(); }
+		bool operator>=(const CacheEntryKey& other) const { return AsTuple() >= other.AsTuple(); }
+		bool operator==(const CacheEntryKey& other) const { return AsTuple() == other.AsTuple(); }
+		bool operator!=(const CacheEntryKey& other) const { return AsTuple() != other.AsTuple(); }
 	};
 
-	struct CacheEntry
+	struct CacheEntryBase
 	{
-		CacheBufferBase* Buffer;
-		u32 StartIndex;
-		u32 EndIndex;
-		u32 SrcDataSize;
+		virtual ~CacheEntryBase() {}
 
-		CacheEntry* Join_Next;
+		bool IsPopulated;
+		u32 Primitive;
 
-		CacheEntry* LRU_Prev;
-		CacheEntry* LRU_Next;
-
-		CacheKey Key;
+		std::vector<CacheEntryKey> Keys;
+		std::vector<u32> Indices;
+		CacheEntryBase* LRU_Prev;
+		CacheEntryBase* LRU_Next;
 	};
 
-	CacheKey CreateCacheKey(const VertexLoaderBase* loader, int primitive, int count, const u8* src_data);
+	CacheEntryKey CreateCacheKey(const VertexLoaderBase* loader, int primitive, int count, const u8* src_data);
 
-	CacheEntry* FindCacheEntry(const VertexLoaderBase* loader, int primitive, int count, const u8* src_data);
+	CacheEntryBase* FindCacheEntry(const CacheEntryKey& key);
 
-	virtual CacheBufferBase* CreateCacheBuffer() = 0;
-	virtual void DeleteCacheBuffer(CacheBufferBase* buffer) = 0;
+	virtual CacheEntryBase* CreateCacheEntry() = 0;
+	virtual void DeleteCacheEntry(CacheEntryBase* entry) = 0;
 
-	virtual void FillCacheBuffer(CacheBufferBase* buffer) = 0;
+	virtual void PopulateCacheEntry(CacheEntryBase* entry) = 0;
 
-	CacheEntry* GetStartCacheEntry() { return m_start_cache_entry; }
-	CacheEntry* GetEndCacheEntry() { return m_end_cache_entry; }
-	void SetStartCacheEntry(CacheEntry* entry) { m_start_cache_entry = entry; }
-	void SetEndCacheEntry(CacheEntry* entry) { m_end_cache_entry = entry; }
+	virtual void DrawCacheEntry(CacheEntryBase* entry, u32 indicesToDraw, bool useDstAlpha) = 0;
+
+	CacheEntryBase* GetCurrentEntry() { return m_current_entry; }
+	u32 GetCurrentEntrySubIndex() { return m_current_entry_subindex; }
+	void SetCurrentEntry(CacheEntryBase* entry, u32 subindex) { m_current_entry = entry; m_current_entry_subindex = subindex; }
 	void ClearFlushedFlag() { s_is_flushed = false; }
 
-	virtual void DrawCacheBuffer(CacheBufferBase* buffer, u32 startIndex, u32 endIndex, bool useDstAlpha) = 0;
-
 private:
-	typedef std::map<CacheKey, CacheEntry*> EntryMap;
+	typedef std::map<CacheEntryKey, CacheEntryBase*> EntryMap;
 	EntryMap m_cache_entries;
 
-	CacheEntry* m_cache_lru_head;
-	CacheEntry* m_cache_lru_tail;
-	
-	CacheEntry* m_start_cache_entry;
-	CacheEntry* m_end_cache_entry;
+	CacheEntryBase* m_cache_lru_head;
+	CacheEntryBase* m_cache_lru_tail;
+
+	CacheEntryBase* m_current_entry;
+	u32 m_current_entry_subindex;
 };
 
 extern std::unique_ptr<VertexManagerBase> g_vertex_manager;
