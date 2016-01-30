@@ -42,6 +42,9 @@ static VertexLoaderMap s_vertex_loader_map;
 
 u8 *cached_arraybases[12];
 
+//static std::vector<VertexManagerBase::CacheEntry*> s_current_cache_entries;
+static VertexManagerBase::CacheEntry* s_last_cache_entry;
+
 void Init()
 {
 	MarkAllDirty();
@@ -198,33 +201,89 @@ int RunVertices(int vtx_attr_group, int primitive, int count, DataReader src, bo
 	// They still need to go through vertex loading, because we need to calculate a zfreeze refrence slope.
 	bool cullall = (bpmem.genMode.cullmode == GenMode::CULL_ALL && primitive < 5);
 
-	VertexManagerBase::CacheEntryBase* cache_entry = g_vertex_manager->FindCacheEntry(loader, primitive, count, src.GetPointer());
-	if (cache_entry && cache_entry->IsPopulated)
+	VertexManagerBase::CacheEntry* cache_entry = g_vertex_manager->FindCacheEntry(loader, primitive, count, src.GetPointer());
+	if (cache_entry && cache_entry->Buffer)
 	{
-		VertexManagerBase::Flush();
-		g_vertex_manager->DrawCacheEntry(cache_entry);
+		// Can we join with the current cache entry? Order must be the same.
+		VertexManagerBase::CacheEntry* current_cache_entry = g_vertex_manager->GetEndCacheEntry();
+		if (current_cache_entry && current_cache_entry->Join_Next == cache_entry)
+		{
+			// Join draws.
+			DEBUG_LOG(VIDEO, "Using previously joined entries %p -> %p", current_cache_entry, cache_entry);
+			g_vertex_manager->SetEndCacheEntry(cache_entry);
+		}
+		else
+		{
+			// Flush any streamed vertices, and prepare for drawing this entry.
+			DEBUG_LOG(VIDEO, "Starting filled entries join with %p", cache_entry);
+			VertexManagerBase::Flush();
+			g_vertex_manager->SetStartCacheEntry(cache_entry);
+			g_vertex_manager->SetEndCacheEntry(cache_entry);
+			g_vertex_manager->ClearFlushedFlag();
+		}
+
 		src.Skip(cache_entry->SrcDataSize);
+	}
+	else if (cache_entry && cache_entry->Join_Next)
+	{
+		// We can't batch with ourselves. Write buffers out, and we'll restart.
+		DEBUG_LOG(VIDEO, "Previous entry re-draw in current batch %p", cache_entry);
+		VertexManagerBase::Flush();
+		g_vertex_manager->SetStartCacheEntry(cache_entry);
+		g_vertex_manager->SetEndCacheEntry(cache_entry);
+		g_vertex_manager->ClearFlushedFlag();
+	}
+	else if (cache_entry && cache_entry == g_vertex_manager->GetEndCacheEntry())
+	{
+		// We can't batch with ourselves. Write buffers out, and we'll restart.
+		DEBUG_LOG(VIDEO, "Current entry re-draw in current batch %p", cache_entry);
+		VertexManagerBase::Flush();
+		g_vertex_manager->SetStartCacheEntry(cache_entry);
+		g_vertex_manager->SetEndCacheEntry(cache_entry);
+		g_vertex_manager->ClearFlushedFlag();
 	}
 	else
 	{
-		u8* data_start = src.GetPointer();
 		if (cache_entry)
-			VertexManagerBase::Flush();
+		{
+			// Can we join with the current cache entry?
+			VertexManagerBase::CacheEntry* current_cache_entry = g_vertex_manager->GetEndCacheEntry();
+			if (current_cache_entry && !current_cache_entry->Buffer && !current_cache_entry->Join_Next && current_cache_entry->Key.Primitive == primitive)
+			{
+				// Yep. Attach ourselves to the end of it.
+				DEBUG_LOG(VIDEO, "Joining cache entry %p with %p", current_cache_entry, cache_entry);
+				cache_entry->StartIndex = current_cache_entry->EndIndex;
+				current_cache_entry->Join_Next = cache_entry;
+				g_vertex_manager->SetEndCacheEntry(cache_entry);
+			}
+			else
+			{
+				// Start a new buffer.
+				DEBUG_LOG(VIDEO, "Starting new cache buffer for entry %p", cache_entry);
+				VertexManagerBase::Flush();
+				g_vertex_manager->SetStartCacheEntry(cache_entry);
+				g_vertex_manager->SetEndCacheEntry(cache_entry);
+				cache_entry->StartIndex = 0;
+			}
+		}
+
+		u8* data_start = src.GetPointer();
 
 		DataReader dst = VertexManagerBase::PrepareForAdditionalData(primitive, count,
 				loader->m_native_vtx_decl.stride, cullall);
 
 		count = loader->RunVertices(src, dst, count);
 
+		u32 index_start = IndexGenerator::GetIndexLen();
 		IndexGenerator::AddIndices(primitive, count);
 
 		VertexManagerBase::FlushData(count, loader->m_native_vtx_decl.stride);
 
 		if (cache_entry)
 		{
+			// TODO: not needed because of return here
 			cache_entry->SrcDataSize = u32(src.GetPointer() - data_start);
-			g_vertex_manager->PopulateCacheEntry(cache_entry);
-			VertexManagerBase::Flush();
+			cache_entry->EndIndex = cache_entry->StartIndex + (IndexGenerator::GetIndexLen() - index_start);
 		}
 	}
 

@@ -165,22 +165,22 @@ void SWVertexLoader::SetFormat(u8 attributeIndex, u8 primitiveType)
 		(xfmem.texMtxInfo[0].projection == XF_TEXPROJ_ST);
 }
 
-SWVertexLoader::CacheEntryBase* SWVertexLoader::CreateCacheEntry()
+SWVertexLoader::CacheBufferBase* SWVertexLoader::CreateCacheBuffer()
 {
 	return nullptr;
 }
 
-void SWVertexLoader::DeleteCacheEntry(CacheEntryBase* entry)
+void SWVertexLoader::DeleteCacheBuffer(CacheBufferBase* buffer)
 {
 	
 }
 
-void SWVertexLoader::PopulateCacheEntry(CacheEntryBase* entry)
+void SWVertexLoader::FillCacheBuffer(CacheBufferBase* buffer)
 {
 	
 }
 
-void SWVertexLoader::DrawCacheEntry(CacheEntryBase* entry, bool useDstAlpha)
+void SWVertexLoader::DrawCacheBuffer(CacheBufferBase* buffer, u32 startIndex, u32 endIndex, bool useDstAlpha)
 {
 	
 }

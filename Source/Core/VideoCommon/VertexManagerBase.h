@@ -80,15 +80,22 @@ protected:
 private:
 	static bool s_is_flushed;
 
-	static void PrepareForFlush();
-
 	virtual void vFlush(bool useDstAlpha) = 0;
 
 	virtual void CreateDeviceObjects() {}
 	virtual void DestroyDeviceObjects() {}
 
 public:
-	struct CacheEntryKey
+	struct CacheBufferBase
+	{
+		u32 RefCount;
+		u32 Primitive;
+		u32 VertexCount;
+		u32 VertexStride;
+		u32 IndexCount;
+	};
+
+	struct CacheKey
 	{
 		const VertexLoaderBase* Loader;
 		int Primitive;
@@ -98,44 +105,55 @@ public:
 
 		std::tuple<const VertexLoaderBase*, int, int, u64, u64> AsTuple() const { return std::tie(Loader, Primitive, Count, SrcHash, ArrayHash); }
 
-		bool operator<(const CacheEntryKey& other) const { return AsTuple() < other.AsTuple(); }
-		bool operator<=(const CacheEntryKey& other) const { return AsTuple() <= other.AsTuple(); }
-		bool operator>(const CacheEntryKey& other) const { return AsTuple() > other.AsTuple(); }
-		bool operator>=(const CacheEntryKey& other) const { return AsTuple() >= other.AsTuple(); }
-		bool operator==(const CacheEntryKey& other) const { return AsTuple() == other.AsTuple(); }
-		bool operator!=(const CacheEntryKey& other) const { return AsTuple() != other.AsTuple(); }
+		bool operator<(const CacheKey& other) const { return AsTuple() < other.AsTuple(); }
+		bool operator<=(const CacheKey& other) const { return AsTuple() <= other.AsTuple(); }
+		bool operator>(const CacheKey& other) const { return AsTuple() > other.AsTuple(); }
+		bool operator>=(const CacheKey& other) const { return AsTuple() >= other.AsTuple(); }
+		bool operator==(const CacheKey& other) const { return AsTuple() == other.AsTuple(); }
+		bool operator!=(const CacheKey& other) const { return AsTuple() != other.AsTuple(); }
 	};
 
-	struct CacheEntryBase
+	struct CacheEntry
 	{
-		bool IsPopulated;
-		u32 Primitive;
+		CacheBufferBase* Buffer;
+		u32 StartIndex;
+		u32 EndIndex;
 		u32 SrcDataSize;
 
-		CacheEntryKey Key;
-		CacheEntryBase* LRU_Prev;
-		CacheEntryBase* LRU_Next;
+		CacheEntry* Join_Next;
+
+		CacheEntry* LRU_Prev;
+		CacheEntry* LRU_Next;
+
+		CacheKey Key;
 	};
 
-	CacheEntryKey CreateCacheKey(const VertexLoaderBase* loader, int primitive, int count, const u8* src_data);
+	CacheKey CreateCacheKey(const VertexLoaderBase* loader, int primitive, int count, const u8* src_data);
 
-	CacheEntryBase* FindCacheEntry(const VertexLoaderBase* loader, int primitive, int count, const u8* src_data);
+	CacheEntry* FindCacheEntry(const VertexLoaderBase* loader, int primitive, int count, const u8* src_data);
 
-	virtual CacheEntryBase* CreateCacheEntry() = 0;
-	virtual void DeleteCacheEntry(CacheEntryBase* entry) = 0;
+	virtual CacheBufferBase* CreateCacheBuffer() = 0;
+	virtual void DeleteCacheBuffer(CacheBufferBase* buffer) = 0;
 
-	virtual void PopulateCacheEntry(CacheEntryBase* entry) = 0;
+	virtual void FillCacheBuffer(CacheBufferBase* buffer) = 0;
 
-	static void DrawCacheEntry(CacheEntryBase* entry);
+	CacheEntry* GetStartCacheEntry() { return m_start_cache_entry; }
+	CacheEntry* GetEndCacheEntry() { return m_end_cache_entry; }
+	void SetStartCacheEntry(CacheEntry* entry) { m_start_cache_entry = entry; }
+	void SetEndCacheEntry(CacheEntry* entry) { m_end_cache_entry = entry; }
+	void ClearFlushedFlag() { s_is_flushed = false; }
 
-	virtual void DrawCacheEntry(CacheEntryBase* entry, bool useDstAlpha) = 0;
+	virtual void DrawCacheBuffer(CacheBufferBase* buffer, u32 startIndex, u32 endIndex, bool useDstAlpha) = 0;
 
 private:
-	typedef std::map<CacheEntryKey, CacheEntryBase*> EntryMap;
+	typedef std::map<CacheKey, CacheEntry*> EntryMap;
 	EntryMap m_cache_entries;
 
-	CacheEntryBase* m_cache_lru_head;
-	CacheEntryBase* m_cache_lru_tail;
+	CacheEntry* m_cache_lru_head;
+	CacheEntry* m_cache_lru_tail;
+	
+	CacheEntry* m_start_cache_entry;
+	CacheEntry* m_end_cache_entry;
 };
 
 extern std::unique_ptr<VertexManagerBase> g_vertex_manager;

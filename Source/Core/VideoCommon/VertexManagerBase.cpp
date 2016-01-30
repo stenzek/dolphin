@@ -58,12 +58,24 @@ VertexManagerBase::VertexManagerBase()
 
 	m_cache_lru_head = nullptr;
 	m_cache_lru_tail = nullptr;
+
+	m_start_cache_entry = nullptr;
+	m_end_cache_entry = nullptr;
 }
 
 VertexManagerBase::~VertexManagerBase()
 {
 	for (auto& it : m_cache_entries)
+	{
+		if (it.second->Buffer)
+		{
+			// virtual call here is dangerous.
+			//if ((--it.second->Buffer->RefCount) == 0)
+				//DeleteCacheBuffer(it.second->Buffer);
+		}
+
 		delete it.second;
+	}
 }
 
 u32 VertexManagerBase::GetRemainingSize()
@@ -266,114 +278,49 @@ void VertexManagerBase::Flush()
 
 		if (PerfQueryBase::ShouldEmulate())
 			g_perf_query->EnableQuery(bpmem.zcontrol.early_ztest ? PQG_ZCOMP_ZCOMPLOC : PQG_ZCOMP);
-		g_vertex_manager->vFlush(useDstAlpha);
-		if (PerfQueryBase::ShouldEmulate())
-			g_perf_query->DisableQuery(bpmem.zcontrol.early_ztest ? PQG_ZCOMP_ZCOMPLOC : PQG_ZCOMP);
-	}
 
-	GFX_DEBUGGER_PAUSE_AT(NEXT_FLUSH, true);
-
-	if (xfmem.numTexGen.numTexGens != bpmem.genMode.numtexgens)
-		ERROR_LOG(VIDEO, "xf.numtexgens (%d) does not match bp.numtexgens (%d). Error in command stream.", xfmem.numTexGen.numTexGens, bpmem.genMode.numtexgens.Value());
-
-	s_is_flushed = true;
-	s_cull_all = false;
-}
-
-void VertexManagerBase::DrawCacheEntry(CacheEntryBase* entry)
-{
-	// loading a state will invalidate BP, so check for it
-	g_video_backend->CheckInvalidState();
-
-#if defined(_DEBUG) || defined(DEBUGFAST)
-	PRIM_LOG("frame%d:\n texgen=%d, numchan=%d, dualtex=%d, ztex=%d, cole=%d, alpe=%d, ze=%d", g_ActiveConfig.iSaveTargetId, xfmem.numTexGen.numTexGens,
-		xfmem.numChan.numColorChans, xfmem.dualTexTrans.enabled, bpmem.ztex2.op,
-		(int)bpmem.blendmode.colorupdate, (int)bpmem.blendmode.alphaupdate, (int)bpmem.zmode.updateenable);
-
-	for (unsigned int i = 0; i < xfmem.numChan.numColorChans; ++i)
-	{
-		LitChannel* ch = &xfmem.color[i];
-		PRIM_LOG("colchan%d: matsrc=%d, light=0x%x, ambsrc=%d, diffunc=%d, attfunc=%d", i, ch->matsource, ch->GetFullLightMask(), ch->ambsource, ch->diffusefunc, ch->attnfunc);
-		ch = &xfmem.alpha[i];
-		PRIM_LOG("alpchan%d: matsrc=%d, light=0x%x, ambsrc=%d, diffunc=%d, attfunc=%d", i, ch->matsource, ch->GetFullLightMask(), ch->ambsource, ch->diffusefunc, ch->attnfunc);
-	}
-
-	for (unsigned int i = 0; i < xfmem.numTexGen.numTexGens; ++i)
-	{
-		TexMtxInfo tinfo = xfmem.texMtxInfo[i];
-		if (tinfo.texgentype != XF_TEXGEN_EMBOSS_MAP) tinfo.hex &= 0x7ff;
-		if (tinfo.texgentype != XF_TEXGEN_REGULAR) tinfo.projection = 0;
-
-		PRIM_LOG("txgen%d: proj=%d, input=%d, gentype=%d, srcrow=%d, embsrc=%d, emblght=%d, postmtx=%d, postnorm=%d",
-			i, tinfo.projection, tinfo.inputform, tinfo.texgentype, tinfo.sourcerow, tinfo.embosssourceshift, tinfo.embosslightshift,
-			xfmem.postMtxInfo[i].index, xfmem.postMtxInfo[i].normalize);
-	}
-
-	PRIM_LOG("pixel: tev=%d, ind=%d, texgen=%d, dstalpha=%d, alphatest=0x%x", (int)bpmem.genMode.numtevstages+1, (int)bpmem.genMode.numindstages,
-		(int)bpmem.genMode.numtexgens, (u32)bpmem.dstalpha.enable, (bpmem.alpha_test.hex>>16)&0xff);
-#endif
-
-	// If the primitave is marked CullAll. All we need to do is update the vertex constants and calculate the zfreeze refrence slope
-	if (!s_cull_all)
-	{
-		BitSet32 usedtextures;
-		for (u32 i = 0; i < bpmem.genMode.numtevstages + 1u; ++i)
-			if (bpmem.tevorders[i / 2].getEnable(i & 1))
-				usedtextures[bpmem.tevorders[i/2].getTexMap(i & 1)] = true;
-
-		if (bpmem.genMode.numindstages > 0)
-			for (unsigned int i = 0; i < bpmem.genMode.numtevstages + 1u; ++i)
-				if (bpmem.tevind[i].IsActive() && bpmem.tevind[i].bt < bpmem.genMode.numindstages)
-					usedtextures[bpmem.tevindref.getTexMap(bpmem.tevind[i].bt)] = true;
-
-		TextureCacheBase::UnbindTextures();
-		for (unsigned int i : usedtextures)
+		// draw cache vs draw streamed
+		if (g_vertex_manager->m_start_cache_entry)
 		{
-			const TextureCacheBase::TCacheEntryBase* tentry = TextureCacheBase::Load(i);
-
-			if (tentry)
+			// populate cache entry if not done already
+			if (!g_vertex_manager->m_start_cache_entry->Buffer)
 			{
-				g_renderer->SetSamplerState(i & 3, i >> 2, tentry->is_custom_tex);
-				PixelShaderManager::SetTexDims(i, tentry->native_width, tentry->native_height);
+				// no buffer, so populate everything from start->finish with the same buffer
+				CacheBufferBase* buffer = g_vertex_manager->CreateCacheBuffer();
+				CacheEntry* entry = g_vertex_manager->m_start_cache_entry;
+				u32 count = 0;
+				while (entry)
+				{
+					_assert_(g_vertex_manager->m_end_cache_entry == entry ||
+							 entry->Join_Next != nullptr);
+
+					buffer->RefCount++;
+					entry->Buffer = buffer;
+					entry = entry->Join_Next;
+					count++;
+				}
+
+				DEBUG_LOG(VIDEO, "Joining %u entries to buffer %p", count, buffer);
+				g_vertex_manager->FillCacheBuffer(buffer);
+				g_vertex_manager->vFlush(useDstAlpha);
 			}
 			else
 			{
-				ERROR_LOG(VIDEO, "error loading texture");
+				// start->end, inclusive
+				g_vertex_manager->DrawCacheBuffer(g_vertex_manager->m_start_cache_entry->Buffer,
+												  g_vertex_manager->m_start_cache_entry->StartIndex,
+												  g_vertex_manager->m_end_cache_entry->EndIndex,
+												  useDstAlpha);
 			}
+
+			g_vertex_manager->m_start_cache_entry = nullptr;
+			g_vertex_manager->m_end_cache_entry = nullptr;
 		}
-		TextureCacheBase::BindTextures();
-	}
+		else
+		{
+			g_vertex_manager->vFlush(useDstAlpha);
+		}
 
-	// set global vertex constants
-	VertexShaderManager::SetConstants();
-
-	// Calculate ZSlope for zfreeze
-	if (!bpmem.genMode.zfreeze)
-	{
-		// Must be done after VertexShaderManager::SetConstants()
-		CalculateZSlope(VertexLoaderManager::GetCurrentVertexFormat());
-	}
-	else if (s_zslope.dirty && !s_cull_all) // or apply any dirty ZSlopes
-	{
-		PixelShaderManager::SetZSlope(s_zslope.dfdx, s_zslope.dfdy, s_zslope.f0);
-		s_zslope.dirty = false;
-	}
-
-	if (!s_cull_all)
-	{
-		// set the rest of the global constants
-		GeometryShaderManager::SetConstants();
-		PixelShaderManager::SetConstants();
-
-		bool useDstAlpha = bpmem.dstalpha.enable &&
-		                   bpmem.blendmode.alphaupdate &&
-		                   bpmem.zcontrol.pixel_format == PEControl::RGBA6_Z24;
-
-		if (PerfQueryBase::ShouldEmulate())
-			g_perf_query->EnableQuery(bpmem.zcontrol.early_ztest ? PQG_ZCOMP_ZCOMPLOC : PQG_ZCOMP);
-
-		g_vertex_manager->DrawCacheEntry(entry, useDstAlpha);
-		
 		if (PerfQueryBase::ShouldEmulate())
 			g_perf_query->DisableQuery(bpmem.zcontrol.early_ztest ? PQG_ZCOMP_ZCOMPLOC : PQG_ZCOMP);
 	}
@@ -386,6 +333,7 @@ void VertexManagerBase::DrawCacheEntry(CacheEntryBase* entry)
 	s_is_flushed = true;
 	s_cull_all = false;
 }
+
 
 void VertexManagerBase::DoState(PointerWrap& p)
 {
@@ -453,9 +401,9 @@ void VertexManagerBase::CalculateZSlope(NativeVertexFormat* format)
 	s_zslope.dirty = true;
 }
 
-VertexManagerBase::CacheEntryKey VertexManagerBase::CreateCacheKey(const VertexLoaderBase* loader, int primitive, int count, const u8* src_data)
+VertexManagerBase::CacheKey VertexManagerBase::CreateCacheKey(const VertexLoaderBase* loader, int primitive, int count, const u8* src_data)
 {
-	CacheEntryKey key;
+	CacheKey key;
 	key.Loader = loader;
 	key.Primitive = primitive;
 	key.Count = count;
@@ -468,7 +416,7 @@ VertexManagerBase::CacheEntryKey VertexManagerBase::CreateCacheKey(const VertexL
 	return key;
 }
 
-VertexManagerBase::CacheEntryBase* VertexManagerBase::FindCacheEntry(const VertexLoaderBase* loader, int primitive, int count, const u8* src_data)
+VertexManagerBase::CacheEntry* VertexManagerBase::FindCacheEntry(const VertexLoaderBase* loader, int primitive, int count, const u8* src_data)
 {
 	// TODO: For batching, assuming things get drawn in the same order.
 	// Multiple map entries for one buffer
@@ -476,15 +424,17 @@ VertexManagerBase::CacheEntryBase* VertexManagerBase::FindCacheEntry(const Verte
 	// else if start buffer == current start buffer, don't flush yet
 	// else flush, re-lookup
 
-	CacheEntryKey key = CreateCacheKey(loader, primitive, count, src_data);
+	CacheKey key = CreateCacheKey(loader, primitive, count, src_data);
 	auto it = m_cache_entries.find(key);
 	if (it == m_cache_entries.end())
 	{
 		// Insert empty entry so we populate on second time around.
-		CacheEntryBase* entry = CreateCacheEntry();
-		entry->IsPopulated = false;
-		entry->Primitive = 0;
+		CacheEntry* entry = new CacheEntry();
+		entry->Buffer = nullptr;
 		entry->SrcDataSize = 0;
+		entry->StartIndex = 0;
+		entry->EndIndex = 0;
+		entry->Join_Next = nullptr;
 		entry->LRU_Prev = nullptr;
 		entry->LRU_Next = nullptr;
 		entry->Key = key;
@@ -506,19 +456,27 @@ VertexManagerBase::CacheEntryBase* VertexManagerBase::FindCacheEntry(const Verte
 
 			if (m_cache_entries.size() >= 65536)
 			{
-				CacheEntryBase* temp = m_cache_lru_tail;
+				CacheEntry* temp = m_cache_lru_tail;
 				m_cache_lru_tail->LRU_Next = nullptr;
 				m_cache_lru_tail = temp->LRU_Prev;
 				m_cache_entries.erase(temp->Key);
-				DeleteCacheEntry(temp);
+
+				if (temp->Buffer)
+				{
+					if ((--temp->Buffer->RefCount) == 0)
+						DeleteCacheBuffer(temp->Buffer);
+				}
+
+				delete temp;
 			}
 		}
 
 		return nullptr;
+		//return entry;
 	}
 	else
 	{
-		CacheEntryBase* entry = it->second;
+		CacheEntry* entry = it->second;
 		if (entry != m_cache_lru_head)
 		{
 			if (entry->LRU_Next)
