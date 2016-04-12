@@ -430,6 +430,7 @@ static void BPWritten(const BPCmd& bp)
    * 3 BC0 - Ind. Tex Stage 0 NTexCoord
    * 0 BI0 - Ind. Tex Stage 0 NTexMap */
   case BPMEM_IREF:
+    PixelShaderManager::UpdateBP(bp.address, bp.newvalue);
     return;
 
   case BPMEM_TEV_KSEL:      // Texture Environment Swap Mode Table 0
@@ -632,7 +633,23 @@ static void BPWritten(const BPCmd& bp)
   // --------------
   // Indirect Tev
   // --------------
-  case BPMEM_IND_CMD:  // Indirect 0-15
+  case BPMEM_IND_CMD:
+  case BPMEM_IND_CMD + 1:
+  case BPMEM_IND_CMD + 2:
+  case BPMEM_IND_CMD + 3:
+  case BPMEM_IND_CMD + 4:
+  case BPMEM_IND_CMD + 5:
+  case BPMEM_IND_CMD + 6:
+  case BPMEM_IND_CMD + 7:
+  case BPMEM_IND_CMD + 8:
+  case BPMEM_IND_CMD + 9:
+  case BPMEM_IND_CMD + 10:
+  case BPMEM_IND_CMD + 11:
+  case BPMEM_IND_CMD + 12:
+  case BPMEM_IND_CMD + 13:
+  case BPMEM_IND_CMD + 14:
+  case BPMEM_IND_CMD + 15:
+    PixelShaderManager::UpdateBP(bp.address, bp.newvalue);
     return;
   // --------------------------------------------------
   // Set Color/Alpha of a Tev
