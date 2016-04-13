@@ -477,7 +477,8 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
         "			else\n"
         "				fixedPoint_uv = fixedPoint_uv >> " I_INDTEXSCALE "[i >> 1].zw;\n"
         "\n"
-        "			indtex[i] = sampleTexture(texmap, fixedPoint_uv).abg;\n"
+        "			indtex[i] = sampleTexture(texmap, float2(fixedPoint_uv) * " I_TEXDIMS
+        "[texmap].xy).abg;\n"
         "		}\n"
         "		else\n"
         "		{\n"
@@ -597,7 +598,7 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
               "				if (shift >= 0)\n"
               "					indtevtrans = indtevtrans >> shift;\n"
               "				else\n"
-              "					indtevtrans = indtevtrans << -shift;\n"
+              "					indtevtrans = indtevtrans << ((-shift) & 31);\n"
               "			}\n"
               "\n"
               "			// Wrapping\n"
