@@ -890,7 +890,7 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
             "		ztex += idot(s.TexColor.xyzw, " I_ZBIAS "[0].xyzw);\n"
             "		if (ztex_op == 1u)\n"
             "			ztex += zCoord;\n"
-            "		zCoord = clamp(ztex, 0, 0xFFFFFF);\n"
+            "		zCoord = ztex & 0xFFFFFF;\n"
             "	}\n"
             "\n");
 
