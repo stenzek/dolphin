@@ -224,6 +224,20 @@ static u32 BPWritten(const BPCmd& bp)
 
     UPE_Copy PE_copy = bpmem.triggerEFBCopy;
 
+    u32 bytes_per_pixel = 3;
+    switch (bpmem.zcontrol.pixel_format)
+    {
+    case PEControl::RGB8_Z24:
+    case PEControl::RGBA6_Z24:
+    case PEControl::Z24:
+      bytes_per_pixel = 3;
+      break;
+    case PEControl::RGB565_Z16:
+      bytes_per_pixel = 2;
+      break;
+    }
+    u32 cycles = 0;
+
     // Check if we are to copy from the EFB or draw to the XFB
     if (PE_copy.copy_to_xfb == 0)
     {
@@ -233,6 +247,8 @@ static u32 BPWritten(const BPCmd& bp)
       g_texture_cache->CopyRenderTargetToTexture(destAddr, PE_copy.tp_realFormat(), destStride,
                                                  is_depth_copy, srcRect, !!PE_copy.intensity_fmt,
                                                  !!PE_copy.half_scale);
+
+      cycles += ((static_cast<u32>(srcRect.GetWidth()) * static_cast<u32>(srcRect.GetHeight())) * bytes_per_pixel) / 8 * 2;
     }
     else
     {
@@ -262,15 +278,19 @@ static u32 BPWritten(const BPCmd& bp)
                 destAddr, srcRect.left, srcRect.top, srcRect.right, srcRect.bottom,
                 bpmem.copyTexSrcWH.x + 1, destStride, height);
       Renderer::RenderToXFB(destAddr, srcRect, destStride, height, s_gammaLUT[PE_copy.gamma]);
+
+      cycles += ((static_cast<u32>(srcRect.GetWidth()) * static_cast<u32>(srcRect.GetHeight())) * bytes_per_pixel) / 8;
+      cycles += ((static_cast<u32>(srcRect.GetWidth() / 2) * height) * 4) / 8;
     }
 
     // Clear the rectangular region after copying it.
     if (PE_copy.clear)
     {
+      cycles += static_cast<u32>(srcRect.GetWidth()) * static_cast<u32>(srcRect.GetHeight()) * bytes_per_pixel / 16;
       ClearScreen(srcRect);
     }
 
-    return 0;
+    return cycles;
   }
   case BPMEM_LOADTLUT0:  // This one updates bpmem.tlutXferSrc, no need to do anything here.
     return 0;
