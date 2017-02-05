@@ -97,11 +97,11 @@ u8* Run(DataReader src, u32* cycles, bool in_display_list)
     switch (cmd_byte)
     {
     case GX_NOP:
-      totalCycles += 6;  // Hm, this means that we scan over nop streams pretty slowly...
+      totalCycles += 2;  // Hm, this means that we scan over nop streams pretty slowly...
       break;
 
     case GX_UNKNOWN_RESET:
-      totalCycles += 6;  // Datel software uses this command
+      totalCycles += 2;  // Datel software uses this command
       DEBUG_LOG(VIDEO, "GX Reset?: %08x", cmd_byte);
       break;
 
@@ -109,7 +109,7 @@ u8* Run(DataReader src, u32* cycles, bool in_display_list)
     {
       if (src.size() < 1 + 4)
         goto end;
-      totalCycles += 12;
+      totalCycles += 4;
       u8 sub_cmd = src.Read<u8>();
       u32 value = src.Read<u32>();
       LoadCPReg(sub_cmd, value, is_preprocess);
@@ -126,7 +126,7 @@ u8* Run(DataReader src, u32* cycles, bool in_display_list)
       int transfer_size = ((Cmd2 >> 16) & 15) + 1;
       if (src.size() < transfer_size * sizeof(u32))
         goto end;
-      totalCycles += 18 + 6 * transfer_size;
+      totalCycles += 6 + 2 * transfer_size;
       if (!is_preprocess)
       {
         u32 xf_address = Cmd2 & 0xFFFF;
@@ -153,7 +153,7 @@ u8* Run(DataReader src, u32* cycles, bool in_display_list)
     load_indx:
       if (src.size() < 4)
         goto end;
-      totalCycles += 6;
+      totalCycles += 2;
       if (is_preprocess)
         PreprocessIndexedXF(src.Read<u32>(), refarray);
       else
@@ -169,7 +169,7 @@ u8* Run(DataReader src, u32* cycles, bool in_display_list)
 
       if (in_display_list)
       {
-        totalCycles += 6;
+        totalCycles += 2;
         INFO_LOG(VIDEO, "recursive display list detected");
       }
       else
@@ -177,19 +177,19 @@ u8* Run(DataReader src, u32* cycles, bool in_display_list)
         if (is_preprocess)
           InterpretDisplayListPreprocess(address, count);
         else
-          totalCycles += 6 + InterpretDisplayList(address, count);
+          totalCycles += 2 + InterpretDisplayList(address, count);
       }
     }
     break;
 
     case GX_CMD_UNKNOWN_METRICS:  // zelda 4 swords calls it and checks the metrics registers after
                                   // that
-      totalCycles += 6;
+      totalCycles += 2;
       DEBUG_LOG(VIDEO, "GX 0x44: %08x", cmd_byte);
       break;
 
     case GX_CMD_INVL_VC:  // Invalidate Vertex Cache
-      totalCycles += 6;
+      totalCycles += 2;
       DEBUG_LOG(VIDEO, "Invalidate (vertex cache?)");
       break;
 
@@ -199,7 +199,7 @@ u8* Run(DataReader src, u32* cycles, bool in_display_list)
       {
         if (src.size() < 4)
           goto end;
-        totalCycles += 12;
+        totalCycles += 4;
         u32 bp_cmd = src.Read<u32>();
         if (is_preprocess)
         {
@@ -230,8 +230,8 @@ u8* Run(DataReader src, u32* cycles, bool in_display_list)
 
         src.Skip(bytes);
 
-        // 4 GPU ticks per vertex, 3 CPU ticks per GPU tick
-        totalCycles += num_vertices * 4 * 3 + 6;
+        // 4 GPU ticks per vertex
+        totalCycles += num_vertices * 4 + 2;
       }
       else
       {
@@ -257,7 +257,9 @@ u8* Run(DataReader src, u32* cycles, bool in_display_list)
 end:
   if (cycles)
   {
-    *cycles = totalCycles;
+    // 3 CPU ticks per GPU tick
+    // TODO: Is this correct?
+    *cycles = totalCycles * 3;
   }
   return opcodeStart;
 }
