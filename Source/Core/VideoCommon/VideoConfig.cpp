@@ -4,6 +4,7 @@
 
 #include <algorithm>
 
+#include "Common/CPUDetect.h"
 #include "Common/CommonTypes.h"
 #include "Common/StringUtil.h"
 #include "Core/Config/GraphicsSettings.h"
@@ -93,6 +94,12 @@ void VideoConfig::Refresh()
   bBackendMultithreading = Config::Get(Config::GFX_BACKEND_MULTITHREADING);
   iCommandBufferExecuteInterval = Config::Get(Config::GFX_COMMAND_BUFFER_EXECUTE_INTERVAL);
   bShaderCache = Config::Get(Config::GFX_SHADER_CACHE);
+  bBackgroundShaderCompiling = Config::Get(Config::GFX_BACKGROUND_SHADER_COMPILING);
+  bDisableSpecializedShaders = Config::Get(Config::GFX_DISABLE_SPECIALIZED_SHADERS);
+  bPrecompileUberShaders = Config::Get(Config::GFX_PRECOMPILE_UBER_SHADERS);
+  iShaderCompilerThreads = Config::Get(Config::GFX_SHADER_COMPILER_THREADS);
+  bForceVertexUberShaders = Config::Get(Config::GFX_FORCE_VERTEX_UBER_SHADERS);
+  bForcePixelUberShaders = Config::Get(Config::GFX_FORCE_PIXEL_UBER_SHADERS);
 
   bZComploc = Config::Get(Config::GFX_SW_ZCOMPLOC);
   bZFreeze = Config::Get(Config::GFX_SW_ZFREEZE);
@@ -245,4 +252,13 @@ std::string VideoConfig::GetHostConfigFilename() const
 {
   u32 bits = GetHostConfigBits();
   return StringFromFormat("%08X", bits);
+}
+
+u32 VideoConfig::GetShaderCompilerThreads() const
+{
+  if (iShaderCompilerThreads >= 0)
+    return static_cast<u32>(iShaderCompilerThreads);
+
+  // Automatic number. We use clamp(cpus - 3, 1, 4).
+  return static_cast<u32>(std::min(std::max(cpu_info.num_cores - 3, 1), 4));
 }

@@ -167,6 +167,35 @@ struct VideoConfig final
   // Currently only supported with Vulkan.
   int iCommandBufferExecuteInterval;
 
+  // The following options determine the ubershader mode:
+  //   No ubershaders:
+  //     - bBackgroundShaderCompiling = false
+  //     - bDisableSpecializedShaders = false
+  //   Hybrid/background compiling:
+  //     - bBackgroundShaderCompiling = true
+  //     - bDisableSpecializedShaders = false
+  //   Ubershaders only:
+  //     - bBackgroundShaderCompiling = false
+  //     - bDisableSpecializedShaders = true
+
+  // Enable background shader compiling, use ubershaders while waiting.
+  bool bBackgroundShaderCompiling;
+
+  // Use ubershaders only, don't compile specialized shaders.
+  bool bDisableSpecializedShaders;
+
+  // Precompile ubershader variants at boot/config reload time.
+  bool bPrecompileUberShaders;
+
+  // Number of shader compiler threads.
+  // 0 disables background compilation.
+  // -1 uses an automatic number based on the CPU threads.
+  int iShaderCompilerThreads;
+
+  // Temporary toggling of ubershaders, for debugging
+  bool bForceVertexUberShaders;
+  bool bForcePixelUberShaders;
+
   // Static config per API
   // TODO: Move this out of VideoConfig
   struct
@@ -224,6 +253,11 @@ struct VideoConfig final
   {
     return backend_info.bSupportsGPUTextureDecoding && bEnableGPUTextureDecoding;
   }
+  bool ShouldPrecompileUberShaders() const
+  {
+    // We don't want to precompile ubershaders if they're never going to be used.
+    return bPrecompileUberShaders && (bBackgroundShaderCompiling || bDisableSpecializedShaders);
+  }
   bool IsStereoEnabled() const { return iStereoMode > 0; }
   bool IsMSAAEnabled() const { return iMultisamples > 1; }
   bool IsSSAAEnabled() const { return iMultisamples > 1 && bSSAA && backend_info.bSupportsSSAA; }
@@ -231,6 +265,7 @@ struct VideoConfig final
   // Host config contains the settings which can influence generated shaders.
   u32 GetHostConfigBits() const;
   std::string GetHostConfigFilename() const;
+  u32 GetShaderCompilerThreads() const;
 };
 
 extern VideoConfig g_Config;
