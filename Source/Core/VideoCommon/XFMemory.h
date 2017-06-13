@@ -133,27 +133,15 @@ enum
 
 union LitChannel
 {
-  struct
-  {
-    u32 matsource : 1;
-    u32 enablelighting : 1;
-    u32 lightMask0_3 : 4;
-    u32 ambsource : 1;
-    u32 diffusefunc : 2;  // LIGHTDIF_X
-    u32 attnfunc : 2;     // LIGHTATTN_X
-    u32 lightMask4_7 : 4;
-  };
-  struct
-  {
-    u32 hex : 15;
-    u32 unused : 17;
-  };
-  struct
-  {
-    u32 dummy0 : 7;
-    u32 lightparams : 4;
-    u32 dummy1 : 21;
-  };
+  BitField<0, 1, u32> matsource;
+  BitField<1, 1, u32> enablelighting;
+  BitField<2, 4, u32> lightMask0_3;
+  BitField<6, 1, u32> ambsource;
+  BitField<7, 2, u32> diffusefunc;  // LIGHTDIF_X
+  BitField<9, 2, u32> attnfunc;     // LIGHTATTN_X
+  BitField<11, 4, u32> lightMask4_7;
+  u32 hex;
+
   unsigned int GetFullLightMask() const
   {
     return enablelighting ? (lightMask0_3 | (lightMask4_7 << 4)) : 0;
