@@ -50,10 +50,15 @@ struct VertexShaderConstants
   // For vertex ubershaders
   u32 components;
   u32 xfmem_dualTexInfo;
+  u32 xfmem_numColorChans;
+  u32 pad[3];
 
   // TODO: Pack these more efficiently
-  uint4 xfmem_texMtxInfo[8];  // .x
-  uint4 xfmem_postMtxInfo[8]; // .x
+  uint4 xfmem_texMtxInfo[8];   // .x
+  uint4 xfmem_postMtxInfo[8];  // .x
+
+  uint4 xfmem_color[2];  // .x
+  uint4 xfmem_alpha[2];  // .x
 };
 
 struct GeometryShaderConstants

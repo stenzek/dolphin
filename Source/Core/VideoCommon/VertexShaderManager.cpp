@@ -30,7 +30,7 @@ alignas(16) static float g_fProjectionMatrix[16];
 
 // track changes
 static bool bTexMatricesChanged[2], bPosNormalMatrixChanged, bProjectionChanged, bViewportChanged;
-static bool bTexMtxInfoChanged;
+static bool bTexMtxInfoChanged, bLightingConfigChanged;
 static BitSet32 nMaterialsChanged;
 static int nTransformMatricesChanged[2];      // min,max
 static int nNormalMatricesChanged[2];         // min,max
@@ -195,6 +195,7 @@ void VertexShaderManager::Init()
   bProjectionChanged = true;
   bViewportChanged = false;
   bTexMtxInfoChanged = false;
+  bLightingConfigChanged = false;
 
   std::memset(&xfmem, 0, sizeof(xfmem));
   constants = {};
@@ -575,6 +576,20 @@ void VertexShaderManager::SetConstants()
 
     dirty = true;
   }
+
+  if (bLightingConfigChanged)
+  {
+    bLightingConfigChanged = false;
+
+    for (size_t i = 0; i < 2; i++)
+    {
+      constants.xfmem_color[i][0] = xfmem.color[i].hex;
+      constants.xfmem_alpha[i][0] = xfmem.alpha[i].hex;
+    }
+    constants.xfmem_numColorChans = xfmem.numChan.numColorChans;
+
+    dirty = true;
+  }
 }
 
 void VertexShaderManager::InvalidateXFRange(int start, int end)
@@ -788,6 +803,11 @@ void VertexShaderManager::SetTexMatrixInfoChanged(int index)
   bTexMtxInfoChanged = true;
 }
 
+void VertexShaderManager::SetLightingConfigChanged()
+{
+  bLightingConfigChanged = true;
+}
+
 void VertexShaderManager::TransformToClipSpace(const float* data, float* out, u32 MtxIdx)
 {
   const float* world_matrix = &xfmem.posMatrices[(MtxIdx & 0x3f) * 4];
@@ -831,6 +851,7 @@ void VertexShaderManager::DoState(PointerWrap& p)
   p.Do(bProjectionChanged);
   p.Do(bViewportChanged);
   p.Do(bTexMtxInfoChanged);
+  p.Do(bLightingConfigChanged);
 
   p.Do(constants);
 

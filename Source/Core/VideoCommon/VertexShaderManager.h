@@ -38,6 +38,7 @@ public:
 
   static void SetVertexFormat(u32 components);
   static void SetTexMatrixInfoChanged(int index);
+  static void SetLightingConfigChanged();
 
   // data: 3 floats representing the X, Y and Z vertex model coordinates and the posmatrix index.
   // out:  4 floats which will be initialized with the corresponding clip space coordinates
