@@ -9,8 +9,11 @@
 #include "Common/GL/GLUtil.h"
 #include "Common/LinearDiskCache.h"
 
+#include "VideoCommon/AsyncShaderCompiler.h"
 #include "VideoCommon/GeometryShaderGen.h"
 #include "VideoCommon/PixelShaderGen.h"
+#include "VideoCommon/UberShaderPixel.h"
+#include "VideoCommon/UberShaderVertex.h"
 #include "VideoCommon/VertexShaderGen.h"
 
 namespace OGL
@@ -24,30 +27,59 @@ public:
 
   bool operator<(const SHADERUID& r) const
   {
-    return std::tie(puid, vuid, guid) < std::tie(r.puid, r.vuid, r.guid);
+    return std::tie(vuid, puid, guid) < std::tie(r.vuid, r.puid, r.guid);
   }
 
   bool operator==(const SHADERUID& r) const
   {
-    return std::tie(puid, vuid, guid) == std::tie(r.puid, r.vuid, r.guid);
+    return std::tie(vuid, puid, guid) == std::tie(r.vuid, r.puid, r.guid);
+  }
+};
+class UBERSHADERUID
+{
+public:
+  UberShader::VertexShaderUid vuid;
+  UberShader::PixelShaderUid puid;
+  GeometryShaderUid guid;
+
+  bool operator<(const UBERSHADERUID& r) const
+  {
+    return std::tie(vuid, puid, guid) < std::tie(r.vuid, r.puid, r.guid);
+  }
+
+  bool operator==(const UBERSHADERUID& r) const
+  {
+    return std::tie(vuid, puid, guid) == std::tie(r.vuid, r.puid, r.guid);
   }
 };
 
 struct SHADER
 {
-  SHADER() : glprogid(0) {}
   void Destroy()
   {
-    glDeleteProgram(glprogid);
-    glprogid = 0;
+    DestroyCode();
+    DestroyShaders();
+    if (glprogid)
+    {
+      glDeleteProgram(glprogid);
+      glprogid = 0;
+    }
   }
-  GLuint glprogid;  // OpenGL program id
+
+  GLuint vsid = 0;
+  GLuint gsid = 0;
+  GLuint psid = 0;
+  GLuint glprogid = 0;
 
   std::string strvprog, strpprog, strgprog;
 
+  bool CheckParallelCompileStatus() const;
+  bool CheckCompileResult() const;
   void SetProgramVariables();
   void SetProgramBindings(bool is_compute);
   void Bind() const;
+  void DestroyShaders();
+  void DestroyCode();
 };
 
 class ProgramShaderCache
@@ -57,41 +89,76 @@ public:
   {
     SHADER shader;
     bool in_cache;
+    bool pending;
 
     void Destroy() { shader.Destroy(); }
+    bool FinishParallelCompile();
   };
 
   static PCacheEntry GetShaderProgram();
   static SHADER* SetShader(u32 primitive_type);
-  static void GetShaderId(SHADERUID* uid, u32 primitive_type);
+  static SHADER* SetUberShader(u32 primitive_type);
 
   static bool CompileShader(SHADER& shader, const std::string& vcode, const std::string& pcode,
-                            const std::string& gcode = "");
+                            const std::string& gcode = "", bool parallel_compile = false);
   static bool CompileComputeShader(SHADER& shader, const std::string& code);
-  static GLuint CompileSingleShader(GLuint type, const std::string& code);
+  static GLuint CompileSingleShader(GLenum type, const std::string& code, bool check_result = true);
+  static bool CheckShaderCompileResult(GLuint id, GLenum type, const std::string& code);
+  static bool CheckProgramLinkResult(GLuint id, const std::string& vcode, const std::string& pcode,
+                                     const std::string& gcode);
   static void UploadConstants();
 
   static void Init();
   static void Reload();
   static void Shutdown();
   static void CreateHeader();
+  static void PrecompileUberShaders();
 
 private:
-  class ProgramShaderCacheInserter : public LinearDiskCacheReader<SHADERUID, u8>
+  template <typename UIDType>
+  class ProgramShaderCacheInserter : public LinearDiskCacheReader<UIDType, u8>
   {
   public:
-    void Read(const SHADERUID& key, const u8* value, u32 value_size) override;
+    ProgramShaderCacheInserter(std::map<UIDType, PCacheEntry>& shader_map)
+        : m_shader_map(shader_map)
+    {
+    }
+
+    void Read(const UIDType& key, const u8* value, u32 value_size) override
+    {
+      if (m_shader_map.find(key) != m_shader_map.end())
+        return;
+
+      PCacheEntry& entry = m_shader_map[key];
+      if (!CreateCacheEntryFromBinary(&entry, value, value_size))
+      {
+        m_shader_map.erase(key);
+        return;
+      }
+    }
+
+  private:
+    std::map<UIDType, PCacheEntry>& m_shader_map;
   };
 
+  typedef std::map<SHADERUID, PCacheEntry> PCache;
+  typedef std::map<UBERSHADERUID, PCacheEntry> UberPCache;
+
+  static GLuint CreateProgramFromBinary(const u8* value, u32 value_size);
+  static bool CreateCacheEntryFromBinary(PCacheEntry* entry, const u8* value, u32 value_size);
+  static bool GetProgramBinary(const PCacheEntry& entry, std::vector<u8>& data);
   static void LoadProgramBinaries();
   static void SaveProgramBinaries();
   static void DestroyShaders();
 
-  typedef std::map<SHADERUID, PCacheEntry> PCache;
   static PCache pshaders;
+  static UberPCache ubershaders;
   static PCacheEntry* last_entry;
+  static PCacheEntry* last_uber_entry;
   static SHADERUID last_uid;
+  static UBERSHADERUID last_uber_uid;
 
+  static bool s_can_use_parallel_shader_compile;
   static u32 s_ubo_buffer_size;
   static s32 s_ubo_align;
 };
