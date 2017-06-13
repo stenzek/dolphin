@@ -3,6 +3,7 @@
 // Refer to the license.txt file included.
 
 #include "VideoCommon/UberShaderVertex.h"
+#include "VideoCommon/UberShaderCommon.h"
 #include "VideoCommon/NativeVertexFormat.h"
 #include "VideoCommon/VertexShaderGen.h"
 #include "VideoCommon/VideoConfig.h"
@@ -26,11 +27,13 @@ ShaderCode GenVertexShader(APIType ApiType, const vertex_ubershader_uid_data* ui
   const u32 numTexgen = uid_data->num_texgens;
   ShaderCode out;
 
-	out.Write("// Vertex UberShader\n\n");
-	out.Write("%s", s_lighting_struct);
+  out.Write("// Vertex UberShader\n\n");
+  WriteUberShaderCommonHeader(out, ApiType);
+
+  out.Write("%s", s_lighting_struct);
 
 	// uniforms
-	if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
+  if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
     out.Write("UBO_BINDING(std140, 2) uniform VSBlock {\n");
 	else
 		out.Write("cbuffer VSBlock {\n");
@@ -157,8 +160,111 @@ ShaderCode GenVertexShader(APIType ApiType, const vertex_ubershader_uid_data* ui
 
 	// TODO: Actual Hardware Lighting
 
-	// TODO: Texture Coordinates
+	// Texture Coordinates
+  // TODO: Should we unroll this at compile time?
+  if (numTexgen > 0)
+  {
+    out.WriteLine("// Texture coordinate generation");
+    out.WriteLine("for (uint i = 0u; i < %uu; i++) {", numTexgen);
+    out.WriteLine("  // Texcoord transforms");
+    out.WriteLine("  float4 coord = float4(0.0, 0.0, 1.0, 1.0);");
+    out.WriteLine("  switch (%s) {", BitfieldExtract("xfmem_texMtxInfo[i]", TexMtxInfo().sourcerow).c_str());
+    out.WriteLine("  case %uu: // XF_SRCGEOM_INROW", XF_SRCGEOM_INROW);
+    out.WriteLine("    coord.xyz = rawpos.xyz;");
+    out.WriteLine("    break;");
+    out.WriteLine("  case %uu: // XF_SRCNORMAL_INROW", XF_SRCNORMAL_INROW);
+    out.WriteLine("    coord.xyz = ((components & %uu /* VB_HAS_NRM0 */) != 0u) ? rawnorm0.xyz : coord.xyz;", VB_HAS_NRM0);
+    out.WriteLine("    break;");
+    out.WriteLine("  case %uu: // XF_SRCBINORMAL_T_INROW", XF_SRCBINORMAL_T_INROW);
+    out.WriteLine("    coord.xyz = ((components & %uu /* VB_HAS_NRM1 */) != 0u) ? rawnorm1.xyz : coord.xyz;", VB_HAS_NRM1);
+    out.WriteLine("    break;");
+    out.WriteLine("  case %uu: // XF_SRCBINORMAL_B_INROW", XF_SRCBINORMAL_B_INROW);
+    out.WriteLine("    coord.xyz = ((components & %uu /* VB_HAS_NRM2 */) != 0u) ? rawnorm2.xyz : coord.xyz;", VB_HAS_NRM2);
+    out.WriteLine("    break;");
+    for (u32 i = 0; i < 8; i++)
+    {
+      out.WriteLine("  case %uu: // XF_SRCTEX%u_INROW", XF_SRCTEX0_INROW + i, i);
+      out.WriteLine("    coord = ((components & %uu /* VB_HAS_UV%u */) != 0u) ? float4(tex%u.x, tex%u.y, 1.0, 1.0) : coord;",
+                    VB_HAS_UV0 << i, i, i, i);
+      out.WriteLine("    break;");
+    }
+    out.WriteLine("  }");
+    out.WriteLine("");
 
+    out.WriteLine("  // Input form of AB11 sets z element to 1.0");
+    out.WriteLine("  if (%s != 0u)", BitfieldExtract("xfmem_texMtxInfo[i]", TexMtxInfo().inputform).c_str());
+    out.WriteLine("    coord.z = 1.0f;");
+    out.WriteLine("");
+
+    out.WriteLine("  // first transformation");
+    out.WriteLine("  switch (%s) {", BitfieldExtract("xfmem_texMtxInfo[i]", TexMtxInfo().texgentype).c_str());
+    out.WriteLine("  case %uu: // XF_TEXGEN_EMBOSS_MAP", XF_TEXGEN_EMBOSS_MAP);
+    out.WriteLine("    // TODO");
+    out.WriteLine("    o.tex[i] = float3(0.0, 0.0, 0.0);");
+    out.WriteLine("    break;");
+    out.WriteLine("  case %uu: // XF_TEXGEN_COLOR_STRGBC0", XF_TEXGEN_COLOR_STRGBC0);
+    out.WriteLine("    o.tex[i].xyz = float3(o.colors_0.x, o.colors_0.y, 1.0);");
+    out.WriteLine("    break;");
+    out.WriteLine("  case %uu: // XF_TEXGEN_COLOR_STRGBC1", XF_TEXGEN_COLOR_STRGBC1);
+    out.WriteLine("    o.tex[i].xyz = float3(o.colors_1.x, o.colors_1.y, 1.0);");
+    out.WriteLine("    break;");
+    out.WriteLine("  default:  // Also XF_TEXGEN_REGULAR");
+    out.WriteLine("    {");
+    out.WriteLine("      if ((components & (%uu /* VB_HAS_TEXMTXIDX0 */ << i)) != 0) {", VB_HAS_TEXMTXIDX0);
+    out.WriteLine("        // This is messy, due to dynamic indexing of the input texture coordinates.");
+    out.WriteLine("        // Hopefully the compiler will unroll this whole loop anyway and the switch.");
+    out.WriteLine("        int tmp = 0;");
+    out.WriteLine("        switch (i) {");
+    for (u32 i = 0; i < numTexgen; i++)
+      out.WriteLine("        case %u: tmp = int(tex%u.z); break;", i, i);
+    out.WriteLine("        }");
+    out.WriteLine("");
+    out.WriteLine("        if (%s == %uu) {", BitfieldExtract("xfmem_texMtxInfo[i]", TexMtxInfo().projection).c_str(), XF_TEXPROJ_STQ);
+    out.WriteLine("          o.tex[i].xyz = float3(dot(coord, " I_TRANSFORMMATRICES "[tmp]),");
+    out.WriteLine("                                dot(coord, " I_TRANSFORMMATRICES "[tmp + 1]),");
+    out.WriteLine("                                dot(coord, " I_TRANSFORMMATRICES "[tmp + 2]));");
+    out.WriteLine("        } else {");
+    out.WriteLine("          o.tex[i].xyz = float3(dot(coord, " I_TRANSFORMMATRICES "[tmp]),");
+    out.WriteLine("                                dot(coord, " I_TRANSFORMMATRICES "[tmp + 1]),");
+    out.WriteLine("                                1.0);");
+    out.WriteLine("        }");
+    out.WriteLine("      } else {");
+    out.WriteLine("        if (%s == %uu) {", BitfieldExtract("xfmem_texMtxInfo[i]", TexMtxInfo().projection).c_str(), XF_TEXPROJ_STQ);
+    out.WriteLine("          o.tex[i].xyz = float3(dot(coord, " I_TEXMATRICES "[3 * i]),");
+    out.WriteLine("                                dot(coord, " I_TEXMATRICES "[3 * i + 1]),");
+    out.WriteLine("                                dot(coord, " I_TEXMATRICES "[3 * i + 2]));");
+    out.WriteLine("        } else {");
+    out.WriteLine("          o.tex[i].xyz = float3(dot(coord, " I_TEXMATRICES "[3 * i]),");
+    out.WriteLine("                                dot(coord, " I_TEXMATRICES "[3 * i + 1]),");
+    out.WriteLine("                                1.0);");
+    out.WriteLine("        }");
+    out.WriteLine("      }");
+    out.WriteLine("    }");
+    out.WriteLine("    break;");
+    out.WriteLine("  }");
+    out.WriteLine("");
+
+    out.WriteLine("  if (xfmem_dualTexInfo != 0u) {");
+    out.WriteLine("    uint base_index = %s;", BitfieldExtract("xfmem_postMtxInfo[i]", PostMtxInfo().index).c_str());
+    out.WriteLine("    float4 P0 = " I_POSTTRANSFORMMATRICES "[base_index & 0x3fu];");
+    out.WriteLine("    float4 P1 = " I_POSTTRANSFORMMATRICES "[(base_index + 1u) & 0x3fu];");
+    out.WriteLine("    float4 P2 = " I_POSTTRANSFORMMATRICES "[(base_index + 2u) & 0x3fu];");
+    out.WriteLine("");
+    
+    out.WriteLine("    if (%s != 0u)", BitfieldExtract("xfmem_postMtxInfo[i]", PostMtxInfo().normalize).c_str());
+    out.WriteLine("      o.tex[i].xyz = normalize(o.tex[i].xyz);");
+    out.WriteLine("");
+
+    out.WriteLine("    // multiply by postmatrix");
+    out.WriteLine("    o.tex[i].xyz = float3(dot(P0.xyz, o.tex[i].xyz) + P0.w,");
+    out.WriteLine("                          dot(P1.xyz, o.tex[i].xyz) + P1.w,");
+    out.WriteLine("                          dot(P2.xyz, o.tex[i].xyz) + P2.w);");
+    out.WriteLine("  }");
+
+    out.WriteLine("}");
+  }
+
+#if 0
 	// Simple Texture coord code: each texcoordX is hardcoded to texgenX
 	for (u32 i = 0; i < numTexgen; i++)
 	{
@@ -168,6 +274,7 @@ ShaderCode GenVertexShader(APIType ApiType, const vertex_ubershader_uid_data* ui
 		out.Write("		o.tex[%d].xyz = float3(dot(coord, " I_TEXMATRICES"[%d]), dot(coord, " I_TEXMATRICES"[%d]), 1);\n", i, 3 * i, 3 * i + 1);
 		out.Write("	}\n");
 	}
+#endif
 
   // TODO: Per Vertex Lighting?
 

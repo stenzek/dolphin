@@ -45,11 +45,15 @@ struct VertexShaderConstants
   float4 normalmatrices[32];
   float4 posttransformmatrices[64];
   float4 pixelcentercorrection;
-  float4 viewport;
+  float viewport[2];
 
   // For vertex ubershaders
   u32 components;
-  u32 pad[3];
+  u32 xfmem_dualTexInfo;
+
+  // TODO: Pack these more efficiently
+  uint4 xfmem_texMtxInfo[8];  // .x
+  uint4 xfmem_postMtxInfo[8]; // .x
 };
 
 struct GeometryShaderConstants

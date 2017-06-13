@@ -30,6 +30,7 @@ alignas(16) static float g_fProjectionMatrix[16];
 
 // track changes
 static bool bTexMatricesChanged[2], bPosNormalMatrixChanged, bProjectionChanged, bViewportChanged;
+static bool bTexMtxInfoChanged;
 static BitSet32 nMaterialsChanged;
 static int nTransformMatricesChanged[2];      // min,max
 static int nNormalMatricesChanged[2];         // min,max
@@ -193,6 +194,7 @@ void VertexShaderManager::Init()
   bPosNormalMatrixChanged = false;
   bProjectionChanged = true;
   bViewportChanged = false;
+  bTexMtxInfoChanged = false;
 
   std::memset(&xfmem, 0, sizeof(xfmem));
   constants = {};
@@ -561,6 +563,18 @@ void VertexShaderManager::SetConstants()
 
     dirty = true;
   }
+
+  if (bTexMtxInfoChanged)
+  {
+    bTexMtxInfoChanged = false;
+    constants.xfmem_dualTexInfo = xfmem.dualTexTrans.enabled;
+    for (size_t i = 0; i < ArraySize(xfmem.texMtxInfo); i++)
+      constants.xfmem_texMtxInfo[i][0] = xfmem.texMtxInfo[i].hex;
+    for (size_t i = 0; i < ArraySize(xfmem.postMtxInfo); i++)
+      constants.xfmem_postMtxInfo[i][0] = xfmem.postMtxInfo[i].hex;
+
+    dirty = true;
+  }
 }
 
 void VertexShaderManager::InvalidateXFRange(int start, int end)
@@ -767,6 +781,13 @@ void VertexShaderManager::SetVertexFormat(u32 components)
   }
 }
 
+void VertexShaderManager::SetTexMatrixInfoChanged(int index)
+{
+  // TODO: Should we track this with more precision, like which indices changed?
+  // The whole vertex constants are probably going to be uploaded regardless.
+  bTexMtxInfoChanged = true;
+}
+
 void VertexShaderManager::TransformToClipSpace(const float* data, float* out, u32 MtxIdx)
 {
   const float* world_matrix = &xfmem.posMatrices[(MtxIdx & 0x3f) * 4];
@@ -809,6 +830,7 @@ void VertexShaderManager::DoState(PointerWrap& p)
   p.Do(bPosNormalMatrixChanged);
   p.Do(bProjectionChanged);
   p.Do(bViewportChanged);
+  p.Do(bTexMtxInfoChanged);
 
   p.Do(constants);
 

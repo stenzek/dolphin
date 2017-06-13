@@ -93,6 +93,7 @@ static void XFRegWritten(int transferSize, u32 baseAddress, DataReader src)
     case XFMEM_DUALTEX:
       if (xfmem.dualTexTrans.enabled != (newValue & 1))
         g_vertex_manager->Flush();
+      VertexShaderManager::SetTexMatrixInfoChanged(-1);
       break;
 
     case XFMEM_SETMATRIXINDA:
@@ -146,6 +147,7 @@ static void XFRegWritten(int transferSize, u32 baseAddress, DataReader src)
     case XFMEM_SETTEXMTXINFO + 6:
     case XFMEM_SETTEXMTXINFO + 7:
       g_vertex_manager->Flush();
+      VertexShaderManager::SetTexMatrixInfoChanged(address - XFMEM_SETTEXMTXINFO);
       if ((xfmem.texMtxInfo[address & 0xf].hex & 2) != (newValue & 2))
         PixelShaderManager::SetTexProjectionChanged();
 
@@ -161,6 +163,7 @@ static void XFRegWritten(int transferSize, u32 baseAddress, DataReader src)
     case XFMEM_SETPOSMTXINFO + 6:
     case XFMEM_SETPOSMTXINFO + 7:
       g_vertex_manager->Flush();
+      VertexShaderManager::SetTexMatrixInfoChanged(address - XFMEM_SETPOSMTXINFO);
 
       nextAddress = XFMEM_SETPOSMTXINFO + 8;
       break;
