@@ -326,6 +326,9 @@ public final class SettingsFragmentPresenter
 		Setting fastDepth = mSettings.get(SettingsFile.SETTINGS_GFX).get(SettingsFile.SECTION_GFX_HACKS).getSetting(SettingsFile.KEY_FAST_DEPTH);
 		Setting aspectRatio = mSettings.get(SettingsFile.SETTINGS_GFX).get(SettingsFile.SECTION_GFX_SETTINGS).getSetting(SettingsFile.KEY_ASPECT_RATIO);
 
+		Setting disableSpecializedShaders = mSettings.get(SettingsFile.SETTINGS_GFX).get(SettingsFile.SECTION_GFX_SETTINGS).getSetting(SettingsFile.KEY_DISABLE_SPECIALIZED_SHADERS);
+		Setting backgroundShaderCompiling = mSettings.get(SettingsFile.SETTINGS_GFX).get(SettingsFile.SECTION_GFX_SETTINGS).getSetting(SettingsFile.KEY_BACKGROUND_SHADER_COMPILING);
+
 		sl.add(new HeaderSetting(null, null, R.string.embedded_frame_buffer, 0));
 		sl.add(new CheckBoxSetting(SettingsFile.KEY_SKIP_EFB, SettingsFile.SECTION_GFX_HACKS, SettingsFile.SETTINGS_GFX, R.string.skip_efb_access, R.string.skip_efb_access_descrip, false, skipEFB));
 		sl.add(new CheckBoxSetting(SettingsFile.KEY_IGNORE_FORMAT, SettingsFile.SECTION_GFX_HACKS, SettingsFile.SETTINGS_GFX, R.string.ignore_format_changes, R.string.ignore_format_changes_descrip, true, ignoreFormat));
@@ -337,6 +340,11 @@ public final class SettingsFragmentPresenter
 
 		sl.add(new HeaderSetting(null, null, R.string.external_frame_buffer, 0));
 		sl.add(new SingleChoiceSetting(SettingsFile.KEY_XFB_METHOD, SettingsFile.SECTION_GFX_HACKS, SettingsFile.SETTINGS_GFX, R.string.external_frame_buffer, R.string.external_frame_buffer_descrip, R.array.externalFrameBufferEntries, R.array.externalFrameBufferValues, 0, xfb));
+
+		sl.add(new HeaderSetting(null, null, R.string.ubershaders, 0));
+		sl.add(new CheckBoxSetting(SettingsFile.KEY_DISABLE_SPECIALIZED_SHADERS, SettingsFile.SECTION_GFX_SETTINGS, SettingsFile.SETTINGS_GFX, R.string.disable_specialized_shaders, R.string.disable_specialized_shaders_descrip, false, disableSpecializedShaders));
+		sl.add(new CheckBoxSetting(SettingsFile.KEY_BACKGROUND_SHADER_COMPILING, SettingsFile.SECTION_GFX_SETTINGS, SettingsFile.SETTINGS_GFX, R.string.background_shader_compiling, R.string.background_shader_compiling_descrip, false, backgroundShaderCompiling));
+
 
 		sl.add(new HeaderSetting(null, null, R.string.other, 0));
 		sl.add(new CheckBoxSetting(SettingsFile.KEY_FAST_DEPTH, SettingsFile.SECTION_GFX_HACKS, SettingsFile.SETTINGS_GFX, R.string.fast_depth_calculation, R.string.fast_depth_calculation_descrip, true, fastDepth));
