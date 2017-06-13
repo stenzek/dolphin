@@ -194,7 +194,7 @@ void VertexShaderManager::Init()
   bProjectionChanged = true;
   bViewportChanged = false;
 
-  xfmem = {};
+  std::memset(&xfmem, 0, sizeof(xfmem));
   constants = {};
   ResetView();
 
@@ -760,10 +760,11 @@ void VertexShaderManager::ResetView()
 
 void VertexShaderManager::SetVertexFormat(u32 components)
 {
-	if (components != constants.components) {
-		constants.components = components;
-		dirty = true;
-	}
+  if (components != constants.components)
+  {
+    constants.components = components;
+    dirty = true;
+  }
 }
 
 void VertexShaderManager::TransformToClipSpace(const float* data, float* out, u32 MtxIdx)
