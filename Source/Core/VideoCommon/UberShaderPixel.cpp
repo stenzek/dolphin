@@ -19,9 +19,10 @@ std::string BitfieldExtract(const std::string& source, T type)
 PixelShaderUid GetPixelShaderUid()
 {
   PixelShaderUid out;
-  pixel_ubershader_uid_data* uid = out.GetUidData<pixel_ubershader_uid_data>();
-  uid->numTexgens = xfmem.numTexGen.numTexGens;
-  uid->early_depth = bpmem.zcontrol.early_ztest && !bpmem.genMode.zfreeze;
+  pixel_ubershader_uid_data* uid_data = out.GetUidData<pixel_ubershader_uid_data>();
+  memset(uid_data, 0, sizeof(*uid_data));
+  uid_data->numTexgens = xfmem.numTexGen.numTexGens;
+  uid_data->early_depth = bpmem.zcontrol.early_ztest && !bpmem.genMode.zfreeze;
   return out;
 }
 
@@ -31,13 +32,11 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
   const bool ssaa = g_ActiveConfig.iMultisamples > 1 && g_ActiveConfig.bSSAA;
   const bool use_dual_source = g_ActiveConfig.backend_info.bSupportsDualSourceBlend;
   const bool early_depth = uid_data->early_depth != 0;
+  const u32 numTexgen = uid_data->numTexgens;
   ShaderCode out;
 
-  out.Write("// Pixel UberShader\n");
+  out.Write("// Pixel UberShader for %u texgens%s\n", numTexgen, early_depth ? ", early-depth": "");
   WritePixelShaderCommonHeader(out, ApiType);
-
-  // Bad
-  u32 numTexgen = xfmem.numTexGen.numTexGens;
 
   // TODO: This is variable based on number of texcoord gens
   out.Write("struct VS_OUTPUT {\n");

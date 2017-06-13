@@ -316,8 +316,8 @@ ShaderCode GenerateVertexShaderCode(APIType api_type, const vertex_shader_uid_da
         out.Write("ldir = normalize(" LIGHT_POS ".xyz - pos.xyz);\n",
                   LIGHT_POS_PARAMS(texinfo.embosslightshift));
         out.Write(
-            "o.tex[%d].xyz = o.tex%d.xyz + float3(dot(ldir, _norm1), dot(ldir, _norm2), 0.0);\n", i,
-            texinfo.embosssourceshift);
+            "o.tex[%d].xyz = o.tex[%d].xyz + float3(dot(ldir, _norm1), dot(ldir, _norm2), 0.0);\n",
+            i, texinfo.embosssourceshift);
       }
       else
       {
@@ -390,10 +390,10 @@ ShaderCode GenerateVertexShaderCode(APIType api_type, const vertex_shader_uid_da
     // TODO: check if this only affects XF_TEXGEN_REGULAR
     if (texinfo.texgentype == XF_TEXGEN_REGULAR)
     {
-      out.Write("if(o.tex%d.z == 0.0f)\n", i);
+      out.Write("if(o.tex[%d].z == 0.0f)\n", i);
       out.Write(
-          "\to.tex%d.xy = clamp(o.tex%d.xy / 2.0f, float2(-1.0f,-1.0f), float2(1.0f,1.0f));\n", i,
-          i);
+          "\to.tex[%d].xy = clamp(o.tex[%d].xy / 2.0f, float2(-1.0f,-1.0f), float2(1.0f,1.0f));\n",
+          i, i);
     }
 
     out.Write("}\n");

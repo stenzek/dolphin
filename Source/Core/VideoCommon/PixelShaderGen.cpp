@@ -354,6 +354,11 @@ void WritePixelShaderCommonHeader(ShaderCode& out, APIType ApiType)
             "int3 iround(float3 x) { return int3(round(x)); }\n"
             "int4 iround(float4 x) { return int4(round(x)); }\n\n");
 
+  out.Write("int  itrunc(float  x) { return int (trunc(x)); }\n"
+            "int2 itrunc(float2 x) { return int2(trunc(x)); }\n"
+            "int3 itrunc(float3 x) { return int3(trunc(x)); }\n"
+            "int4 itrunc(float4 x) { return int4(trunc(x)); }\n\n");
+
   if (ApiType == APIType::OpenGL)
   {
     out.Write("SAMPLER_BINDING(0) uniform sampler2DArray samp[8];\n");

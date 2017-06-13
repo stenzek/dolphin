@@ -234,7 +234,7 @@ SHADER* ProgramShaderCache::SetShader(u32 primitive_type)
   ShaderCode vcode = GenerateVertexShaderCode(APIType::OpenGL, uid.vuid.GetUidData());
   // ShaderCode pcode = GeneratePixelShaderCode(APIType::OpenGL, uid.puid.GetUidData());
   UberShader::PixelShaderUid uber_uid = UberShader::GetPixelShaderUid();
-  ShaderCode pcode = UberShader::GenPixelShader(APIType::D3D, uber_uid.GetUidData());
+  ShaderCode pcode = UberShader::GenPixelShader(APIType::OpenGL, uber_uid.GetUidData());
 
   ShaderCode gcode;
 
