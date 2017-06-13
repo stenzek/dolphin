@@ -21,7 +21,7 @@ PixelShaderUid GetPixelShaderUid()
   PixelShaderUid out;
   pixel_ubershader_uid_data* uid_data = out.GetUidData<pixel_ubershader_uid_data>();
   memset(uid_data, 0, sizeof(*uid_data));
-  uid_data->numTexgens = xfmem.numTexGen.numTexGens;
+  uid_data->num_texgens = xfmem.numTexGen.numTexGens;
   uid_data->early_depth = bpmem.zcontrol.early_ztest && !bpmem.genMode.zfreeze;
   return out;
 }
@@ -32,7 +32,7 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
   const bool ssaa = g_ActiveConfig.iMultisamples > 1 && g_ActiveConfig.bSSAA;
   const bool use_dual_source = g_ActiveConfig.backend_info.bSupportsDualSourceBlend;
   const bool early_depth = uid_data->early_depth != 0;
-  const u32 numTexgen = uid_data->numTexgens;
+  const u32 numTexgen = uid_data->num_texgens;
   ShaderCode out;
 
   out.Write("// Pixel UberShader for %u texgens%s\n", numTexgen, early_depth ? ", early-depth": "");
