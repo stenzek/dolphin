@@ -3,19 +3,13 @@
 // Refer to the license.txt file included.
 
 #include "VideoCommon/UberShaderPixel.h"
+#include "VideoCommon/UberShaderCommon.h"
 #include "VideoCommon/BPMemory.h"
 #include "VideoCommon/DriverDetails.h"
 #include "VideoCommon/XFMemory.h"
 
 namespace UberShader
 {
-template <typename T>
-std::string BitfieldExtract(const std::string& source, T type)
-{
-  return StringFromFormat("bitfieldExtract(%s, %u, %u)", source.c_str(),
-                          static_cast<u32>(type.StartBit()), static_cast<u32>(type.NumBits()));
-}
-
 PixelShaderUid GetPixelShaderUid()
 {
   PixelShaderUid out;
@@ -37,6 +31,7 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
 
   out.Write("// Pixel UberShader for %u texgens%s\n", numTexgen, early_depth ? ", early-depth": "");
   WritePixelShaderCommonHeader(out, ApiType);
+  WriteUberShaderCommonHeader(out, ApiType);
 
   // TODO: This is variable based on number of texcoord gens
   out.Write("struct VS_OUTPUT {\n");
@@ -68,21 +63,6 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
   // TODO: Per pixel lighting (not really needed)
 
   // TODO: early depth tests (we will need multiple shaders)
-
-  // ==============================================
-  //  BitfieldExtract for APIs which don't have it
-  // ==============================================
-
-  if (!g_ActiveConfig.backend_info.bSupportsBitfield)
-  {
-    out.Write("uint bitfieldExtract(uint val, int off, int size) {\n"
-              "	// This built-in function is only support in OpenGL 4.0+ and ES 3.1+\n"
-              "	// Microsoft's HLSL compiler automatically optimises this to a bitfield extract "
-              "instruction.\n"
-              "	uint mask = uint((1 << size) - 1);\n"
-              "	return uint(val >> off) & mask;\n"
-              "}\n\n");
-  }
 
   // =====================
   //   Texture Sampling

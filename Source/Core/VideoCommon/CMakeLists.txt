@@ -30,6 +30,7 @@ set(SRCS
   RenderBase.cpp
   RenderState.cpp
   Statistics.cpp
+  UberShaderCommon.cpp
   UberShaderPixel.cpp
   UberShaderVertex.cpp
   TextureCacheBase.cpp
