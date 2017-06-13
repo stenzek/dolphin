@@ -74,6 +74,8 @@ const std::string hotkey_labels[] = {
     _trans("Toggle Fog"),
     _trans("Toggle Texture Dumping"),
     _trans("Toggle Custom Textures"),
+    _trans("Toggle Uber Vertex Shaders"),
+    _trans("Toggle Uber Pixel Shaders"),
 
     // i18n: IR stands for internal resolution
     _trans("Increase IR"),
@@ -249,7 +251,7 @@ const std::array<HotkeyGroupInfo, NUM_HOTKEY_GROUPS> groups_info = {
      {_trans("Program Counter"), HK_SHOW_PC, HK_SET_PC},
      {_trans("Breakpoint"), HK_BP_TOGGLE, HK_MBP_ADD},
      {_trans("Wii"), HK_TRIGGER_SYNC_BUTTON, HK_BALANCEBOARD_CONNECT},
-     {_trans("Graphics toggles"), HK_TOGGLE_CROP, HK_TOGGLE_TEXTURES},
+     {_trans("Graphics toggles"), HK_TOGGLE_CROP, HK_TOGGLE_PIXEL_UBERSHADERS},
      {_trans("Internal Resolution"), HK_INCREASE_IR, HK_DECREASE_IR},
      {_trans("Freelook"), HK_FREELOOK_DECREASE_SPEED, HK_FREELOOK_RESET},
      {_trans("3D"), HK_TOGGLE_STEREO_SBS, HK_TOGGLE_STEREO_3DVISION},

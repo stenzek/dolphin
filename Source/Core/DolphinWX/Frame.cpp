@@ -1467,6 +1467,23 @@ void CFrame::ParseHotkeys()
   {
     Config::SetCurrent(Config::GFX_HIRES_TEXTURES, !Config::Get(Config::GFX_HIRES_TEXTURES));
   }
+  if (IsHotkey(HK_TOGGLE_VERTEX_UBERSHADERS))
+  {
+    g_Config.bForceVertexUberShaders = !g_Config.bForceVertexUberShaders;
+    if (g_Config.bForceVertexUberShaders)
+      OSD::AddMessage("Using vertex ubershaders");
+    else
+      OSD::AddMessage("Not using vertex ubershaders");
+  }
+
+  if (IsHotkey(HK_TOGGLE_PIXEL_UBERSHADERS))
+  {
+    g_Config.bForcePixelUberShaders = !g_Config.bForcePixelUberShaders;
+    if (g_Config.bForcePixelUberShaders)
+      OSD::AddMessage("Using pixel ubershaders");
+    else
+      OSD::AddMessage("Not using pixel ubershaders");
+  }
   Core::SetIsThrottlerTempDisabled(IsHotkey(HK_TOGGLE_THROTTLE, true));
   if (IsHotkey(HK_DECREASE_EMULATION_SPEED))
   {
