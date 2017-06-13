@@ -4,27 +4,29 @@
 
 #include "VideoCommon/UberShaderVertex.h"
 #include "VideoCommon/NativeVertexFormat.h"
-#include "VideoCommon/VertexLoaderManager.h"
 #include "VideoCommon/VertexShaderGen.h"
 #include "VideoCommon/VideoConfig.h"
 #include "VideoCommon/XFMemory.h"
 
 namespace UberShader
 {
+VertexShaderUid GetVertexShaderUid()
+{
+  VertexShaderUid out;
+  vertex_ubershader_uid_data* uid_data = out.GetUidData<vertex_ubershader_uid_data>();
+  memset(uid_data, 0, sizeof(*uid_data));
+  uid_data->num_texgens = xfmem.numTexGen.numTexGens;
+  return out;
+}
 
-ShaderCode GenVertexShader(APIType ApiType)
+ShaderCode GenVertexShader(APIType ApiType, const vertex_ubershader_uid_data* uid_data)
 {
   const bool msaa = g_ActiveConfig.iMultisamples > 1;
   const bool ssaa = g_ActiveConfig.iMultisamples > 1 && g_ActiveConfig.bSSAA;
-	const u32 components = VertexLoaderManager::g_current_components;
+  const u32 numTexgen = uid_data->num_texgens;
   ShaderCode out;
 
 	out.Write("// Vertex UberShader\n\n");
-
-	// Bad
-	u32 numTexgen = xfmem.numTexGen.numTexGens;
-
-
 	out.Write("%s", s_lighting_struct);
 
 	// uniforms
