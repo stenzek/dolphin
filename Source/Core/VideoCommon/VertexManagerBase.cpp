@@ -202,10 +202,12 @@ void VertexManagerBase::Flush()
   {
     LitChannel* ch = &xfmem.color[i];
     PRIM_LOG("colchan%d: matsrc=%d, light=0x%x, ambsrc=%d, diffunc=%d, attfunc=%d", i,
-             ch->matsource, ch->GetFullLightMask(), ch->ambsource, ch->diffusefunc, ch->attnfunc);
+             (int)ch->matsource, ch->GetFullLightMask(), (int)ch->ambsource, (int)ch->diffusefunc,
+             (int)ch->attnfunc);
     ch = &xfmem.alpha[i];
     PRIM_LOG("alpchan%d: matsrc=%d, light=0x%x, ambsrc=%d, diffunc=%d, attfunc=%d", i,
-             ch->matsource, ch->GetFullLightMask(), ch->ambsource, ch->diffusefunc, ch->attnfunc);
+             (int)ch->matsource, ch->GetFullLightMask(), (int)ch->ambsource, (int)ch->diffusefunc,
+             (int)ch->attnfunc);
   }
 
   for (unsigned int i = 0; i < xfmem.numTexGen.numTexGens; ++i)
@@ -218,9 +220,9 @@ void VertexManagerBase::Flush()
 
     PRIM_LOG("txgen%d: proj=%d, input=%d, gentype=%d, srcrow=%d, embsrc=%d, emblght=%d, "
              "postmtx=%d, postnorm=%d",
-             i, tinfo.projection, tinfo.inputform, tinfo.texgentype, tinfo.sourcerow,
-             tinfo.embosssourceshift, tinfo.embosslightshift, xfmem.postMtxInfo[i].index,
-             xfmem.postMtxInfo[i].normalize);
+             i, (int)tinfo.projection, (int)tinfo.inputform, (int)tinfo.texgentype,
+             (int)tinfo.sourcerow, (int)tinfo.embosssourceshift, (int)tinfo.embosslightshift,
+             (int)xfmem.postMtxInfo[i].index, (int)xfmem.postMtxInfo[i].normalize);
   }
 
   PRIM_LOG("pixel: tev=%d, ind=%d, texgen=%d, dstalpha=%d, alphatest=0x%x",
