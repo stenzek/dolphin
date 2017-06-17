@@ -138,6 +138,7 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
   // ======================
   //   TEV's Special Lerp
   // ======================
+  // TODO: This can be vectorized?
 
   out.Write("// One channel worth of TEV's Linear Interpolate, plus bias, add/subtract and scale\n"
             "int tevLerp(int A, int B, int C, int D, uint bias, bool op, bool alpha, uint shift) {\n"
@@ -469,7 +470,7 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
         "		{\n"
         "			uint texcoord = bitfieldExtract(iref, 0, 3);\n"
         "			uint texmap = bitfieldExtract(iref, 8, 3);\n"
-        "			int2 fixedPoint_uv = itrunc((tex[texcoord].xy / tex[texcoord].z) * " I_TEXDIMS
+        "			int2 fixedPoint_uv = int2((tex[texcoord].xy / tex[texcoord].z) * " I_TEXDIMS
         "[texcoord].zw);\n"
         "\n"
         "			if ((i & 1u) == 0u)\n"
@@ -513,7 +514,7 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
     out.Write("		uint tex_coord = %s;\n",
               BitfieldExtract("order", TwoTevStageOrders().texcoord0).c_str());
     out.Write(
-        "		int2 fixedPoint_uv = itrunc((tex[tex_coord].z == 0.0 ? tex[tex_coord].xy : "
+        "		int2 fixedPoint_uv = int2((tex[tex_coord].z == 0.0 ? tex[tex_coord].xy : "
         "(tex[tex_coord].xy / tex[tex_coord].z)) * " I_TEXDIMS
         "[tex_coord].zw);\n"
         "\n"
