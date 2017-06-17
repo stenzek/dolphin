@@ -798,6 +798,9 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
   out.Write("	} // Main tev loop\n"
             "\n");
 
+  // TODO: Should this clamp/mask happen here? From PixelShaderGen.cpp:713
+  out.Write(" TevResult = TevResult & 255;\n");
+
   out.Write("	// Alpha Test\n"
             "	if (bpmem_alphaTest != 0u) {\n"
             "		bool comp0 = alphaCompare(TevResult.a, " I_ALPHA ".r, %s);\n",
