@@ -475,8 +475,11 @@ void PixelShaderManager::DoState(PointerWrap& p)
 {
   p.Do(s_bFogRangeAdjustChanged);
   p.Do(s_bViewPortChanged);
+  p.Do(s_bIndirectDirty);
+  p.Do(s_bTexProjDirty);
 
   p.Do(constants);
+  p.Do(more_constants);
 
   if (p.GetMode() == PointerWrap::MODE_READ)
   {
