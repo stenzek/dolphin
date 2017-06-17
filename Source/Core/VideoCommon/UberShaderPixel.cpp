@@ -296,6 +296,21 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
             "	}\n"
             "}\n"
             "\n"
+            "int4 getTevReg(in State s, uint index) {\n"
+            "	switch (index) {\n"
+            "	case 0u: // prev\n"
+            "		return s.Reg[0];\n"
+            "	case 1u: // c0\n"
+            "		return s.Reg[1];\n"
+            "	case 2u: // c1\n"
+            "		return s.Reg[2];\n"
+            "	case 3u: // c2\n"
+            "		return s.Reg[3];\n"
+            "	default: // prev\n"
+            "		return s.Reg[0];\n"
+            "	}\n"
+            "}\n"
+            "\n"
             "void setRegColor(inout State s, uint index, int3 color) {\n"
             "	switch (index) {\n"
             "	case 0u: // prev\n"
@@ -432,7 +447,6 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
             "	int3 tevcoord = int3(0, 0, 0);\n"
             "	int4 icolors_0 = iround(colors_0 * 255.0);\n"
             "	int4 icolors_1 = iround(colors_1 * 255.0);\n"
-            "	int4 TevResult;\n"
             "	State s;\n"
             "	s.TexColor = int4(0, 0, 0, 0);\n"
             "	s.RasColor = int4(0, 0, 0, 0);\n"
@@ -720,13 +734,8 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
       "			else\n"
       "				color = clamp(color, -1024, 1023);\n"
       "\n"
-      "			if (stage == num_stages) { // If this is the last stage\n"
-      "				// Write result to output\n"
-      "				TevResult.rgb = color;\n"
-      "			} else {\n"
-      "				// Write result to the correct input register of the next stage\n"
-      "				setRegColor(s, color_dest, color);\n"
-      "			}\n"
+      "			// Write result to the correct input register of the next stage\n"
+      "			setRegColor(s, color_dest, color);\n"
       "\n");
 
   // Alpha combiner
@@ -789,21 +798,24 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
             "			else\n"
             "				alpha = clamp(alpha, -1024, 1023);\n"
             "\n"
-            "			if (stage == num_stages) { // If this is the last stage\n"
-            "				// Write result to output\n"
-            "				TevResult.a = alpha;\n"
-            "				break;\n"
-            "			} else {\n"
-            "				// Write result to the correct input register of the next stage\n"
-            "				setRegAlpha(s, alpha_dest, alpha);\n"
-            "			}\n"
+            "			// Write result to the correct input register of the next stage\n"
+            "			setRegAlpha(s, alpha_dest, alpha);\n"
             "		}\n");
 
   out.Write("	} // Main tev loop\n"
             "\n");
 
+  // Select the output color and alpha registers from the last stage.
+  out.Write("	int4 TevResult;\n");
+  out.Write(
+      "	TevResult.xyz = getTevReg(s, %s).xyz;\n",
+      BitfieldExtract("bpmem_combiners[num_stages].x", TevStageCombiner().colorC.dest).c_str());
+  out.Write(
+      "	TevResult.w = getTevReg(s, %s).w;\n",
+      BitfieldExtract("bpmem_combiners[num_stages].y", TevStageCombiner().alphaC.dest).c_str());
+
   // TODO: Should this clamp/mask happen here? From PixelShaderGen.cpp:713
-  out.Write(" TevResult = TevResult & 255;\n");
+  out.Write(" TevResult &= 255;\n\n");
 
   out.Write("	// Alpha Test\n"
             "	if (bpmem_alphaTest != 0u) {\n"
