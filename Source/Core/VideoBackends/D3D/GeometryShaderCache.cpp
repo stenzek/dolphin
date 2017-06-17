@@ -159,6 +159,9 @@ void GeometryShaderCache::Init()
 
   if (g_ActiveConfig.bShaderCache)
     LoadShaderCache();
+
+  if (g_ActiveConfig.ShouldPrecompileUberShaders())
+    PrecompileShaders();
 }
 
 void GeometryShaderCache::LoadShaderCache()
@@ -181,6 +184,9 @@ void GeometryShaderCache::Reload()
 
   if (g_ActiveConfig.bShaderCache)
     LoadShaderCache();
+
+  if (g_ActiveConfig.ShouldPrecompileUberShaders())
+    PrecompileShaders();
 }
 
 // ONLY to be used during shutdown.
@@ -209,77 +215,70 @@ void GeometryShaderCache::Shutdown()
 bool GeometryShaderCache::SetShader(u32 primitive_type)
 {
   GeometryShaderUid uid = GetGeometryShaderUid(primitive_type);
-
-  // Check if the shader is already set
-  if (last_entry)
+  if (last_entry && uid == last_uid)
   {
-    if (uid == last_uid)
-    {
-      GFX_DEBUGGER_PAUSE_AT(NEXT_PIXEL_SHADER_CHANGE, true);
-      return true;
-    }
+    GFX_DEBUGGER_PAUSE_AT(NEXT_PIXEL_SHADER_CHANGE, true);
+    return true;
   }
-
-  last_uid = uid;
 
   // Check if the shader is a pass-through shader
   if (uid.GetUidData()->IsPassthrough())
   {
     // Return the default pass-through shader
+    last_uid = uid;
     last_entry = &pass_entry;
     return true;
   }
 
   // Check if the shader is already in the cache
-  GSCache::iterator iter;
-  iter = GeometryShaders.find(uid);
+  auto iter = GeometryShaders.find(uid);
   if (iter != GeometryShaders.end())
   {
     const GSCacheEntry& entry = iter->second;
+    last_uid = uid;
     last_entry = &entry;
-
     return (entry.shader != nullptr);
   }
 
   // Need to compile a new shader
-  ShaderCode code = GenerateGeometryShaderCode(APIType::D3D, uid.GetUidData());
+  if (CompileShader(uid))
+    return SetShader(primitive_type);
+  else
+    return false;
+}
 
-  D3DBlob* pbytecode;
-  if (!D3D::CompileGeometryShader(code.GetBuffer(), &pbytecode))
+bool GeometryShaderCache::CompileShader(const GeometryShaderUid& uid)
+{
+  D3DBlob* bytecode;
+  ShaderCode code = GenerateGeometryShaderCode(APIType::D3D, uid.GetUidData());
+  if (!D3D::CompileGeometryShader(code.GetBuffer(), &bytecode) ||
+      !InsertByteCode(uid, bytecode->Data(), bytecode->Size()))
   {
-    GFX_DEBUGGER_PAUSE_AT(NEXT_ERROR, true);
+    SAFE_RELEASE(bytecode);
     return false;
   }
 
   // Insert the bytecode into the caches
-  g_gs_disk_cache.Append(uid, pbytecode->Data(), pbytecode->Size());
-
-  bool success = InsertByteCode(uid, pbytecode->Data(), pbytecode->Size());
-  pbytecode->Release();
-
-  return success;
+  g_gs_disk_cache.Append(uid, bytecode->Data(), bytecode->Size());
+  return true;
 }
 
-bool GeometryShaderCache::InsertByteCode(const GeometryShaderUid& uid, const void* bytecode,
-                                         unsigned int bytecodelen)
+bool GeometryShaderCache::InsertByteCode(const GeometryShaderUid& uid, const u8* bytecode,
+                                         size_t len)
 {
-  ID3D11GeometryShader* shader = D3D::CreateGeometryShaderFromByteCode(bytecode, bytecodelen);
-  if (shader == nullptr)
-    return false;
+  GSCacheEntry& newentry = GeometryShaders[uid];
+  newentry.shader = bytecode ? D3D::CreateGeometryShaderFromByteCode(bytecode, len) : nullptr;
+  return newentry.shader != nullptr;
+}
 
-  // TODO: Somehow make the debug name a bit more specific
-  D3D::SetDebugObjectName((ID3D11DeviceChild*)shader, "a pixel shader of GeometryShaderCache");
+void GeometryShaderCache::PrecompileShaders()
+{
+  EnumerateGeometryShaderUids([](const GeometryShaderUid& uid) {
+    if (GeometryShaders.find(uid) != GeometryShaders.end())
+      return;
 
-  // Make an entry in the table
-  GSCacheEntry newentry;
-  newentry.shader = shader;
-  GeometryShaders[uid] = newentry;
-  last_entry = &GeometryShaders[uid];
-
-  if (!shader)
-    return false;
-
-  return true;
+    CompileShader(uid);
+  });
 }
 
 }  // DX11

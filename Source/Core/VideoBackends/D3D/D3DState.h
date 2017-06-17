@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <stack>
 #include <unordered_map>
@@ -122,13 +123,18 @@ public:
     m_pending.samplers[index] = sampler;
   }
 
-  void SetPixelConstants(ID3D11Buffer* buffer0, ID3D11Buffer* buffer1 = nullptr)
+  void SetPixelConstants(ID3D11Buffer* buffer0, ID3D11Buffer* buffer1 = nullptr,
+                         ID3D11Buffer* buffer2 = nullptr)
   {
-    if (m_current.pixelConstants[0] != buffer0 || m_current.pixelConstants[1] != buffer1)
+    if (m_current.pixelConstants[0] != buffer0 || m_current.pixelConstants[1] != buffer1 ||
+        m_current.pixelConstants[2] != buffer2)
+    {
       m_dirtyFlags |= DirtyFlag_PixelConstants;
+    }
 
     m_pending.pixelConstants[0] = buffer0;
     m_pending.pixelConstants[1] = buffer1;
+    m_pending.pixelConstants[2] = buffer2;
   }
 
   void SetVertexConstants(ID3D11Buffer* buffer)
@@ -269,9 +275,9 @@ private:
 
   struct Resources
   {
-    ID3D11ShaderResourceView* textures[8];
-    ID3D11SamplerState* samplers[8];
-    ID3D11Buffer* pixelConstants[2];
+    std::array<ID3D11ShaderResourceView*, 8> textures;
+    std::array<ID3D11SamplerState*, 8> samplers;
+    std::array<ID3D11Buffer*, 3> pixelConstants;
     ID3D11Buffer* vertexConstants;
     ID3D11Buffer* geometryConstants;
     ID3D11Buffer* vertexBuffer;

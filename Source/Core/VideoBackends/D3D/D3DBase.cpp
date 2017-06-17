@@ -198,10 +198,9 @@ std::vector<DXGI_SAMPLE_DESC> EnumAAModes(IDXGIAdapter* adapter)
   ID3D11Device* _device;
   ID3D11DeviceContext* _context;
   D3D_FEATURE_LEVEL feat_level;
-  HRESULT hr = PD3D11CreateDevice(adapter, D3D_DRIVER_TYPE_UNKNOWN, nullptr,
-                                  D3D11_CREATE_DEVICE_SINGLETHREADED, supported_feature_levels,
-                                  NUM_SUPPORTED_FEATURE_LEVELS, D3D11_SDK_VERSION, &_device,
-                                  &feat_level, &_context);
+  HRESULT hr = PD3D11CreateDevice(adapter, D3D_DRIVER_TYPE_UNKNOWN, nullptr, 0,
+                                  supported_feature_levels, NUM_SUPPORTED_FEATURE_LEVELS,
+                                  D3D11_SDK_VERSION, &_device, &feat_level, &_context);
   if (FAILED(hr) || feat_level == D3D_FEATURE_LEVEL_10_0)
   {
     DXGI_SAMPLE_DESC desc;
@@ -234,9 +233,9 @@ std::vector<DXGI_SAMPLE_DESC> EnumAAModes(IDXGIAdapter* adapter)
 D3D_FEATURE_LEVEL GetFeatureLevel(IDXGIAdapter* adapter)
 {
   D3D_FEATURE_LEVEL feat_level = D3D_FEATURE_LEVEL_9_1;
-  PD3D11CreateDevice(adapter, D3D_DRIVER_TYPE_UNKNOWN, nullptr, D3D11_CREATE_DEVICE_SINGLETHREADED,
-                     supported_feature_levels, NUM_SUPPORTED_FEATURE_LEVELS, D3D11_SDK_VERSION,
-                     nullptr, &feat_level, nullptr);
+  PD3D11CreateDevice(adapter, D3D_DRIVER_TYPE_UNKNOWN, nullptr, 0, supported_feature_levels,
+                     NUM_SUPPORTED_FEATURE_LEVELS, D3D11_SDK_VERSION, nullptr, &feat_level,
+                     nullptr);
   return feat_level;
 }
 
@@ -359,10 +358,9 @@ HRESULT Create(HWND wnd)
   // version of the DirectX SDK. If it does, simply fallback to a non-debug device.
   {
     hr = PD3D11CreateDeviceAndSwapChain(
-        adapter, D3D_DRIVER_TYPE_UNKNOWN, nullptr,
-        D3D11_CREATE_DEVICE_SINGLETHREADED | D3D11_CREATE_DEVICE_DEBUG, supported_feature_levels,
-        NUM_SUPPORTED_FEATURE_LEVELS, D3D11_SDK_VERSION, &swap_chain_desc, &swapchain, &device,
-        &featlevel, &context);
+        adapter, D3D_DRIVER_TYPE_UNKNOWN, nullptr, D3D11_CREATE_DEVICE_DEBUG,
+        supported_feature_levels, NUM_SUPPORTED_FEATURE_LEVELS, D3D11_SDK_VERSION, &swap_chain_desc,
+        &swapchain, &device, &featlevel, &context);
     // Debugbreak on D3D error
     if (SUCCEEDED(hr) && SUCCEEDED(device->QueryInterface(__uuidof(ID3D11Debug), (void**)&debug)))
     {
@@ -386,10 +384,10 @@ HRESULT Create(HWND wnd)
   if (FAILED(hr))
 #endif
   {
-    hr = PD3D11CreateDeviceAndSwapChain(
-        adapter, D3D_DRIVER_TYPE_UNKNOWN, nullptr, D3D11_CREATE_DEVICE_SINGLETHREADED,
-        supported_feature_levels, NUM_SUPPORTED_FEATURE_LEVELS, D3D11_SDK_VERSION, &swap_chain_desc,
-        &swapchain, &device, &featlevel, &context);
+    hr = PD3D11CreateDeviceAndSwapChain(adapter, D3D_DRIVER_TYPE_UNKNOWN, nullptr, 0,
+                                        supported_feature_levels, NUM_SUPPORTED_FEATURE_LEVELS,
+                                        D3D11_SDK_VERSION, &swap_chain_desc, &swapchain, &device,
+                                        &featlevel, &context);
   }
 
   if (FAILED(hr))

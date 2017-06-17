@@ -448,7 +448,7 @@ ShaderCode GeneratePixelShaderCode(APIType ApiType, const pixel_shader_uid_data*
     if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
       out.Write("UBO_BINDING(std140, 2) uniform VSBlock {\n");
     else
-      out.Write("cbuffer VSBlock : register(b1) {\n");
+      out.Write("cbuffer VSBlock : register(b2) {\n");
 
     out.Write(s_shader_uniforms);
     out.Write("};\n");

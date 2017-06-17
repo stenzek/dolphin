@@ -836,6 +836,7 @@ void Renderer::SwapImpl(u32 xfbAddr, u32 fbWidth, u32 fbStride, u32 fbHeight,
   // Enable configuration changes
   UpdateActiveConfig();
   g_texture_cache->OnConfigChanged(g_ActiveConfig);
+  VertexShaderCache::RetreiveAsyncShaders();
 
   SetWindowSize(fbStride, fbHeight);
 
@@ -956,8 +957,8 @@ void Renderer::ApplyState()
   // Yeah, I'm just hacking this through. Need to think about resource managment
   // at some point.
   D3D::stateman->SetPixelConstants(PixelShaderCache::GetConstantBuffer(),
-                                   DX11::uber_bufffer);  // g_ActiveConfig.bEnablePixelLighting ?
-                                                         // vertexConstants : nullptr);
+                                   PixelShaderCache::GetUberConstantBuffer(),
+                                   g_ActiveConfig.bEnablePixelLighting ? vertexConstants : nullptr);
   D3D::stateman->SetVertexConstants(vertexConstants);
   D3D::stateman->SetGeometryConstants(GeometryShaderCache::GetConstantBuffer());
 

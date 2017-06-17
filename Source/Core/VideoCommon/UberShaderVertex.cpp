@@ -127,7 +127,7 @@ ShaderCode GenVertexShader(APIType ApiType, const vertex_ubershader_uid_data* ui
 		{
 			out.Write("  float3 tex%d : TEXCOORD%d,\n", i, i);
 		}
-		out.Write("  int posmtx : BLENDINDICES,\n");
+		out.Write("  uint posmtx : BLENDINDICES,\n");
 		out.Write("  float4 rawpos : POSITION) {\n");
 	}
 
