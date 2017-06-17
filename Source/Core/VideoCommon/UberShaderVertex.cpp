@@ -205,37 +205,20 @@ ShaderCode GenVertexShader(APIType ApiType, const vertex_ubershader_uid_data* ui
 
   out.WriteLine("// Lighting");
   out.WriteLine("for (uint i = 0; i < xfmem_numColorChans; i++) {");
-  out.WriteLine("  int4 mat;");
+  out.WriteLine("  int4 mat = " I_MATERIALS "[i + 2u];");
+  out.WriteLine("  int4 lacc = int4(255, 255, 255, 255);");
+  out.WriteLine("");
+
   out.WriteLine("  if (%s != 0u) {", BitfieldExtract("xfmem_color[i]", LitChannel().matsource).c_str());
   out.WriteLine("    if ((components & (%uu << i)) != 0u) // VB_HAS_COL0", VB_HAS_COL0);
-  out.WriteLine("      mat = int4(round(((i == 0u) ? color0 : color1) * 255.0));");
+  out.WriteLine("      mat.xyz = int3(round(((i == 0u) ? color0.xyz : color1.xyz) * 255.0));");
   out.WriteLine("    else if ((components & %uu) != 0) // VB_HAS_COLO0", VB_HAS_COL0);
-  out.WriteLine("      mat = int4(round(color0 * 255.0));");
+  out.WriteLine("      mat.xyz = int3(round(color0.xyz * 255.0));");
   out.WriteLine("    else");
-  out.WriteLine("      mat = int4(255, 255, 255, 255);");
-  out.WriteLine("  } else {");
-  out.WriteLine("    mat = " I_MATERIALS " [i + 2u];");
+  out.WriteLine("      mat.xyz = int3(255, 255, 255);");
   out.WriteLine("  }");
   out.WriteLine("");
 
-  out.WriteLine("  int4 lacc;");
-  out.WriteLine("  if (%s != 0u) {", BitfieldExtract("xfmem_color[i]", LitChannel().enablelighting).c_str());
-  out.WriteLine("    if (%s != 0u) {", BitfieldExtract("xfmem_color[i]", LitChannel().ambsource).c_str());
-  out.WriteLine("      if ((components & (%uu << i)) != 0u) // VB_HAS_COL0", VB_HAS_COL0);
-  out.WriteLine("        lacc = int4(round(((i == 0u) ? color0 : color1) * 255.0));");
-  out.WriteLine("      else if ((components & %uu) != 0) // VB_HAS_COLO0", VB_HAS_COL0);
-  out.WriteLine("        lacc = int4(round(color0 * 255.0));");
-  out.WriteLine("      else");
-  out.WriteLine("        lacc = int4(255, 255, 255, 255);");
-  out.WriteLine("    } else {");
-  out.WriteLine("      lacc = " I_MATERIALS " [i];");
-  out.WriteLine("    }");
-  out.WriteLine("  } else {");
-  out.WriteLine("    lacc = int4(255, 255, 255, 255);");
-  out.WriteLine("  }");
-  out.WriteLine("");
-
-  // TODO: Combine alpha and color lights, or use a function
   out.WriteLine("  if (%s != 0u) {", BitfieldExtract("xfmem_alpha[i]", LitChannel().matsource).c_str());
   out.WriteLine("    if ((components & (%uu << i)) != 0u) // VB_HAS_COL0", VB_HAS_COL0);
   out.WriteLine("      mat.w = int(round(((i == 0u) ? color0.w : color1.w) * 255.0));");
@@ -245,6 +228,28 @@ ShaderCode GenVertexShader(APIType ApiType, const vertex_ubershader_uid_data* ui
   out.WriteLine("      mat.w = 255;");
   out.WriteLine("  } else {");
   out.WriteLine("    mat.w = " I_MATERIALS " [i + 2u].w;");
+  out.WriteLine("  }");
+  out.WriteLine("");
+
+  out.WriteLine("  if (%s != 0u) {", BitfieldExtract("xfmem_color[i]", LitChannel().enablelighting).c_str());
+  out.WriteLine("    if (%s != 0u) {", BitfieldExtract("xfmem_color[i]", LitChannel().ambsource).c_str());
+  out.WriteLine("      if ((components & (%uu << i)) != 0u) // VB_HAS_COL0", VB_HAS_COL0);
+  out.WriteLine("        lacc.xyz = int3(round(((i == 0u) ? color0.xyz : color1.xyz) * 255.0));");
+  out.WriteLine("      else if ((components & %uu) != 0) // VB_HAS_COLO0", VB_HAS_COL0);
+  out.WriteLine("        lacc.xyz = int3(round(color0.xyz * 255.0));");
+  out.WriteLine("      else");
+  out.WriteLine("        lacc.xyz = int3(255, 255, 255);");
+  out.WriteLine("    } else {");
+  out.WriteLine("      lacc.xyz = " I_MATERIALS " [i].xyz;");
+  out.WriteLine("    }");
+  out.WriteLine("");
+  out.WriteLine("    uint light_mask = %s | (%s << 4u);", BitfieldExtract("xfmem_color[i]", LitChannel().lightMask0_3).c_str(), BitfieldExtract("xfmem_color[i]", LitChannel().lightMask4_7).c_str());
+  out.WriteLine("    uint attnfunc = %s;", BitfieldExtract("xfmem_color[i]", LitChannel().attnfunc).c_str());
+  out.WriteLine("    uint diffusefunc = %s;", BitfieldExtract("xfmem_color[i]", LitChannel().diffusefunc).c_str());
+  out.WriteLine("    for (uint light_index = 0; light_index < 8u; light_index++) {");
+  out.WriteLine("      if ((light_mask & (1u << light_index)) != 0)");
+  out.WriteLine("        lacc.xyz += CalculateLighting(light_index, attnfunc, diffusefunc, pos, _norm0).xyz;");
+  out.WriteLine("    }");
   out.WriteLine("  }");
   out.WriteLine("");
 
@@ -259,24 +264,8 @@ ShaderCode GenVertexShader(APIType ApiType, const vertex_ubershader_uid_data* ui
   out.WriteLine("    } else {");
   out.WriteLine("      lacc.w = " I_MATERIALS " [i].w;");
   out.WriteLine("    }");
-  out.WriteLine("  } else {");
-  out.WriteLine("    lacc.w = 255;");
-  out.WriteLine("  }");
   out.WriteLine("");
-
-  // TODO: Move to above if block
-  out.WriteLine("  if (%s != 0u) {", BitfieldExtract("xfmem_color[i]", LitChannel().enablelighting).c_str());
-  out.WriteLine("    uint light_mask = %s | (%s << 4u);", BitfieldExtract("xfmem_color[i]", LitChannel().lightMask0_3).c_str(), BitfieldExtract("xfmem_color[i]", LitChannel().lightMask4_7).c_str());
-  out.WriteLine("    uint attnfunc = %s;", BitfieldExtract("xfmem_color[i]", LitChannel().attnfunc).c_str());
-  out.WriteLine("    uint diffusefunc = %s;", BitfieldExtract("xfmem_color[i]", LitChannel().diffusefunc).c_str());
-  out.WriteLine("    for (uint light_index = 0; light_index < 8u; light_index++) {");
-  out.WriteLine("      if ((light_mask & (1u << light_index)) != 0)");
-  out.WriteLine("        lacc.xyz += CalculateLighting(light_index, attnfunc, diffusefunc, pos, _norm0).xyz;");
-  out.WriteLine("    }");
-  out.WriteLine("  }");
-
-  out.WriteLine("  if (%s != 0u) {", BitfieldExtract("xfmem_alpha[i]", LitChannel().enablelighting).c_str());
-  out.WriteLine("    uint light_mask = %s | (%s << 4u);", BitfieldExtract("xfmem_alpha[i]", LitChannel().lightMask0_3).c_str(), BitfieldExtract("xfmem_color[i]", LitChannel().lightMask4_7).c_str());
+  out.WriteLine("    uint light_mask = %s | (%s << 4u);", BitfieldExtract("xfmem_alpha[i]", LitChannel().lightMask0_3).c_str(), BitfieldExtract("xfmem_alpha[i]", LitChannel().lightMask4_7).c_str());
   out.WriteLine("    uint attnfunc = %s;", BitfieldExtract("xfmem_alpha[i]", LitChannel().attnfunc).c_str());
   out.WriteLine("    uint diffusefunc = %s;", BitfieldExtract("xfmem_alpha[i]", LitChannel().diffusefunc).c_str());
   out.WriteLine("    for (uint light_index = 0; light_index < 8u; light_index++) {");
@@ -284,6 +273,7 @@ ShaderCode GenVertexShader(APIType ApiType, const vertex_ubershader_uid_data* ui
   out.WriteLine("        lacc.w += CalculateLighting(light_index, attnfunc, diffusefunc, pos, _norm0).w;");
   out.WriteLine("    }");
   out.WriteLine("  }");
+  out.WriteLine("");
 
   out.WriteLine("  lacc = clamp(lacc, 0, 255);");
   out.WriteLine("");
