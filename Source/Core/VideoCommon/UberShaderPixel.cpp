@@ -57,6 +57,8 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
             "	uint4	bpmem_iref;\n"
             "	uint	bpmem_tevind[16];\n"
             "	int4	konstLookup[32];\n"
+            "	bool  bpmem_rgba6_format;\n"
+            "	bool  bpmem_dither;\n"
             "	float4  debug;\n"
             "};\n");
 
@@ -890,6 +892,16 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
   }
 
   // =========
+  // Dithering
+  // =========
+  out.WriteLine("  if (bpmem_dither) {");
+  out.WriteLine("    // Flipper uses a standard 2x2 Bayer Matrix for 6 bit dithering");
+  out.WriteLine("    // Here the matrix is encoded into the two factor constants");
+  out.WriteLine("    int2 dither = int2(rawpos.xy) & 1;\n");
+  out.WriteLine("    TevResult.rgb = (TevResult.rgb - (TevResult.rgb >> 6)) + abs(dither.y * 3 - dither.x * 2);");
+  out.WriteLine("  }");
+
+  // =========
   //    Fog
   // =========
 
@@ -951,22 +963,26 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
             "\n");
 
   // TODO: Do we still want to support two pass alpha blending?
-  out.Write("	ocol0 = float4(TevResult) / 255.0;\n\n");
+  out.WriteLine("if (bpmem_rgba6_format)");
+  out.WriteLine("  ocol0.rgb = float3(TevResult.rgb >> 2) / 63.0;");
+  out.WriteLine("else");
+  out.WriteLine("  ocol0.rgb = float3(TevResult.rgb) / 255.0;");
+  out.WriteLine("");
+  out.WriteLine("if (bpmem_dstalpha != 0u)");
+  out.WriteLine("  ocol0.a = float(%s >> 2) / 63.0;", BitfieldExtract("bpmem_dstalpha", ConstantAlpha().alpha).c_str());
+  out.WriteLine("else");
+  out.WriteLine("  ocol0.a = float(TevResult.a >> 2) / 63.0;");
+  out.WriteLine("");
+
   if (use_dual_source)
   {
-    out.Write("	// Dest alpha override (dual source blening)\n"
-              "	// Colors will be blended against the alpha from ocol1 and\n"
-              "	// the alpha from ocol0 will be written to the framebuffer.\n"
-              "	ocol1 = float4(TevResult) / 255.0; \n"
-              "	if (bpmem_dstalpha != 0u) {\n"
-              "		ocol0.a = float(%s) / 255.0;\n",
-              BitfieldExtract("bpmem_dstalpha", ConstantAlpha().alpha).c_str());
+    out.WriteLine("// Dest alpha override (dual source blending)");
+    out.WriteLine("// Colors will be blended against the alpha from ocol1 and");
+    out.WriteLine("// the alpha from ocol0 will be written to the framebuffer.");
+    out.WriteLine("ocol1 = float4(0.0, 0.0, 0.0, float(TevResult.a) / 255.0);");
   }
 
-  out.Write("	}\n"
-            "\n");
-
-  out.Write("}");
+  out.WriteLine("}");
 
   return out;
 }

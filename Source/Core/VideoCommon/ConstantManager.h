@@ -84,5 +84,8 @@ struct UberShaderConstants
   uint4 iref;           // .xyzw
   uint4 tevind[16];     // .x
   int4 konst[32];       // .rgba
+  u32 rgba6_format;     // .x
+  u32 dither;           // .y
+  u32 pad[2];           // .zw
   float4 debug;
 };

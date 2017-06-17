@@ -167,8 +167,10 @@ void PixelShaderManager::SetConstants()
     // Destination alpha is only enabled if alpha writes are enabled. Force
     // entire uniform to zero
     // when disabled.
-    more_constants.dstalpha =
-        bpmem.blendmode.alphaupdate && bpmem.dstalpha.enable ? bpmem.dstalpha.hex : 0;
+    more_constants.dstalpha = bpmem.blendmode.alphaupdate && bpmem.dstalpha.enable &&
+                                      bpmem.zcontrol.pixel_format == PEControl::RGBA6_Z24 ?
+                                  bpmem.dstalpha.hex :
+                                  0;
 
     // Force alphaTest Uniform to zero if it will always pass. (set an extra bit
     // to distinguish from
@@ -410,6 +412,9 @@ void PixelShaderManager::UpdateBP(u32 bp, u32 newValue)
   else if (bp == 0x43)
   {
     more_constants.zcontrol = newValue;
+    more_constants.rgba6_format =
+        ((newValue & 7) == PEControl::RGBA6_Z24 && !g_ActiveConfig.bForceTrueColor) ? 1 : 0;
+    more_constants.dither = bpmem.blendmode.dither && more_constants.rgba6_format;
     dirty = true;
   }
   else if (bp >= 0xc0 && bp < 0xe0)
@@ -446,6 +451,11 @@ void PixelShaderManager::UpdateBP(u32 bp, u32 newValue)
   else if (bp == BPMEM_IREF || (bp & 0xf0) == BPMEM_IND_CMD)
   {
     s_bIndirectDirty = true;
+  }
+  else if (bp == BPMEM_BLENDMODE)
+  {
+    more_constants.dither = bpmem.blendmode.dither && more_constants.rgba6_format;
+    dirty = true;
   }
 }
 

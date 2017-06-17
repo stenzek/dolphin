@@ -140,6 +140,7 @@ static void BPWritten(const BPCmd& bp)
   case BPMEM_BLENDMODE:  // Blending Control
     if (bp.changes & 0xFFFF)
     {
+      PixelShaderManager::UpdateBP(bp.address, bp.newvalue);
       PRIM_LOG("blendmode: en=%d, open=%d, colupd=%d, alphaupd=%d, dst=%d, src=%d, sub=%d, mode=%d",
                (int)bpmem.blendmode.blendenable, (int)bpmem.blendmode.logicopenable,
                (int)bpmem.blendmode.colorupdate, (int)bpmem.blendmode.alphaupdate,
