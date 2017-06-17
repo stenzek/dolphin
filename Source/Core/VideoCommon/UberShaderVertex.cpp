@@ -191,22 +191,6 @@ ShaderCode GenVertexShader(APIType ApiType, const vertex_ubershader_uid_data* ui
 		"		_norm2 = float3(dot(N0, rawnorm2), dot(N1, rawnorm2), dot(N2, rawnorm2));\n"
 		"\n");
 
-#if 0
-  // Lighting (basic color passthrough for now)
-  out.Write(
-		"	if ((components & %uu) != 0u) // VB_HAS_COL0\n", VB_HAS_COL0);
-	out.Write(
-		"		o.colors_0 = color0;\n"
-		"	else\n"
-		"		o.colors_0 = float4(1.0, 1.0, 1.0, 1.0);\n"
-		"\n"
-		"	if ((components & %uu) != 0u) // VB_HAS_COL1\n", VB_HAS_COL1);
-	out.Write(
-		"		o.colors_1 = color1;\n"
-		"	else\n"
-		"		o.colors_1 = o.colors_0;\n"
-		"\n");
-#else
   // Hardware Lighting
   out.WriteLine("if ((components & %uu) != 0) // VB_HAS_COL0", VB_HAS_COL0);
   out.WriteLine("  o.colors_0 = color0;");
@@ -315,7 +299,6 @@ ShaderCode GenVertexShader(APIType ApiType, const vertex_ubershader_uid_data* ui
 
   out.WriteLine("if (xfmem_numColorChans < 2u && (components & %uu) == 0)", VB_HAS_COL1);
   out.WriteLine("  o.colors_1 = o.colors_0;");
-#endif
 
 	// Texture Coordinates
   // TODO: Should we unroll this at compile time?
@@ -440,18 +423,6 @@ ShaderCode GenVertexShader(APIType ApiType, const vertex_ubershader_uid_data* ui
     out.WriteLine("    o.tex[i].xy = clamp(o.tex[i].xy / 2.0f, float2(-1.0f,-1.0f), float2(1.0f,1.0f));");
     out.WriteLine("}");
   }
-
-#if 0
-	// Simple Texture coord code: each texcoordX is hardcoded to texgenX
-	for (u32 i = 0; i < numTexgen; i++)
-	{
-		out.Write("	{\n");
-		out.Write("		// This UV generation code is overly simplied, texCoord %i is not hardwired to texgen %i\n", i, i);
-		out.Write("		float4 coord = float4(tex%d.x, tex%d.y, 1.0, 1.0);\n", i, i);
-		out.Write("		o.tex[%d].xyz = float3(dot(coord, " I_TEXMATRICES"[%d]), dot(coord, " I_TEXMATRICES"[%d]), 1);\n", i, 3 * i, 3 * i + 1);
-		out.Write("	}\n");
-	}
-#endif
 
   // clipPos/w needs to be done in pixel shader, not here
   out.Write("o.clipPos = o.pos;\n");
