@@ -40,6 +40,7 @@ public:
   static void SetFogRangeAdjustChanged();
   static void UpdateBP(u32 addr, u32 newValue);
   static void SetTexProjectionChanged();
+  static void SetBoundingBoxActive(bool active);
 
   static PixelShaderConstants constants;
   static UberShaderConstants more_constants;

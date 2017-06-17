@@ -390,6 +390,18 @@ void PixelShaderManager::SetTexProjectionChanged()
   s_bTexProjDirty = true;
 }
 
+void PixelShaderManager::SetBoundingBoxActive(bool active)
+{
+  const bool enable =
+      active && g_ActiveConfig.bBBoxEnable && g_ActiveConfig.BBoxUseFragmentShaderImplementation();
+
+  if (enable == (more_constants.bounding_box != 0))
+    return;
+
+  more_constants.bounding_box = active;
+  dirty = true;
+}
+
 void PixelShaderManager::UpdateBP(u32 bp, u32 newValue)
 {
   // TODO: think of a less totally hacky way of doing this.

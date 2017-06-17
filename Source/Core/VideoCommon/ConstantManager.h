@@ -86,6 +86,7 @@ struct UberShaderConstants
   int4 konst[32];       // .rgba
   u32 rgba6_format;     // .x
   u32 dither;           // .y
-  u32 pad[2];           // .zw
+  u32 bounding_box;     // .z
+  u32 pad;              // .w
   float4 debug;
 };

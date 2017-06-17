@@ -333,7 +333,7 @@ PixelShaderUid GetPixelShaderUid()
   return out;
 }
 
-void WritePixelShaderCommonHeader(ShaderCode& out, APIType ApiType)
+void WritePixelShaderCommonHeader(ShaderCode& out, APIType ApiType, bool bounding_box)
 {
   // dot product for integer vectors
   out.Write("int idot(int3 x, int3 y)\n"
@@ -401,6 +401,20 @@ void WritePixelShaderCommonHeader(ShaderCode& out, APIType ApiType)
             "\tfloat4 " I_ZSLOPE ";\n"
             "\tfloat4 " I_EFBSCALE ";\n"
             "};\n");
+
+  if (bounding_box)
+  {
+    if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
+    {
+      out.Write("SSBO_BINDING(0) buffer BBox {\n"
+                "\tint4 bbox_data;\n"
+                "};\n");
+    }
+    else
+    {
+      out.Write("globallycoherent RWBuffer<int> bbox_data : register(u2);\n");
+    }
+  }
 }
 
 static void WriteStage(ShaderCode& out, const pixel_shader_uid_data* uid_data, int n,
@@ -430,7 +444,7 @@ ShaderCode GeneratePixelShaderCode(APIType ApiType, const pixel_shader_uid_data*
             uid_data->genMode_numindstages);
 
   // Stuff that is shared between ubershaders and pixelgen.
-  WritePixelShaderCommonHeader(out, ApiType);
+  WritePixelShaderCommonHeader(out, ApiType, uid_data->bounding_box);
 
   if (per_pixel_lighting)
   {
@@ -443,20 +457,6 @@ ShaderCode GeneratePixelShaderCode(APIType ApiType, const pixel_shader_uid_data*
 
     out.Write(s_shader_uniforms);
     out.Write("};\n");
-  }
-
-  if (uid_data->bounding_box)
-  {
-    if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
-    {
-      out.Write("SSBO_BINDING(0) buffer BBox {\n"
-                "\tint4 bbox_data;\n"
-                "};\n");
-    }
-    else
-    {
-      out.Write("globallycoherent RWBuffer<int> bbox_data : register(u2);\n");
-    }
   }
 
   out.Write("struct VS_OUTPUT {\n");

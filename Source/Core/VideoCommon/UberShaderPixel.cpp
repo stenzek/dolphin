@@ -26,11 +26,12 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
   const bool ssaa = g_ActiveConfig.iMultisamples > 1 && g_ActiveConfig.bSSAA;
   const bool use_dual_source = g_ActiveConfig.backend_info.bSupportsDualSourceBlend;
   const bool early_depth = uid_data->early_depth != 0;
+  const bool bounding_box = g_ActiveConfig.bBBoxEnable && g_ActiveConfig.BBoxUseFragmentShaderImplementation();
   const u32 numTexgen = uid_data->num_texgens;
   ShaderCode out;
 
   out.Write("// Pixel UberShader for %u texgens%s\n", numTexgen, early_depth ? ", early-depth": "");
-  WritePixelShaderCommonHeader(out, ApiType);
+  WritePixelShaderCommonHeader(out, ApiType, bounding_box);
   WriteUberShaderCommonHeader(out, ApiType);
 
   // TODO: This is variable based on number of texcoord gens
@@ -59,6 +60,7 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
             "	int4	konstLookup[32];\n"
             "	bool  bpmem_rgba6_format;\n"
             "	bool  bpmem_dither;\n"
+            "	bool  bpmem_bounding_box;\n"
             "	float4  debug;\n"
             "};\n");
 
@@ -980,6 +982,18 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
     out.WriteLine("// Colors will be blended against the alpha from ocol1 and");
     out.WriteLine("// the alpha from ocol0 will be written to the framebuffer.");
     out.WriteLine("ocol1 = float4(0.0, 0.0, 0.0, float(TevResult.a) / 255.0);");
+  }
+
+  if (bounding_box)
+  {
+    const char* atomic_op =
+        (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan) ? "atomic" : "Interlocked";
+    out.WriteLine("  if (bpmem_bounding_box) {");
+    out.WriteLine("    if(bbox_data[0] > int(rawpos.x)) %sMin(bbox_data[0], int(rawpos.x));", atomic_op);
+    out.WriteLine("    if(bbox_data[1] < int(rawpos.x)) %sMax(bbox_data[1], int(rawpos.x));", atomic_op);
+    out.WriteLine("    if(bbox_data[2] > int(rawpos.y)) %sMin(bbox_data[2], int(rawpos.y));", atomic_op);
+    out.WriteLine("    if(bbox_data[3] < int(rawpos.y)) %sMax(bbox_data[3], int(rawpos.y));", atomic_op);
+    out.WriteLine("  }");
   }
 
   out.WriteLine("}");
