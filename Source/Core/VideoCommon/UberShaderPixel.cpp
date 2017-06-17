@@ -845,16 +845,16 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
 
     out.Write("		zCoord = int(" I_ZSLOPE ".z + " I_ZSLOPE ".x * screenpos.x + " I_ZSLOPE
               ".y * screenpos.y);\n"
-              "\n"
-              "		// If early depth is enabled, write to zbuffer before depth textures\n"
-              "		if ((bpmem_zcontrol & %du) != 0u)\n",
-              1 << PEControl().early_ztest.StartBit());
+              " }\n"
+              "\n");
+
+    out.Write(" // If early depth is enabled, write to zbuffer before depth textures\n"
+              " if ((bpmem_zcontrol & %du) != 0u)\n", 1 << PEControl().early_ztest.StartBit());
     if (ApiType == APIType::D3D || ApiType == APIType::Vulkan)
       out.Write("	depth = 1.0 - float(zCoord) / 16777216.0;\n");
     else
       out.Write("	depth = float(zCoord) / 16777216.0;\n");
-    out.Write("	}\n"
-              "\n");
+    out.Write("\n");
   }
 
   // =================
