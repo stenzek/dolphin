@@ -448,12 +448,8 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
         "		{\n"
         "			uint texcoord = bitfieldExtract(iref, 0, 3);\n"
         "			uint texmap = bitfieldExtract(iref, 8, 3);\n"
-        "			int2 fixedPoint_uv; \n"
-        "			if ((xfmem_projection & (1u << texcoord)) != 0u) // Optional Perspective divide\n"
-        "				fixedPoint_uv = itrunc((tex[texcoord].xy / tex[texcoord].z) * " I_TEXDIMS
+        "			int2 fixedPoint_uv = itrunc((tex[texcoord].xy / tex[texcoord].z) * " I_TEXDIMS
         "[texcoord].zw);\n"
-        "			else\n"
-        "				fixedPoint_uv = itrunc(tex[texcoord].xy * " I_TEXDIMS "[texcoord].zw);\n"
         "\n"
         "			if ((i & 1u) == 0u)\n"
         "				fixedPoint_uv = fixedPoint_uv >> " I_INDTEXSCALE "[i >> 1].xy;\n"
@@ -496,12 +492,9 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
     out.Write("		uint tex_coord = %s;\n",
               BitfieldExtract("order", TwoTevStageOrders().texcoord0).c_str());
     out.Write(
-        "		int2 fixedPoint_uv;\n"
-        "		if ((xfmem_projection & (1u << tex_coord)) != 0u) // Optional Perspective divide\n"
-        "			fixedPoint_uv = itrunc((tex[tex_coord].xy / tex[tex_coord].z) * " I_TEXDIMS
+        "		int2 fixedPoint_uv = itrunc((tex[tex_coord].z == 0.0 ? tex[tex_coord].xy : "
+        "(tex[tex_coord].xy / tex[tex_coord].z)) * " I_TEXDIMS
         "[tex_coord].zw);\n"
-        "		else\n"
-        "			fixedPoint_uv = itrunc(tex[tex_coord].xy * " I_TEXDIMS "[tex_coord].zw);\n"
         "\n"
         "		bool texture_enabled = (order & %du) != 0u;\n",
         1 << TwoTevStageOrders().enable0.StartBit());
