@@ -171,7 +171,6 @@ static VertexLoaderBase* RefreshLoader(int vtx_attr_group, bool preprocess = fal
       }
       loader->m_native_vertex_format = native.get();
     }
-    VertexShaderManager::SetVertexFormat(loader->m_native_components);
     state->vertex_loaders[vtx_attr_group] = loader;
     state->attr_dirty[vtx_attr_group] = false;
   }
@@ -209,6 +208,7 @@ int RunVertices(int vtx_attr_group, int primitive, int count, DataReader src, bo
   }
   s_current_vtx_fmt = loader->m_native_vertex_format;
   g_current_components = loader->m_native_components;
+  VertexShaderManager::SetVertexFormat(loader->m_native_components);
 
   // if cull mode is CULL_ALL, tell VertexManager to skip triangles and quads.
   // They still need to go through vertex loading, because we need to calculate a zfreeze refrence
