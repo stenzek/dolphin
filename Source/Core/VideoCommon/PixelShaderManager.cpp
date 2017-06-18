@@ -155,6 +155,12 @@ void PixelShaderManager::SetConstants()
         more_constants.tevind[i][0] =
             bpmem.tevind[i].hex;  // TODO: This match shadergen, but videosw will
                                   // always wrap.
+
+        // The ubershader uses tevind != 0 as a condition whether to calculate texcoords,
+        // even when texture is disabled, instead of the stage < bpmem.genMode.numindstages.
+        // We set an unused bit here to indicate that the stage is active, even if it
+        // is just a pass-through.
+        more_constants.tevind[i][0] |= 0x80000000;
       }
       else
       {
