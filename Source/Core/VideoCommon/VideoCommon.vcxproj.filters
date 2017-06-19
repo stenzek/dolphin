@@ -182,6 +182,9 @@
     <ClCompile Include="UberShaderCommon.cpp">
       <Filter>Shader Generators</Filter>
     </ClCompile>
+    <ClCompile Include="AsyncShaderCompiler.cpp">
+      <Filter>Util</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CommandProcessor.h" />
@@ -346,6 +349,9 @@
     </ClInclude>
     <ClInclude Include="UberShaderCommon.h">
       <Filter>Shader Generators</Filter>
+    </ClInclude>
+    <ClInclude Include="AsyncShaderCompiler.h">
+      <Filter>Util</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
