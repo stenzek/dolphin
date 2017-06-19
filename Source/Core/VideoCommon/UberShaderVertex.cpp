@@ -110,7 +110,7 @@ ShaderCode GenVertexShader(APIType ApiType, const vertex_ubershader_uid_data* ui
 
 		// TODO: No Geometery shader fallback.
 		out.Write("out VertexData {\n");
-		GenerateVSOutputMembers(out, ApiType, xfmem.numTexGen.numTexGens, false,
+		GenerateVSOutputMembers(out, ApiType, numTexgen, false,
                             GetInterpolationQualifier(msaa, ssaa, true));
 		out.Write("} vs;\n");
 
