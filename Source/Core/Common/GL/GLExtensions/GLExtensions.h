@@ -20,6 +20,7 @@
 #include "Common/GL/GLExtensions/ARB_get_program_binary.h"
 #include "Common/GL/GLExtensions/ARB_map_buffer_range.h"
 #include "Common/GL/GLExtensions/ARB_occlusion_query2.h"
+#include "Common/GL/GLExtensions/ARB_parallel_shader_compile.h"
 #include "Common/GL/GLExtensions/ARB_sample_shading.h"
 #include "Common/GL/GLExtensions/ARB_sampler_objects.h"
 #include "Common/GL/GLExtensions/ARB_shader_image_load_store.h"

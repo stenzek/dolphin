@@ -995,6 +995,9 @@ PFNDOLMEMORYBARRIERPROC dolMemoryBarrier;
 PFNDOLDISPATCHCOMPUTEPROC dolDispatchCompute;
 PFNDOLDISPATCHCOMPUTEINDIRECTPROC dolDispatchComputeIndirect;
 
+// ARB_parallel_shader_compile
+PFNDOLMAXSHADERCOMPILERTHREADSARBPROC dolMaxShaderCompilerThreadsARB;
+
 // Creates a GLFunc object that requires a feature
 #define GLFUNC_REQUIRES(x, y)                                                                      \
   {                                                                                                \
@@ -1870,6 +1873,9 @@ const GLFunc gl_function_array[] = {
     GLFUNC_REQUIRES(glDispatchCompute, "GL_ARB_compute_shader !VERSION_4_3 |VERSION_GLES_3_1"),
     GLFUNC_REQUIRES(glDispatchComputeIndirect,
                     "GL_ARB_compute_shader !VERSION_4_3 |VERSION_GLES_3_1"),
+
+    // ARB_parallel_shader_compile
+    GLFUNC_REQUIRES(glMaxShaderCompilerThreadsARB, "GL_ARB_parallel_shader_compile"),
 };
 
 namespace GLExtensions

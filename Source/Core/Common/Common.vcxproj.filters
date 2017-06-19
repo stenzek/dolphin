@@ -254,6 +254,9 @@
     </ClInclude>
     <ClInclude Include="File.h" />
     <ClInclude Include="LdrWatcher.h" />
+    <ClInclude Include="GL\GLExtensions\ARB_parallel_shader_compile.h">
+      <Filter>GL\GLExtensions</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CDUtils.cpp" />
