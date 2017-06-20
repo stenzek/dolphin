@@ -92,24 +92,21 @@ ShaderCode GenVertexShader(APIType ApiType, const vertex_ubershader_uid_data* ui
 	GenerateVSOutputMembers(out, ApiType, numTexgen, false, "");
 	out.Write("};\n");
 
-	if (ApiType == APIType::OpenGL)
+	if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
 	{
-		out.Write("in float4 rawpos; // ATTR%d,\n", SHADER_POSITION_ATTRIB);
-		out.Write("in int posmtx; // ATTR%d,\n", SHADER_POSMTX_ATTRIB);
-		out.Write("in float3 rawnorm0; // ATTR%d,\n", SHADER_NORM0_ATTRIB);
-		out.Write("in float3 rawnorm1; // ATTR%d,\n", SHADER_NORM1_ATTRIB);
-		out.Write("in float3 rawnorm2; // ATTR%d,\n", SHADER_NORM2_ATTRIB);
+    out.Write("ATTRIBUTE_LOCATION(%d) in float4 rawpos;\n", SHADER_POSITION_ATTRIB);
+    out.Write("ATTRIBUTE_LOCATION(%d) in uint4 posmtx;\n", SHADER_POSMTX_ATTRIB);
+    out.Write("ATTRIBUTE_LOCATION(%d) in float3 rawnorm0;\n", SHADER_NORM0_ATTRIB);
+    out.Write("ATTRIBUTE_LOCATION(%d) in float3 rawnorm1;\n", SHADER_NORM1_ATTRIB);
+    out.Write("ATTRIBUTE_LOCATION(%d) in float3 rawnorm2;\n", SHADER_NORM2_ATTRIB);
+    out.Write("ATTRIBUTE_LOCATION(%d) in float4 color0;\n", SHADER_COLOR0_ATTRIB);
+    out.Write("ATTRIBUTE_LOCATION(%d) in float4 color1;\n", SHADER_COLOR1_ATTRIB);
 
-		out.Write("in float4 color0; // ATTR%d,\n", SHADER_COLOR0_ATTRIB);
-		out.Write("in float4 color1; // ATTR%d,\n", SHADER_COLOR1_ATTRIB);
-
-		for (int i = 0; i < 8; ++i)
-		{
-			out.Write("in float3 tex%d; // ATTR%d,\n", i, SHADER_TEXTURE0_ATTRIB + i);
-		}
+    for (int i = 0; i < 8; ++i)
+      out.Write("ATTRIBUTE_LOCATION(%d) in float3 tex%d;\n", SHADER_TEXTURE0_ATTRIB + i, i);
 
 		// TODO: No Geometery shader fallback.
-		out.Write("out VertexData {\n");
+		out.Write("VARYING_LOCATION(0) out VertexData {\n");
 		GenerateVSOutputMembers(out, ApiType, numTexgen, false,
                             GetInterpolationQualifier(msaa, ssaa, true));
 		out.Write("} vs;\n");
@@ -151,13 +148,14 @@ ShaderCode GenVertexShader(APIType ApiType, const vertex_ubershader_uid_data* ui
 		"	float3 N2;\n"
 		"\n"
 		"	if ((components & %uu) != 0u) {// VB_HAS_POSMTXIDX\n", VB_HAS_POSMTXIDX);
-	out.Write(
-		"		// Vertex format has a per-vertex matrix\n"
-		"		P0 = " I_TRANSFORMMATRICES"[posmtx];\n"
-		"		P1 = " I_TRANSFORMMATRICES"[posmtx+1];\n"
-		"		P2 = " I_TRANSFORMMATRICES"[posmtx+2];\n"
+  out.Write(
+    "		// Vertex format has a per-vertex matrix\n"
+    "		int posidx = int(posmtx.r);\n"
+		"		P0 = " I_TRANSFORMMATRICES"[posidx];\n"
+		"		P1 = " I_TRANSFORMMATRICES"[posidx+1];\n"
+		"		P2 = " I_TRANSFORMMATRICES"[posidx+2];\n"
 		"\n"
-		"		int normidx = posmtx >= 32 ? (posmtx - 32) : posmtx;\n"
+		"		int normidx = posidx >= 32 ? (posidx - 32) : posidx;\n"
 		"		N0 = " I_NORMALMATRICES"[normidx].xyz;\n"
 		"		N1 = " I_NORMALMATRICES"[normidx+1].xyz;\n"
 		"		N2 = " I_NORMALMATRICES"[normidx+2].xyz;\n"
