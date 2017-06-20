@@ -238,6 +238,7 @@ void VulkanContext::PopulateBackendInfo(VideoConfig* config)
   config->backend_info.bSupportsGPUTextureDecoding = true;    // Assumed support.
   config->backend_info.bSupportsInternalResolutionFrameDumps = true;  // Assumed support.
   config->backend_info.bSupportsPostProcessing = true;                // Assumed support.
+  config->backend_info.bSupportsBitfield = true;                      // Assumed support.
   config->backend_info.bSupportsDualSourceBlend = false;              // Dependent on features.
   config->backend_info.bSupportsGeometryShaders = false;              // Dependent on features.
   config->backend_info.bSupportsGSInstancing = false;                 // Dependent on features.
