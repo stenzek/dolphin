@@ -10,6 +10,7 @@
 
 #include "VideoBackends/Vulkan/CommandBufferManager.h"
 #include "VideoBackends/Vulkan/ObjectCache.h"
+#include "VideoBackends/Vulkan/ShaderCache.h"
 #include "VideoBackends/Vulkan/Texture2D.h"
 #include "VideoBackends/Vulkan/Util.h"
 #include "VideoBackends/Vulkan/VulkanContext.h"
@@ -45,7 +46,7 @@ void VulkanPostProcessing::BlitFromTexture(const TargetRectangle& dst, const Tar
       m_fragment_shader != VK_NULL_HANDLE ? m_fragment_shader : m_default_fragment_shader;
   UtilityShaderDraw draw(g_command_buffer_mgr->GetCurrentCommandBuffer(),
                          g_object_cache->GetPipelineLayout(PIPELINE_LAYOUT_STANDARD), render_pass,
-                         g_object_cache->GetPassthroughVertexShader(), VK_NULL_HANDLE,
+                         g_shader_cache->GetPassthroughVertexShader(), VK_NULL_HANDLE,
                          fragment_shader);
 
   // Source is always bound.
@@ -237,7 +238,7 @@ bool VulkanPostProcessing::RecompileShader()
   if (m_fragment_shader != VK_NULL_HANDLE)
   {
     g_command_buffer_mgr->WaitForGPUIdle();
-    g_object_cache->ClearPipelineCache();
+    g_shader_cache->ClearPipelineCache();
     vkDestroyShaderModule(g_vulkan_context->GetDevice(), m_fragment_shader, nullptr);
     m_fragment_shader = VK_NULL_HANDLE;
   }
