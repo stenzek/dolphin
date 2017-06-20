@@ -82,7 +82,7 @@ bool StateTracker::Initialize()
   for (size_t i = 0; i < NUM_PIXEL_SHADER_SAMPLERS; i++)
   {
     m_bindings.ps_samplers[i].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    m_bindings.ps_samplers[i].imageView = VK_NULL_HANDLE;
+    m_bindings.ps_samplers[i].imageView = g_object_cache->GetDummyImageView();
     m_bindings.ps_samplers[i].sampler = g_object_cache->GetPointSampler();
   }
 
@@ -599,7 +599,7 @@ void StateTracker::UnbindTexture(VkImageView view)
   for (VkDescriptorImageInfo& it : m_bindings.ps_samplers)
   {
     if (it.imageView == view)
-      it.imageView = VK_NULL_HANDLE;
+      it.imageView = g_object_cache->GetDummyImageView();
   }
 }
 
@@ -913,7 +913,7 @@ bool StateTracker::UpdatePipeline()
 bool StateTracker::UpdateDescriptorSet()
 {
   const size_t MAX_DESCRIPTOR_WRITES = NUM_UBO_DESCRIPTOR_SET_BINDINGS +  // UBO
-                                       NUM_PIXEL_SHADER_SAMPLERS +        // Samplers
+                                       1 +                                // Samplers
                                        1;                                 // SSBO
   std::array<VkWriteDescriptorSet, MAX_DESCRIPTOR_WRITES> writes;
   u32 num_writes = 0;
@@ -954,23 +954,16 @@ bool StateTracker::UpdateDescriptorSet()
     if (set == VK_NULL_HANDLE)
       return false;
 
-    for (size_t i = 0; i < NUM_PIXEL_SHADER_SAMPLERS; i++)
-    {
-      const VkDescriptorImageInfo& info = m_bindings.ps_samplers[i];
-      if (info.imageView != VK_NULL_HANDLE && info.sampler != VK_NULL_HANDLE)
-      {
-        writes[num_writes++] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                                nullptr,
-                                set,
-                                static_cast<uint32_t>(i),
-                                0,
-                                1,
-                                VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                                &info,
-                                nullptr,
-                                nullptr};
-      }
-    }
+    writes[num_writes++] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                            nullptr,
+                            set,
+                            0,
+                            0,
+                            static_cast<u32>(NUM_PIXEL_SHADER_SAMPLERS),
+                            VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                            m_bindings.ps_samplers.data(),
+                            nullptr,
+                            nullptr};
 
     m_descriptor_sets[DESCRIPTOR_SET_BIND_POINT_PIXEL_SHADER_SAMPLERS] = set;
     m_dirty_flags |= DIRTY_FLAG_DESCRIPTOR_SET_BINDING;
