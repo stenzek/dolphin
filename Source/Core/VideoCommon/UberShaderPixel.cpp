@@ -138,40 +138,44 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
   // ======================
   //   TEV's Special Lerp
   // ======================
-  // TODO: This can be vectorized?
-
-  out.Write("// One channel worth of TEV's Linear Interpolate, plus bias, add/subtract and scale\n"
-            "int tevLerp(int A, int B, int C, int D, uint bias, bool op, bool alpha, uint shift) {\n"
-            " // Scale C from 0..255 to 0..256\n"
-            "	C += C >> 7;\n"
-            "\n"
-            " // Add bias to D\n"
-            "	if (bias == 1u) D += 128;\n"
-            "	else if (bias == 2u) D -= 128;\n"
-            "\n"
-            "	int lerp = (A << 8) + (B - A)*C;\n"
-            "	if (shift != 3u) {\n"
-            "		lerp = lerp << shift;\n"
-            "		D = D << shift;\n"
-            "	}\n"
-            "\n"
-            "	if ((shift == 3u) == alpha)\n"
-            "		lerp = lerp + (op ? 127 : 128);\n"
-            "\n"
-            "	int result = lerp >> 8;\n"
-            "\n"
-            "	// Add/Subtract D\n"
-            "	if(op) // Subtract\n"
-            "		result = D - result;\n"
-            "	else // Add\n"
-            "		result = D + result;\n"
-            "\n"
-            "	// Most of the Shift was moved inside the lerp for improved percision\n"
-            "	// But we still do the divide by 2 here\n"
-            "	if (shift == 3u)\n"
-            "		result = result >> 1;\n"
-            "	return result;\n"
-            "}\n\n");
+  auto WriteTevLerp = [&out](const char* components)
+  {
+    out.Write("// One channel worth of TEV's Linear Interpolate, plus bias, add/subtract and scale\n"
+              "int%s tevLerp%s(int%s A, int%s B, int%s C, int%s D, uint bias, bool op, bool alpha, uint shift) {\n"
+              " // Scale C from 0..255 to 0..256\n"
+              "	C += C >> 7;\n"
+              "\n"
+              " // Add bias to D\n"
+              "	if (bias == 1u) D += 128;\n"
+              "	else if (bias == 2u) D -= 128;\n"
+              "\n"
+              "	int%s lerp = (A << 8) + (B - A)*C;\n"
+              "	if (shift != 3u) {\n"
+              "		lerp = lerp << shift;\n"
+              "		D = D << shift;\n"
+              "	}\n"
+              "\n"
+              "	if ((shift == 3u) == alpha)\n"
+              "		lerp = lerp + (op ? 127 : 128);\n"
+              "\n"
+              "	int%s result = lerp >> 8;\n"
+              "\n"
+              "	// Add/Subtract D\n"
+              "	if(op) // Subtract\n"
+              "		result = D - result;\n"
+              "	else // Add\n"
+              "		result = D + result;\n"
+              "\n"
+              "	// Most of the Shift was moved inside the lerp for improved percision\n"
+              "	// But we still do the divide by 2 here\n"
+              "	if (shift == 3u)\n"
+              "		result = result >> 1;\n"
+              "	return result;\n"
+              "}\n\n", components, components, components, components, components, components,
+              components, components);
+  };
+  WriteTevLerp("");   // int
+  WriteTevLerp("3");  // int3
 
   // =======================
   //   TEV's Color Compare
@@ -704,13 +708,7 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
       "\n"
       "			int3 color;\n"
       "			if(color_bias != 3u) { // Normal mode\n"
-      "			  // TODO: tevLerp has control flow, vectorize it here.\n"
-      "				color.r = tevLerp(color_A.r, color_B.r, color_C.r, color_D.r, color_bias, color_op, "
-      "false, color_shift);\n"
-      "				color.g = tevLerp(color_A.g, color_B.g, color_C.g, color_D.g, color_bias, color_op, "
-      "false, color_shift);\n"
-      "				color.b = tevLerp(color_A.b, color_B.b, color_C.b, color_D.b, color_bias, color_op, "
-      "false, color_shift);\n"
+      "				color = tevLerp3(color_A, color_B, color_C, color_D, color_bias, color_op, false, color_shift);\n"
       "			} else { // Compare mode\n"
       "				// op 6 and 7 do a select per color channel\n"
       "				if (color_compare_op == 6u) {\n"
