@@ -373,7 +373,7 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
         "		uint texcoord = bitfieldExtract(iref, 0, 3);\n"
         "		uint texmap = bitfieldExtract(iref, 8, 3);\n"
         "		float3 uv = getTexCoord(tex, texcoord);\n"
-        "		int2 fixedPoint_uv = int2((uv.xy / uv.z) * " I_TEXDIMS "[texcoord].zw);\n"
+        "		int2 fixedPoint_uv = int2((uv.z == 0.0 ? uv.xy : (uv.xy / uv.z)) * " I_TEXDIMS "[texcoord].zw);\n"
         "\n"
         "		if ((i & 1u) == 0u)\n"
         "			fixedPoint_uv = fixedPoint_uv >> " I_INDTEXSCALE "[i >> 1].xy;\n"
