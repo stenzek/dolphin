@@ -351,6 +351,21 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
             "}\n"
             "\n");
 
+  if (numTexgen > 0)
+  {
+    out.Write("float3 getTexCoord(in float3 tex[%d], uint index) {\n"
+              "  switch (index) {\n", numTexgen);
+    for (u32 i = 0; i < numTexgen; i++)
+    {
+      out.Write("  case %u:\n"
+                "    return tex[%u];\n", i, i);
+    }
+    out.Write("  default:"
+              "    return float3(0.0, 0.0, 0.0);\n"
+              "  }\n"
+              "}\n");
+  }
+
   if (early_depth && g_ActiveConfig.backend_info.bSupportsEarlyZ)
   {
     if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
@@ -511,9 +526,8 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
     out.Write("		uint tex_coord = %s;\n",
               BitfieldExtract("order", TwoTevStageOrders().texcoord0).c_str());
     out.Write(
-        "		int2 fixedPoint_uv = int2((tex[tex_coord].z == 0.0 ? tex[tex_coord].xy : "
-        "(tex[tex_coord].xy / tex[tex_coord].z)) * " I_TEXDIMS
-        "[tex_coord].zw);\n"
+        "		float3 uv = getTexCoord(tex, tex_coord);\n"
+        "		int2 fixedPoint_uv = int2((uv.z == 0.0 ? uv.xy : (uv.xy / uv.z)) * " I_TEXDIMS "[tex_coord].zw);\n"
         "\n"
         "		bool texture_enabled = (order & %du) != 0u;\n",
         1 << TwoTevStageOrders().enable0.StartBit());
@@ -535,8 +549,8 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
               "			{\n"
               "				uint texcoord = bitfieldExtract(iref, 0, 3);\n"
               "				uint texmap = bitfieldExtract(iref, 8, 3);\n"
-              "				int2 fixedPoint_uvi = int2((tex[texcoord].xy / tex[texcoord].z) * " I_TEXDIMS
-              "[texcoord].zw);\n"
+              "				float3 uvi = getTexCoord(tex, texcoord);\n"
+              "				int2 fixedPoint_uvi = int2((uvi.xy / uvi.z) * " I_TEXDIMS "[texcoord].zw);\n"
               "\n"
               "				if ((bt & 1u) == 0u)\n"
               "					fixedPoint_uvi = fixedPoint_uv >> " I_INDTEXSCALE "[bt >> 1].xy;\n"
