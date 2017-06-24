@@ -222,6 +222,10 @@ struct VideoConfig final
   {
     return backend_info.bSupportsGPUTextureDecoding && bEnableGPUTextureDecoding;
   }
+  bool IsStereoEnabled() const { return iStereoMode > 0; }
+  bool IsMSAAEnabled() const { return iMultisamples > 1; }
+  bool IsSSAAEnabled() const { return iMultisamples > 1 && bSSAA && backend_info.bSupportsSSAA; }
+  bool UseVertexRounding() const { return bVertexRounding && iEFBScale != SCALE_1X; }
 };
 
 extern VideoConfig g_Config;
