@@ -364,6 +364,29 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
               "    return float3(0.0, 0.0, 0.0);\n"
               "  }\n"
               "}\n");
+
+    out.Write(
+        "int3 sampleIndirectTexture(in float3 tex[%d], uint i) {"
+        "	uint iref = bpmem_iref[i];\n"
+        "	if ( iref != 0u)\n"
+        "	{\n"
+        "		uint texcoord = bitfieldExtract(iref, 0, 3);\n"
+        "		uint texmap = bitfieldExtract(iref, 8, 3);\n"
+        "		float3 uv = getTexCoord(tex, texcoord);\n"
+        "		int2 fixedPoint_uv = int2((uv.xy / uv.z) * " I_TEXDIMS "[texcoord].zw);\n"
+        "\n"
+        "		if ((i & 1u) == 0u)\n"
+        "			fixedPoint_uv = fixedPoint_uv >> " I_INDTEXSCALE "[i >> 1].xy;\n"
+        "		else\n"
+        "			fixedPoint_uv = fixedPoint_uv >> " I_INDTEXSCALE "[i >> 1].zw;\n"
+        "\n"
+        "		return sampleTexture(texmap, float2(fixedPoint_uv) * " I_TEXDIMS "[texmap].xy).abg;\n"
+        "	}\n"
+        "	else\n"
+        "	{\n"
+        "		return int3(0, 0, 0);\n"
+        "	}\n"
+        "}\n", numTexgen);
   }
 
   if (early_depth && g_ActiveConfig.backend_info.bSupportsEarlyZ)
@@ -468,38 +491,15 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
   for (int i = 0; i < 4; i++)
     out.Write("	s.Reg[%d] = " I_COLORS "[%d];\n", i, i);
 
-//   if (numTexgen != 0)
-//   {
-//     out.Write(  // TODO: Skip preload on Nvidia and other GPUs which can't handle dynamic indexed
-//                 // arrays?
-//         "\n"
-//         "	int3 indtex[4];\n"
+  if (numTexgen != 0)
+  {
+    // TODO: Skip preload on Nvidia and other GPUs which can't handle dynamic indexed arrays?
+//     out.Write(
 //         "	// Pre-sample indirect textures\n"
+//         "	int3 indtex[4];\n"
 //         "	for(uint i = 0u; i < 4u; i++)\n"
-//         "	{\n"
-//         "		uint iref = bpmem_iref[i];\n"
-//         "		if ( iref != 0u)\n"
-//         "		{\n"
-//         "			uint texcoord = bitfieldExtract(iref, 0, 3);\n"
-//         "			uint texmap = bitfieldExtract(iref, 8, 3);\n"
-//         "			int2 fixedPoint_uv = int2((tex[texcoord].xy / tex[texcoord].z) * " I_TEXDIMS
-//         "[texcoord].zw);\n"
-//         "\n"
-//         "			if ((i & 1u) == 0u)\n"
-//         "				fixedPoint_uv = fixedPoint_uv >> " I_INDTEXSCALE "[i >> 1].xy;\n"
-//         "			else\n"
-//         "				fixedPoint_uv = fixedPoint_uv >> " I_INDTEXSCALE "[i >> 1].zw;\n"
-//         "\n"
-//         "			indtex[i] = sampleTexture(texmap, float2(fixedPoint_uv) * " I_TEXDIMS
-//         "[texmap].xy).abg;\n"
-//         "		}\n"
-//         "		else\n"
-//         "		{\n"
-//         "			indtex[i] = int3(0, 0, 0);\n"
-//         "		}\n"
-//         "	}\n"
-//         "\n");
-//   }
+//         "		indtex[i] = sampleIndirectTexture(tex, i);\n");
+  }
 
   out.Write("	uint num_stages = %s;\n\n",
             BitfieldExtract("bpmem_genmode", bpmem.genMode.numtevstages).c_str());
@@ -543,27 +543,8 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
     out.Write("			uint bt = %s;\n", BitfieldExtract("tevind", TevStageIndirect().bt).c_str());
     out.Write("			uint mid = %s;\n", BitfieldExtract("tevind", TevStageIndirect().mid).c_str());
     out.Write("\n"
-              "			uint iref = bpmem_iref[bt];\n"
-              "			int3 indcoord;\n"
-              "			if ( iref != 0u)\n"
-              "			{\n"
-              "				uint texcoord = bitfieldExtract(iref, 0, 3);\n"
-              "				uint texmap = bitfieldExtract(iref, 8, 3);\n"
-              "				float3 uvi = getTexCoord(tex, texcoord);\n"
-              "				int2 fixedPoint_uvi = int2((uvi.xy / uvi.z) * " I_TEXDIMS "[texcoord].zw);\n"
-              "\n"
-              "				if ((bt & 1u) == 0u)\n"
-              "					fixedPoint_uvi = fixedPoint_uv >> " I_INDTEXSCALE "[bt >> 1].xy;\n"
-              "				else\n"
-              "					fixedPoint_uvi = fixedPoint_uv >> " I_INDTEXSCALE "[bt >> 1].zw;\n"
-              "	\n"
-              "				indcoord = sampleTexture(texmap, float2(fixedPoint_uvi) * " I_TEXDIMS
-              "	[texmap].xy).abg;\n"
-              "			}\n"
-              "			else\n"
-              "			{\n"
-              "				indcoord = int3(0, 0, 0);\n"
-              "			}\n"
+              "			int3 indcoord = sampleIndirectTexture(tex, bt);\n"
+              //"			int3 indcoord = indtex[bt];\n"
               "			if (bs != 0u)\n"
               "				AlphaBump = indcoord[bs - 1u];\n"
               "			switch(fmt)\n"
