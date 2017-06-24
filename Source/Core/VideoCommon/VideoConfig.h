@@ -226,6 +226,9 @@ struct VideoConfig final
   bool IsMSAAEnabled() const { return iMultisamples > 1; }
   bool IsSSAAEnabled() const { return iMultisamples > 1 && bSSAA && backend_info.bSupportsSSAA; }
   bool UseVertexRounding() const { return bVertexRounding && iEFBScale != SCALE_1X; }
+  // Host config contains the settings which can influence generated shaders.
+  u32 GetHostConfigBits() const;
+  std::string GetHostConfigFilename() const;
 };
 
 extern VideoConfig g_Config;
