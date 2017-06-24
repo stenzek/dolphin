@@ -159,6 +159,7 @@ public:
   std::string GetDiskCacheFileName(const char* type, bool include_gameid, bool include_host_config);
 
   void PrecompileUberShaders();
+  void WaitForBackgroundCompilesToComplete();
   void RetrieveAsyncShaders();
 
 private:

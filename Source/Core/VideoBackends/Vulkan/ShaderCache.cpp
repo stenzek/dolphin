@@ -1277,6 +1277,11 @@ void ShaderCache::PrecompileUberShaders()
     });
   });
 
+  WaitForBackgroundCompilesToComplete();
+}
+
+void ShaderCache::WaitForBackgroundCompilesToComplete()
+{
   m_async_shader_compiler->WaitUntilCompletion();
   m_async_shader_compiler->RetrieveWorkItems();
 }
