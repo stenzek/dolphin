@@ -95,9 +95,9 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
     for (int i = 0; i < 8; i++)
     {
       if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
-        out.Write("	case %du: return int4(texture(samp[%d], float3(uv, 0.0)) * 255.0);\n", i, i);
+        out.Write("	case %du: return iround(texture(samp[%d], float3(uv, 0.0)) * 255.0);\n", i, i);
       else if (ApiType == APIType::D3D)
-        out.Write("	case %du: return int4(Tex[%d].Sample(samp[%d], float3(uv, 0.0)) * 255.0);\n", i,
+        out.Write("	case %du: return iround(Tex[%d].Sample(samp[%d], float3(uv, 0.0)) * 255.0);\n", i,
                   i, i);
     }
     out.Write("	}\n"
