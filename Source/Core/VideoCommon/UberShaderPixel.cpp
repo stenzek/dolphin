@@ -409,13 +409,6 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
     }
 
     out.Write("void main()\n{\n");
-
-    if (g_ActiveConfig.backend_info.bSupportsGeometryShaders || ApiType == APIType::Vulkan)
-    {
-      for (unsigned int i = 0; i < numTexgen; ++i)
-        out.Write("\tfloat3 uv%d = tex[%d];\n", i, i);
-    }
-
     out.Write("\tfloat4 rawpos = gl_FragCoord;\n");
   }
   else  // D3D
