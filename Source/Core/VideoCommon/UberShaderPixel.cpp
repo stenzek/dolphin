@@ -704,6 +704,7 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
       "\n"
       "			int3 color;\n"
       "			if(color_bias != 3u) { // Normal mode\n"
+      "			  // TODO: tevLerp has control flow, vectorize it here.\n"
       "				color.r = tevLerp(color_A.r, color_B.r, color_C.r, color_D.r, color_bias, color_op, "
       "false, color_shift);\n"
       "				color.g = tevLerp(color_A.g, color_B.g, color_C.g, color_D.g, color_bias, color_op, "
@@ -854,7 +855,8 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
   // ===========
 
   if (!early_depth)
-  {  // Zfreeze forces early depth off
+  {
+    // Zfreeze forces early depth off
     out.Write("	// ZFreeze\n"
               "	if ((bpmem_genmode & %du) != 0u) {\n",
               1 << GenMode().zfreeze.StartBit());
@@ -869,11 +871,13 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
               "\n");
 
     out.Write(" // If early depth is enabled, write to zbuffer before depth textures\n"
+              " // We use a temporary here to ensure it is written in all execution paths.\n"
+              " float depth_value = 0.0;\n"
               " if ((bpmem_zcontrol & %du) != 0u)\n", 1 << PEControl().early_ztest.StartBit());
     if (ApiType == APIType::D3D || ApiType == APIType::Vulkan)
-      out.Write("	depth = 1.0 - float(zCoord) / 16777216.0;\n");
+      out.Write("	depth_value = 1.0 - float(zCoord) / 16777216.0;\n");
     else
-      out.Write("	depth = float(zCoord) / 16777216.0;\n");
+      out.Write("	depth_value = float(zCoord) / 16777216.0;\n");
     out.Write("\n");
   }
 
@@ -901,9 +905,12 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
               "	if ((bpmem_zcontrol & %du) == 0u)\n",
               1 << PEControl().early_ztest.StartBit());
     if (ApiType == APIType::D3D || ApiType == APIType::Vulkan)
-      out.Write("		depth = 1.0 - float(zCoord) / 16777216.0;\n");
+      out.Write("		depth_value = 1.0 - float(zCoord) / 16777216.0;\n");
     else
-      out.Write("		depth = float(zCoord) / 16777216.0;\n");
+      out.Write("		depth_value = float(zCoord) / 16777216.0;\n");
+
+    out.Write(" // depth_value will have been written in one of the bpmem_zcontrol branches by now.\n"
+              " depth = depth_value;\n");
   }
 
   // =========
