@@ -53,6 +53,7 @@ ShaderCode GenerateGeometryShaderCode(APIType ApiType, const geometry_shader_uid
   const bool msaa = g_ActiveConfig.IsMSAAEnabled();
   const bool ssaa = g_ActiveConfig.IsSSAAEnabled();
   const bool stereo = g_ActiveConfig.IsStereoEnabled();
+  const bool texgen_array = ApiType != APIType::Vulkan;
   const unsigned int vertex_in = uid_data->primitive_type + 1;
   unsigned int vertex_out = uid_data->primitive_type == PRIMITIVE_TRIANGLES ? 3 : 4;
 
@@ -91,7 +92,7 @@ ShaderCode GenerateGeometryShaderCode(APIType ApiType, const geometry_shader_uid
             "};\n");
 
   out.Write("struct VS_OUTPUT {\n");
-  GenerateVSOutputMembers<ShaderCode>(out, ApiType, uid_data->numTexGens, pixel_lighting, "");
+  GenerateVSOutputMembers<ShaderCode>(out, ApiType, uid_data->numTexGens, true, pixel_lighting, "");
   out.Write("};\n");
 
   if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
@@ -100,12 +101,14 @@ ShaderCode GenerateGeometryShaderCode(APIType ApiType, const geometry_shader_uid
       out.Write("#define InstanceID gl_InvocationID\n");
 
     out.Write("VARYING_LOCATION(0) in VertexData {\n");
-    GenerateVSOutputMembers<ShaderCode>(out, ApiType, uid_data->numTexGens, pixel_lighting,
+    GenerateVSOutputMembers<ShaderCode>(out, ApiType, uid_data->numTexGens, texgen_array,
+                                        pixel_lighting,
                                         GetInterpolationQualifier(msaa, ssaa, true, true));
     out.Write("} vs[%d];\n", vertex_in);
 
     out.Write("VARYING_LOCATION(0) out VertexData {\n");
-    GenerateVSOutputMembers<ShaderCode>(out, ApiType, uid_data->numTexGens, pixel_lighting,
+    GenerateVSOutputMembers<ShaderCode>(out, ApiType, uid_data->numTexGens, texgen_array,
+                                        pixel_lighting,
                                         GetInterpolationQualifier(msaa, ssaa, true, false));
 
     if (stereo)
@@ -149,8 +152,10 @@ ShaderCode GenerateGeometryShaderCode(APIType ApiType, const geometry_shader_uid
     if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
     {
       out.Write("\tVS_OUTPUT start, end;\n");
-      AssignVSOutputMembers(out, "start", "vs[0]", uid_data->numTexGens, pixel_lighting);
-      AssignVSOutputMembers(out, "end", "vs[1]", uid_data->numTexGens, pixel_lighting);
+      AssignVSOutputMembers(out, "start", "vs[0]", uid_data->numTexGens, true, texgen_array,
+                            pixel_lighting);
+      AssignVSOutputMembers(out, "end", "vs[1]", uid_data->numTexGens, true, texgen_array,
+                            pixel_lighting);
     }
     else
     {
@@ -180,7 +185,8 @@ ShaderCode GenerateGeometryShaderCode(APIType ApiType, const geometry_shader_uid
     if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
     {
       out.Write("\tVS_OUTPUT center;\n");
-      AssignVSOutputMembers(out, "center", "vs[0]", uid_data->numTexGens, pixel_lighting);
+      AssignVSOutputMembers(out, "center", "vs[0]", uid_data->numTexGens, true, texgen_array,
+                            pixel_lighting);
     }
     else
     {
@@ -211,7 +217,8 @@ ShaderCode GenerateGeometryShaderCode(APIType ApiType, const geometry_shader_uid
   if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
   {
     out.Write("\tVS_OUTPUT f;\n");
-    AssignVSOutputMembers(out, "f", "vs[i]", uid_data->numTexGens, pixel_lighting);
+    AssignVSOutputMembers(out, "f", "vs[i]", uid_data->numTexGens, true, texgen_array,
+                          pixel_lighting);
 
     if (g_ActiveConfig.backend_info.bSupportsDepthClamp &&
         DriverDetails::HasBug(DriverDetails::BUG_BROKEN_CLIP_DISTANCE))
@@ -329,14 +336,14 @@ static void EmitVertex(ShaderCode& out, const geometry_shader_uid_data* uid_data
       out.Write("\tgl_ClipDistance[0] = %s.clipDist0;\n", vertex);
       out.Write("\tgl_ClipDistance[1] = %s.clipDist1;\n", vertex);
     }
-    AssignVSOutputMembers(out, "ps", vertex, uid_data->numTexGens, pixel_lighting);
+    AssignVSOutputMembers(out, "ps", vertex, uid_data->numTexGens, true, true, pixel_lighting);
   }
   else if (ApiType == APIType::Vulkan)
   {
     // Vulkan NDC space has Y pointing down (right-handed NDC space).
     out.Write("\tgl_Position = %s.pos;\n", vertex);
     out.Write("\tgl_Position.y = -gl_Position.y;\n");
-    AssignVSOutputMembers(out, "ps", vertex, uid_data->numTexGens, pixel_lighting);
+    AssignVSOutputMembers(out, "ps", vertex, uid_data->numTexGens, false, true, pixel_lighting);
   }
   else
   {

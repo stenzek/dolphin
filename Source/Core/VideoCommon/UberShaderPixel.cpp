@@ -36,7 +36,7 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
 
   // TODO: This is variable based on number of texcoord gens
   out.Write("struct VS_OUTPUT {\n");
-  GenerateVSOutputMembers(out, ApiType, numTexgen, false, "");
+  GenerateVSOutputMembers(out, ApiType, numTexgen, true, false, "");
   out.Write("};\n");
 
   // TEV constants
@@ -134,6 +134,35 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
             "	else // ITW_0\n"
             "		return 0;\n"
             "}\n\n");
+
+  // ======================
+  //    Indirect Lookup
+  // ======================
+  auto LookupIndirectTexture = [&out](const char* out_var_name, const char* in_index_name)
+  {
+    out.Write(
+      "{"
+      "	uint iref = bpmem_iref[%s];\n"
+      "	if ( iref != 0u)\n"
+      "	{\n"
+      "		uint texcoord = bitfieldExtract(iref, 0, 3);\n"
+      "		uint texmap = bitfieldExtract(iref, 8, 3);\n"
+      "		float3 uv = getTexCoord(texcoord);\n"
+      "		int2 fixedPoint_uv = int2((uv.z == 0.0 ? uv.xy : (uv.xy / uv.z)) * " I_TEXDIMS "[texcoord].zw);\n"
+      "\n"
+      "		if ((%s & 1u) == 0u)\n"
+      "			fixedPoint_uv = fixedPoint_uv >> " I_INDTEXSCALE "[%s >> 1].xy;\n"
+      "		else\n"
+      "			fixedPoint_uv = fixedPoint_uv >> " I_INDTEXSCALE "[%s >> 1].zw;\n"
+      "\n"
+      "		%s = sampleTexture(texmap, float2(fixedPoint_uv) * " I_TEXDIMS "[texmap].xy).abg;\n"
+      "	}\n"
+      "	else\n"
+      "	{\n"
+      "		%s = int3(0, 0, 0);\n"
+      "	}\n"
+      "}\n", in_index_name, in_index_name, in_index_name, in_index_name, out_var_name, out_var_name);
+  };
 
   // ======================
   //   TEV's Special Lerp
@@ -351,44 +380,6 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
             "}\n"
             "\n");
 
-  if (numTexgen > 0)
-  {
-    out.Write("float3 getTexCoord(in float3 tex[%d], uint index) {\n"
-              "  switch (index) {\n", numTexgen);
-    for (u32 i = 0; i < numTexgen; i++)
-    {
-      out.Write("  case %u:\n"
-                "    return tex[%u];\n", i, i);
-    }
-    out.Write("  default:"
-              "    return float3(0.0, 0.0, 0.0);\n"
-              "  }\n"
-              "}\n");
-
-    out.Write(
-        "int3 sampleIndirectTexture(in float3 tex[%d], uint i) {"
-        "	uint iref = bpmem_iref[i];\n"
-        "	if ( iref != 0u)\n"
-        "	{\n"
-        "		uint texcoord = bitfieldExtract(iref, 0, 3);\n"
-        "		uint texmap = bitfieldExtract(iref, 8, 3);\n"
-        "		float3 uv = getTexCoord(tex, texcoord);\n"
-        "		int2 fixedPoint_uv = int2((uv.z == 0.0 ? uv.xy : (uv.xy / uv.z)) * " I_TEXDIMS "[texcoord].zw);\n"
-        "\n"
-        "		if ((i & 1u) == 0u)\n"
-        "			fixedPoint_uv = fixedPoint_uv >> " I_INDTEXSCALE "[i >> 1].xy;\n"
-        "		else\n"
-        "			fixedPoint_uv = fixedPoint_uv >> " I_INDTEXSCALE "[i >> 1].zw;\n"
-        "\n"
-        "		return sampleTexture(texmap, float2(fixedPoint_uv) * " I_TEXDIMS "[texmap].xy).abg;\n"
-        "	}\n"
-        "	else\n"
-        "	{\n"
-        "		return int3(0, 0, 0);\n"
-        "	}\n"
-        "}\n", numTexgen);
-  }
-
   if (early_depth && g_ActiveConfig.backend_info.bSupportsEarlyZ)
   {
     if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
@@ -423,7 +414,7 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
     if (g_ActiveConfig.backend_info.bSupportsGeometryShaders || ApiType == APIType::Vulkan)
     {
       out.Write("VARYING_LOCATION(0) in VertexData {\n");
-      GenerateVSOutputMembers(out, ApiType, numTexgen, false,
+      GenerateVSOutputMembers(out, ApiType, numTexgen, ApiType != APIType::Vulkan, false,
                               GetInterpolationQualifier(msaa, ssaa));
 
       if (g_ActiveConfig.iStereoMode > 0)
@@ -446,8 +437,25 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
       }
     }
 
+    if (ApiType == APIType::Vulkan)
+    {
+      out.Write("float3 getTexCoord(uint index) {\n"
+        "  switch (index) {\n", numTexgen);
+      for (u32 i = 0; i < numTexgen; i++)
+      {
+        out.Write("  case %u:\n"
+          "    return tex%u;\n", i, i);
+      }
+      out.Write("  default:\n"
+        "    return float3(0.0, 0.0, 0.0);\n"
+        "  }\n"
+        "}\n");
+    }
+
     out.Write("void main()\n{\n");
     out.Write("\tfloat4 rawpos = gl_FragCoord;\n");
+    if (ApiType != APIType::Vulkan)
+      out.Write("#define getTexCoord(index) (tex[(index)])\n");
   }
   else  // D3D
   {
@@ -477,6 +485,7 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
     if (g_ActiveConfig.iStereoMode > 0)
       out.Write(",\n  in uint layer : SV_RenderTargetArrayIndex\n");
     out.Write("        ) {\n");
+    out.Write("#define getTexCoord(index) (tex[(index)])\n");
   }
 
   out.Write("	int AlphaBump = 0;\n"
@@ -493,12 +502,12 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
 
   if (numTexgen != 0)
   {
-    // TODO: Skip preload on Nvidia and other GPUs which can't handle dynamic indexed arrays?
+//     // TODO: Skip preload on Nvidia and other GPUs which can't handle dynamic indexed arrays?
 //     out.Write(
 //         "	// Pre-sample indirect textures\n"
 //         "	int3 indtex[4];\n"
-//         "	for(uint i = 0u; i < 4u; i++)\n"
-//         "		indtex[i] = sampleIndirectTexture(tex, i);\n");
+//         "	for(uint i = 0u; i < 4u; i++)\n");
+//     LookupIndirectTexture("indtex[i]", "i");
   }
 
   out.Write("	uint num_stages = %s;\n\n",
@@ -526,7 +535,7 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
     out.Write("		uint tex_coord = %s;\n",
               BitfieldExtract("order", TwoTevStageOrders().texcoord0).c_str());
     out.Write(
-        "		float3 uv = getTexCoord(tex, tex_coord);\n"
+        "		float3 uv = getTexCoord(tex_coord);\n"
         "		int2 fixedPoint_uv = int2((uv.z == 0.0 ? uv.xy : (uv.xy / uv.z)) * " I_TEXDIMS "[tex_coord].zw);\n"
         "\n"
         "		bool texture_enabled = (order & %du) != 0u;\n",
@@ -542,10 +551,11 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
     out.Write("			uint bias = %s;\n", BitfieldExtract("tevind", TevStageIndirect().bias).c_str());
     out.Write("			uint bt = %s;\n", BitfieldExtract("tevind", TevStageIndirect().bt).c_str());
     out.Write("			uint mid = %s;\n", BitfieldExtract("tevind", TevStageIndirect().mid).c_str());
-    out.Write("\n"
-              "			int3 indcoord = sampleIndirectTexture(tex, bt);\n"
-              //"			int3 indcoord = indtex[bt];\n"
-              "			if (bs != 0u)\n"
+    out.Write("\n");
+    out.Write("			int3 indcoord;\n");
+    LookupIndirectTexture("indcoord", "bt");
+    //out.Write("			int3 indcoord = indtex[bt];\n");
+    out.Write("			if (bs != 0u)\n"
               "				AlphaBump = indcoord[bs - 1u];\n"
               "			switch(fmt)\n"
               "			{\n"

@@ -89,7 +89,7 @@ ShaderCode GenVertexShader(APIType ApiType, const vertex_ubershader_uid_data* ui
   out.WriteLine("}");  
 
 	out.Write("struct VS_OUTPUT {\n");
-	GenerateVSOutputMembers(out, ApiType, numTexgen, false, "");
+	GenerateVSOutputMembers(out, ApiType, numTexgen, true, false, "");
 	out.Write("};\n");
 
 	if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
@@ -107,7 +107,7 @@ ShaderCode GenVertexShader(APIType ApiType, const vertex_ubershader_uid_data* ui
 
 		// TODO: No Geometery shader fallback.
 		out.Write("VARYING_LOCATION(0) out VertexData {\n");
-		GenerateVSOutputMembers(out, ApiType, numTexgen, false,
+		GenerateVSOutputMembers(out, ApiType, numTexgen, ApiType != APIType::Vulkan, false,
                             GetInterpolationQualifier(msaa, ssaa, true));
 		out.Write("} vs;\n");
 
@@ -477,7 +477,7 @@ ShaderCode GenVertexShader(APIType ApiType, const vertex_ubershader_uid_data* ui
   {
     if (g_ActiveConfig.backend_info.bSupportsGeometryShaders || ApiType == APIType::Vulkan)
     {
-      AssignVSOutputMembers(out, "vs", "o", numTexgen, false);
+      AssignVSOutputMembers(out, "vs", "o", numTexgen, ApiType != APIType::Vulkan, true, false);
     }
     else
     {

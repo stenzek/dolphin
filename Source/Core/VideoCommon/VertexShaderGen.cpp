@@ -86,6 +86,9 @@ ShaderCode GenerateVertexShaderCode(APIType api_type, const vertex_shader_uid_da
   const bool stereo = g_ActiveConfig.IsStereoEnabled();
   const bool vertex_rounding = g_ActiveConfig.UseVertexRounding();
 
+  // On AMD's Vulkan driver, using arrays in the interface block results in graphical corruption.
+  const bool texgen_array = api_type != APIType::Vulkan;
+
   out.Write("%s", s_lighting_struct);
 
   // uniforms
@@ -98,7 +101,7 @@ ShaderCode GenerateVertexShaderCode(APIType api_type, const vertex_shader_uid_da
   out.Write("};\n");
 
   out.Write("struct VS_OUTPUT {\n");
-  GenerateVSOutputMembers(out, api_type, uid_data->numTexGens, per_pixel_lighting, "");
+  GenerateVSOutputMembers(out, api_type, uid_data->numTexGens, true, per_pixel_lighting, "");
   out.Write("};\n");
 
   if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
@@ -132,7 +135,7 @@ ShaderCode GenerateVertexShaderCode(APIType api_type, const vertex_shader_uid_da
     if (g_ActiveConfig.backend_info.bSupportsGeometryShaders || api_type == APIType::Vulkan)
     {
       out.Write("VARYING_LOCATION(0) out VertexData {\n");
-      GenerateVSOutputMembers(out, api_type, uid_data->numTexGens, per_pixel_lighting,
+      GenerateVSOutputMembers(out, api_type, uid_data->numTexGens, texgen_array, per_pixel_lighting,
                               GetInterpolationQualifier(msaa, ssaa, true, false));
       out.Write("} vs;\n");
     }
@@ -481,7 +484,8 @@ ShaderCode GenerateVertexShaderCode(APIType api_type, const vertex_shader_uid_da
   {
     if (g_ActiveConfig.backend_info.bSupportsGeometryShaders || api_type == APIType::Vulkan)
     {
-      AssignVSOutputMembers(out, "vs", "o", uid_data->numTexGens, per_pixel_lighting);
+      AssignVSOutputMembers(out, "vs", "o", uid_data->numTexGens, texgen_array, true,
+                            per_pixel_lighting);
     }
     else
     {
