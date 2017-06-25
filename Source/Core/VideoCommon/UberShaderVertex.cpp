@@ -202,14 +202,14 @@ ShaderCode GenVertexShader(APIType ApiType, const vertex_ubershader_uid_data* ui
   out.WriteLine("");
 
   out.WriteLine("// Lighting");
-  out.WriteLine("for (uint i = 0; i < xfmem_numColorChans; i++) {");
-  out.WriteLine("  int4 mat = " I_MATERIALS "[i + 2u];");
+  out.WriteLine("%sfor (uint chan = 0; chan < xfmem_numColorChans; chan++) {", ApiType == APIType::D3D ? "[loop] " : "");
+  out.WriteLine("  int4 mat = " I_MATERIALS "[chan + 2u];");
   out.WriteLine("  int4 lacc = int4(255, 255, 255, 255);");
   out.WriteLine("");
 
-  out.WriteLine("  if (%s != 0u) {", BitfieldExtract("xfmem_color[i]", LitChannel().matsource).c_str());
-  out.WriteLine("    if ((components & (%uu << i)) != 0u) // VB_HAS_COL0", VB_HAS_COL0);
-  out.WriteLine("      mat.xyz = int3(round(((i == 0u) ? color0.xyz : color1.xyz) * 255.0));");
+  out.WriteLine("  if (%s != 0u) {", BitfieldExtract("xfmem_color[chan]", LitChannel().matsource).c_str());
+  out.WriteLine("    if ((components & (%uu << chan)) != 0u) // VB_HAS_COL0", VB_HAS_COL0);
+  out.WriteLine("      mat.xyz = int3(round(((chan == 0u) ? color0.xyz : color1.xyz) * 255.0));");
   out.WriteLine("    else if ((components & %uu) != 0) // VB_HAS_COLO0", VB_HAS_COL0);
   out.WriteLine("      mat.xyz = int3(round(color0.xyz * 255.0));");
   out.WriteLine("    else");
@@ -217,33 +217,33 @@ ShaderCode GenVertexShader(APIType ApiType, const vertex_ubershader_uid_data* ui
   out.WriteLine("  }");
   out.WriteLine("");
 
-  out.WriteLine("  if (%s != 0u) {", BitfieldExtract("xfmem_alpha[i]", LitChannel().matsource).c_str());
-  out.WriteLine("    if ((components & (%uu << i)) != 0u) // VB_HAS_COL0", VB_HAS_COL0);
-  out.WriteLine("      mat.w = int(round(((i == 0u) ? color0.w : color1.w) * 255.0));");
+  out.WriteLine("  if (%s != 0u) {", BitfieldExtract("xfmem_alpha[chan]", LitChannel().matsource).c_str());
+  out.WriteLine("    if ((components & (%uu << chan)) != 0u) // VB_HAS_COL0", VB_HAS_COL0);
+  out.WriteLine("      mat.w = int(round(((chan == 0u) ? color0.w : color1.w) * 255.0));");
   out.WriteLine("    else if ((components & %uu) != 0) // VB_HAS_COLO0", VB_HAS_COL0);
   out.WriteLine("      mat.w = int(round(color0.w * 255.0));");
   out.WriteLine("    else");
   out.WriteLine("      mat.w = 255;");
   out.WriteLine("  } else {");
-  out.WriteLine("    mat.w = " I_MATERIALS " [i + 2u].w;");
+  out.WriteLine("    mat.w = " I_MATERIALS " [chan + 2u].w;");
   out.WriteLine("  }");
   out.WriteLine("");
 
-  out.WriteLine("  if (%s != 0u) {", BitfieldExtract("xfmem_color[i]", LitChannel().enablelighting).c_str());
-  out.WriteLine("    if (%s != 0u) {", BitfieldExtract("xfmem_color[i]", LitChannel().ambsource).c_str());
-  out.WriteLine("      if ((components & (%uu << i)) != 0u) // VB_HAS_COL0", VB_HAS_COL0);
-  out.WriteLine("        lacc.xyz = int3(round(((i == 0u) ? color0.xyz : color1.xyz) * 255.0));");
+  out.WriteLine("  if (%s != 0u) {", BitfieldExtract("xfmem_color[chan]", LitChannel().enablelighting).c_str());
+  out.WriteLine("    if (%s != 0u) {", BitfieldExtract("xfmem_color[chan]", LitChannel().ambsource).c_str());
+  out.WriteLine("      if ((components & (%uu << chan)) != 0u) // VB_HAS_COL0", VB_HAS_COL0);
+  out.WriteLine("        lacc.xyz = int3(round(((chan == 0u) ? color0.xyz : color1.xyz) * 255.0));");
   out.WriteLine("      else if ((components & %uu) != 0) // VB_HAS_COLO0", VB_HAS_COL0);
   out.WriteLine("        lacc.xyz = int3(round(color0.xyz * 255.0));");
   out.WriteLine("      else");
   out.WriteLine("        lacc.xyz = int3(255, 255, 255);");
   out.WriteLine("    } else {");
-  out.WriteLine("      lacc.xyz = " I_MATERIALS " [i].xyz;");
+  out.WriteLine("      lacc.xyz = " I_MATERIALS " [chan].xyz;");
   out.WriteLine("    }");
   out.WriteLine("");
-  out.WriteLine("    uint light_mask = %s | (%s << 4u);", BitfieldExtract("xfmem_color[i]", LitChannel().lightMask0_3).c_str(), BitfieldExtract("xfmem_color[i]", LitChannel().lightMask4_7).c_str());
-  out.WriteLine("    uint attnfunc = %s;", BitfieldExtract("xfmem_color[i]", LitChannel().attnfunc).c_str());
-  out.WriteLine("    uint diffusefunc = %s;", BitfieldExtract("xfmem_color[i]", LitChannel().diffusefunc).c_str());
+  out.WriteLine("    uint light_mask = %s | (%s << 4u);", BitfieldExtract("xfmem_color[chan]", LitChannel().lightMask0_3).c_str(), BitfieldExtract("xfmem_color[chan]", LitChannel().lightMask4_7).c_str());
+  out.WriteLine("    uint attnfunc = %s;", BitfieldExtract("xfmem_color[chan]", LitChannel().attnfunc).c_str());
+  out.WriteLine("    uint diffusefunc = %s;", BitfieldExtract("xfmem_color[chan]", LitChannel().diffusefunc).c_str());
   out.WriteLine("    for (uint light_index = 0; light_index < 8u; light_index++) {");
   out.WriteLine("      if ((light_mask & (1u << light_index)) != 0)");
   out.WriteLine("        lacc.xyz += CalculateLighting(light_index, attnfunc, diffusefunc, pos, _norm0).xyz;");
@@ -251,21 +251,21 @@ ShaderCode GenVertexShader(APIType ApiType, const vertex_ubershader_uid_data* ui
   out.WriteLine("  }");
   out.WriteLine("");
 
-  out.WriteLine("  if (%s != 0u) {", BitfieldExtract("xfmem_alpha[i]", LitChannel().enablelighting).c_str());
-  out.WriteLine("    if (%s != 0u) {", BitfieldExtract("xfmem_alpha[i]", LitChannel().ambsource).c_str());
-  out.WriteLine("      if ((components & (%uu << i)) != 0u) // VB_HAS_COL0", VB_HAS_COL0);
-  out.WriteLine("        lacc.w = int(round(((i == 0u) ? color0.w : color1.w) * 255.0));");
+  out.WriteLine("  if (%s != 0u) {", BitfieldExtract("xfmem_alpha[chan]", LitChannel().enablelighting).c_str());
+  out.WriteLine("    if (%s != 0u) {", BitfieldExtract("xfmem_alpha[chan]", LitChannel().ambsource).c_str());
+  out.WriteLine("      if ((components & (%uu << chan)) != 0u) // VB_HAS_COL0", VB_HAS_COL0);
+  out.WriteLine("        lacc.w = int(round(((chan == 0u) ? color0.w : color1.w) * 255.0));");
   out.WriteLine("      else if ((components & %uu) != 0) // VB_HAS_COLO0", VB_HAS_COL0);
   out.WriteLine("        lacc.w = int(round(color0.w * 255.0));");
   out.WriteLine("      else");
   out.WriteLine("        lacc.w = 255;");
   out.WriteLine("    } else {");
-  out.WriteLine("      lacc.w = " I_MATERIALS " [i].w;");
+  out.WriteLine("      lacc.w = " I_MATERIALS " [chan].w;");
   out.WriteLine("    }");
   out.WriteLine("");
-  out.WriteLine("    uint light_mask = %s | (%s << 4u);", BitfieldExtract("xfmem_alpha[i]", LitChannel().lightMask0_3).c_str(), BitfieldExtract("xfmem_alpha[i]", LitChannel().lightMask4_7).c_str());
-  out.WriteLine("    uint attnfunc = %s;", BitfieldExtract("xfmem_alpha[i]", LitChannel().attnfunc).c_str());
-  out.WriteLine("    uint diffusefunc = %s;", BitfieldExtract("xfmem_alpha[i]", LitChannel().diffusefunc).c_str());
+  out.WriteLine("    uint light_mask = %s | (%s << 4u);", BitfieldExtract("xfmem_alpha[chan]", LitChannel().lightMask0_3).c_str(), BitfieldExtract("xfmem_alpha[chan]", LitChannel().lightMask4_7).c_str());
+  out.WriteLine("    uint attnfunc = %s;", BitfieldExtract("xfmem_alpha[chan]", LitChannel().attnfunc).c_str());
+  out.WriteLine("    uint diffusefunc = %s;", BitfieldExtract("xfmem_alpha[chan]", LitChannel().diffusefunc).c_str());
   out.WriteLine("    for (uint light_index = 0; light_index < 8u; light_index++) {");
   out.WriteLine("      if ((light_mask & (1u << light_index)) != 0)");
   out.WriteLine("        lacc.w += CalculateLighting(light_index, attnfunc, diffusefunc, pos, _norm0).w;");
@@ -278,7 +278,7 @@ ShaderCode GenVertexShader(APIType ApiType, const vertex_ubershader_uid_data* ui
 
   out.WriteLine("  // Hopefully GPUs that can support dynamic indexing will optimize this.");
   out.WriteLine("  float4 lit_color = float4((mat * (lacc + (lacc >> 7))) >> 8) / 255.0;");
-  out.WriteLine("  switch (i) {");
+  out.WriteLine("  switch (chan) {");
   out.WriteLine("  case 0: o.colors_0 = lit_color; break;");
   out.WriteLine("  case 1: o.colors_1 = lit_color; break;");
   out.WriteLine("  }");
@@ -289,19 +289,20 @@ ShaderCode GenVertexShader(APIType ApiType, const vertex_ubershader_uid_data* ui
   out.WriteLine("  o.colors_1 = o.colors_0;");
 
 	// Texture Coordinates
-  // TODO: Should we unroll this at compile time?
   if (numTexgen > 0)
   {
     // The HLSL compiler complains that the output texture coordinates are uninitialized when trying to dynamically index them.
-    out.WriteLine("// Texture coordinate generation");
     for (u32 i = 0; i < numTexgen; i++)
       out.WriteLine("o.tex[%u] = float3(0.0, 0.0, 0.0);", i);
-    out.WriteLine("");
 
-    out.WriteLine("for (uint i = 0u; i < %uu; i++) {", numTexgen);
+    out.WriteLine("// Texture coordinate generation");
+    if (numTexgen == 1)
+      out.WriteLine("{ const uint texgen = 0u;");
+    else
+      out.WriteLine("%sfor (uint texgen = 0u; texgen < %uu; texgen++) {", ApiType == APIType::D3D ? "[loop] " : "", numTexgen);
     out.WriteLine("  // Texcoord transforms");
     out.WriteLine("  float4 coord = float4(0.0, 0.0, 1.0, 1.0);");
-    out.WriteLine("  switch (%s) {", BitfieldExtract("xfmem_texMtxInfo[i]", TexMtxInfo().sourcerow).c_str());
+    out.WriteLine("  switch (%s) {", BitfieldExtract("xfmem_texMtxInfo[texgen]", TexMtxInfo().sourcerow).c_str());
     out.WriteLine("  case %uu: // XF_SRCGEOM_INROW", XF_SRCGEOM_INROW);
     out.WriteLine("    coord.xyz = rawpos.xyz;");
     out.WriteLine("    break;");
@@ -325,61 +326,65 @@ ShaderCode GenVertexShader(APIType ApiType, const vertex_ubershader_uid_data* ui
     out.WriteLine("");
 
     out.WriteLine("  // Input form of AB11 sets z element to 1.0");
-    out.WriteLine("  if (%s == %uu) // inputform == XF_TEXINPUT_AB11", BitfieldExtract("xfmem_texMtxInfo[i]", TexMtxInfo().inputform).c_str(), XF_TEXINPUT_AB11);
+    out.WriteLine("  if (%s == %uu) // inputform == XF_TEXINPUT_AB11", BitfieldExtract("xfmem_texMtxInfo[texgen]", TexMtxInfo().inputform).c_str(), XF_TEXINPUT_AB11);
     out.WriteLine("    coord.z = 1.0f;");
     out.WriteLine("");
 
     out.WriteLine("  // first transformation");
-    out.WriteLine("  uint texgentype = %s;", BitfieldExtract("xfmem_texMtxInfo[i]", TexMtxInfo().texgentype).c_str());
+    out.WriteLine("  uint texgentype = %s;", BitfieldExtract("xfmem_texMtxInfo[texgen]", TexMtxInfo().texgentype).c_str());
+    out.WriteLine("  float3 output_tex;");
     out.WriteLine("  switch (texgentype)");
     out.WriteLine("  {");
     out.WriteLine("  case %uu: // XF_TEXGEN_EMBOSS_MAP", XF_TEXGEN_EMBOSS_MAP);
     out.WriteLine("    {");
-    out.WriteLine("      uint light = %s;", BitfieldExtract("xfmem_texMtxInfo[i]", TexMtxInfo().embosslightshift).c_str());
-    out.WriteLine("      uint source = %s;", BitfieldExtract("xfmem_texMtxInfo[i]", TexMtxInfo().embosssourceshift).c_str());
+    out.WriteLine("      uint light = %s;", BitfieldExtract("xfmem_texMtxInfo[texgen]", TexMtxInfo().embosslightshift).c_str());
+    out.WriteLine("      uint source = %s;", BitfieldExtract("xfmem_texMtxInfo[texgen]", TexMtxInfo().embosssourceshift).c_str());
+    out.WriteLine("      switch (source) {");
+    for (u32 i = 0; i < numTexgen; i++)
+      out.WriteLine("      case %u: output_tex.xyz = o.tex[%u]; break;", i, i);
+    out.WriteLine("      default: output_tex.xyz = float3(0.0, 0.0, 0.0); break;");
+    out.WriteLine("      }");
     out.WriteLine("      if ((components & %uu) != 0) { // VB_HAS_NRM1 | VB_HAS_NRM2");   // Should this be == (NRM1 | NRM2)?
     out.WriteLine("        float3 ldir = normalize(" I_LIGHTS "[light].pos.xyz - pos.xyz);");
-    out.WriteLine("        o.tex[i].xyz = o.tex[source].xyz + float3(dot(ldir, _norm1), dot(ldir, _norm2), 0.0);");
-    out.WriteLine("      } else {");
-    out.WriteLine("        o.tex[i].xyz = o.tex[source].xyz;");
+    out.WriteLine("        output_tex.xyz += float3(dot(ldir, _norm1), dot(ldir, _norm2), 0.0);");
     out.WriteLine("      }");
     out.WriteLine("    }");
     out.WriteLine("    break;");
     out.WriteLine("  case %uu: // XF_TEXGEN_COLOR_STRGBC0", XF_TEXGEN_COLOR_STRGBC0);
-    out.WriteLine("    o.tex[i].xyz = float3(o.colors_0.x, o.colors_0.y, 1.0);");
+    out.WriteLine("    output_tex.xyz = float3(o.colors_0.x, o.colors_0.y, 1.0);");
     out.WriteLine("    break;");
     out.WriteLine("  case %uu: // XF_TEXGEN_COLOR_STRGBC1", XF_TEXGEN_COLOR_STRGBC1);
-    out.WriteLine("    o.tex[i].xyz = float3(o.colors_1.x, o.colors_1.y, 1.0);");
+    out.WriteLine("    output_tex.xyz = float3(o.colors_1.x, o.colors_1.y, 1.0);");
     out.WriteLine("    break;");
     out.WriteLine("  default:  // Also XF_TEXGEN_REGULAR");
     out.WriteLine("    {");
-    out.WriteLine("      if ((components & (%uu /* VB_HAS_TEXMTXIDX0 */ << i)) != 0) {", VB_HAS_TEXMTXIDX0);
+    out.WriteLine("      if ((components & (%uu /* VB_HAS_TEXMTXIDX0 */ << texgen)) != 0) {", VB_HAS_TEXMTXIDX0);
     out.WriteLine("        // This is messy, due to dynamic indexing of the input texture coordinates.");
     out.WriteLine("        // Hopefully the compiler will unroll this whole loop anyway and the switch.");
     out.WriteLine("        int tmp = 0;");
-    out.WriteLine("        switch (i) {");
+    out.WriteLine("        switch (texgen) {");
     for (u32 i = 0; i < numTexgen; i++)
       out.WriteLine("        case %u: tmp = int(tex%u.z); break;", i, i);
     out.WriteLine("        }");
     out.WriteLine("");
-    out.WriteLine("        if (%s == %uu) {", BitfieldExtract("xfmem_texMtxInfo[i]", TexMtxInfo().projection).c_str(), XF_TEXPROJ_STQ);
-    out.WriteLine("          o.tex[i].xyz = float3(dot(coord, " I_TRANSFORMMATRICES "[tmp]),");
-    out.WriteLine("                                dot(coord, " I_TRANSFORMMATRICES "[tmp + 1]),");
-    out.WriteLine("                                dot(coord, " I_TRANSFORMMATRICES "[tmp + 2]));");
+    out.WriteLine("        if (%s == %uu) {", BitfieldExtract("xfmem_texMtxInfo[texgen]", TexMtxInfo().projection).c_str(), XF_TEXPROJ_STQ);
+    out.WriteLine("          output_tex.xyz = float3(dot(coord, " I_TRANSFORMMATRICES "[tmp]),");
+    out.WriteLine("                                  dot(coord, " I_TRANSFORMMATRICES "[tmp + 1]),");
+    out.WriteLine("                                  dot(coord, " I_TRANSFORMMATRICES "[tmp + 2]));");
     out.WriteLine("        } else {");
-    out.WriteLine("          o.tex[i].xyz = float3(dot(coord, " I_TRANSFORMMATRICES "[tmp]),");
-    out.WriteLine("                                dot(coord, " I_TRANSFORMMATRICES "[tmp + 1]),");
-    out.WriteLine("                                1.0);");
+    out.WriteLine("          output_tex.xyz = float3(dot(coord, " I_TRANSFORMMATRICES "[tmp]),");
+    out.WriteLine("                                  dot(coord, " I_TRANSFORMMATRICES "[tmp + 1]),");
+    out.WriteLine("                                  1.0);");
     out.WriteLine("        }");
     out.WriteLine("      } else {");
-    out.WriteLine("        if (%s == %uu) {", BitfieldExtract("xfmem_texMtxInfo[i]", TexMtxInfo().projection).c_str(), XF_TEXPROJ_STQ);
-    out.WriteLine("          o.tex[i].xyz = float3(dot(coord, " I_TEXMATRICES "[3 * i]),");
-    out.WriteLine("                                dot(coord, " I_TEXMATRICES "[3 * i + 1]),");
-    out.WriteLine("                                dot(coord, " I_TEXMATRICES "[3 * i + 2]));");
+    out.WriteLine("        if (%s == %uu) {", BitfieldExtract("xfmem_texMtxInfo[texgen]", TexMtxInfo().projection).c_str(), XF_TEXPROJ_STQ);
+    out.WriteLine("          output_tex.xyz = float3(dot(coord, " I_TEXMATRICES "[3 * texgen]),");
+    out.WriteLine("                                  dot(coord, " I_TEXMATRICES "[3 * texgen + 1]),");
+    out.WriteLine("                                  dot(coord, " I_TEXMATRICES "[3 * texgen + 2]));");
     out.WriteLine("        } else {");
-    out.WriteLine("          o.tex[i].xyz = float3(dot(coord, " I_TEXMATRICES "[3 * i]),");
-    out.WriteLine("                                dot(coord, " I_TEXMATRICES "[3 * i + 1]),");
-    out.WriteLine("                                1.0);");
+    out.WriteLine("          output_tex.xyz = float3(dot(coord, " I_TEXMATRICES "[3 * texgen]),");
+    out.WriteLine("                                  dot(coord, " I_TEXMATRICES "[3 * texgen + 1]),");
+    out.WriteLine("                                  1.0);");
     out.WriteLine("        }");
     out.WriteLine("      }");
     out.WriteLine("    }");
@@ -388,27 +393,32 @@ ShaderCode GenVertexShader(APIType ApiType, const vertex_ubershader_uid_data* ui
     out.WriteLine("");
 
     out.WriteLine("  if (xfmem_dualTexInfo != 0u) {");
-    out.WriteLine("    uint base_index = %s;", BitfieldExtract("xfmem_postMtxInfo[i]", PostMtxInfo().index).c_str());
+    out.WriteLine("    uint base_index = %s;", BitfieldExtract("xfmem_postMtxInfo[texgen]", PostMtxInfo().index).c_str());
     out.WriteLine("    float4 P0 = " I_POSTTRANSFORMMATRICES "[base_index & 0x3fu];");
     out.WriteLine("    float4 P1 = " I_POSTTRANSFORMMATRICES "[(base_index + 1u) & 0x3fu];");
     out.WriteLine("    float4 P2 = " I_POSTTRANSFORMMATRICES "[(base_index + 2u) & 0x3fu];");
     out.WriteLine("");
-    
-    out.WriteLine("    if (%s != 0u)", BitfieldExtract("xfmem_postMtxInfo[i]", PostMtxInfo().normalize).c_str());
-    out.WriteLine("      o.tex[i].xyz = normalize(o.tex[i].xyz);");
+    out.WriteLine("    if (%s != 0u)", BitfieldExtract("xfmem_postMtxInfo[texgen]", PostMtxInfo().normalize).c_str());
+    out.WriteLine("      output_tex.xyz = normalize(output_tex.xyz);");
     out.WriteLine("");
-
     out.WriteLine("    // multiply by postmatrix");
-    out.WriteLine("    o.tex[i].xyz = float3(dot(P0.xyz, o.tex[i].xyz) + P0.w,");
-    out.WriteLine("                          dot(P1.xyz, o.tex[i].xyz) + P1.w,");
-    out.WriteLine("                          dot(P2.xyz, o.tex[i].xyz) + P2.w);");
+    out.WriteLine("    output_tex.xyz = float3(dot(P0.xyz, output_tex.xyz) + P0.w,");
+    out.WriteLine("                            dot(P1.xyz, output_tex.xyz) + P1.w,");
+    out.WriteLine("                            dot(P2.xyz, output_tex.xyz) + P2.w);");
     out.WriteLine("  }");
 
     // When q is 0, the GameCube appears to have a special case
     // This can be seen in devkitPro's neheGX Lesson08 example for Wii
     // Makes differences in Rogue Squadron 3 (Hoth sky) and The Last Story (shadow culling)
-    out.WriteLine("  if (texgentype == %uu && o.tex[i].z == 0.0) // XF_TEXGEN_REGULAR", XF_TEXGEN_REGULAR);
-    out.WriteLine("    o.tex[i].xy = clamp(o.tex[i].xy / 2.0f, float2(-1.0f,-1.0f), float2(1.0f,1.0f));");
+    out.WriteLine("  if (texgentype == %uu && output_tex.z == 0.0) // XF_TEXGEN_REGULAR", XF_TEXGEN_REGULAR);
+    out.WriteLine("    output_tex.xy = clamp(output_tex.xy / 2.0f, float2(-1.0f,-1.0f), float2(1.0f,1.0f));");
+    out.WriteLine("");
+
+    out.WriteLine("  // Hopefully GPUs that can support dynamic indexing will optimize this.");
+    out.WriteLine("  switch (texgen) {");
+    for (u32 i = 0; i < numTexgen; i++)
+      out.WriteLine("  case %u: o.tex[%u] = output_tex; break;", i, i);
+    out.WriteLine("  }");
     out.WriteLine("}");
   }
 
