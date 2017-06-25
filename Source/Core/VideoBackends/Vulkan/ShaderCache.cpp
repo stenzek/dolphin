@@ -15,6 +15,7 @@
 #include "Common/MsgHandler.h"
 
 #include "Core/ConfigManager.h"
+#include "Core/Host.h"
 
 #include "VideoBackends/Vulkan/FramebufferManager.h"
 #include "VideoBackends/Vulkan/ShaderCompiler.h"
@@ -1282,8 +1283,12 @@ void ShaderCache::PrecompileUberShaders()
 
 void ShaderCache::WaitForBackgroundCompilesToComplete()
 {
-  m_async_shader_compiler->WaitUntilCompletion();
+  m_async_shader_compiler->WaitUntilCompletion([](size_t completed, size_t total) {
+    Host_UpdateProgressDialog(GetStringT("Compiling shaders...").c_str(),
+                              static_cast<int>(completed), static_cast<int>(total));
+  });
   m_async_shader_compiler->RetrieveWorkItems();
+  Host_UpdateProgressDialog("", -1, -1);
 }
 
 void ShaderCache::RetrieveAsyncShaders()

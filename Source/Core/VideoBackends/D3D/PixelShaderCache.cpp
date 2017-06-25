@@ -8,9 +8,11 @@
 #include "Common/CommonTypes.h"
 #include "Common/FileUtil.h"
 #include "Common/LinearDiskCache.h"
+#include "Common/MsgHandler.h"
 #include "Common/StringUtil.h"
 
 #include "Core/ConfigManager.h"
+#include "Core/Host.h"
 
 #include "VideoBackends/D3D/D3DBase.h"
 #include "VideoBackends/D3D/D3DShader.h"
@@ -781,8 +783,12 @@ void PixelShaderCache::PrecompileUberShaders()
         g_async_compiler->CreateWorkItem<UberPixelShaderCompilerWorkItem>(uid));
   });
 
-  g_async_compiler->WaitUntilCompletion();
+  g_async_compiler->WaitUntilCompletion([](size_t completed, size_t total) {
+    Host_UpdateProgressDialog(GetStringT("Compiling shaders...").c_str(),
+                              static_cast<int>(completed), static_cast<int>(total));
+  });
   g_async_compiler->RetrieveWorkItems();
+  Host_UpdateProgressDialog("", -1, -1);
 }
 
 PixelShaderCache::PixelShaderCompilerWorkItem::PixelShaderCompilerWorkItem(
