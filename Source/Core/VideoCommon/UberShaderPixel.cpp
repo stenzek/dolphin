@@ -1022,4 +1022,23 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
 
   return out;
 }
+
+void EnumeratePixelShaderUids(const std::function<void(const PixelShaderUid&)>& callback)
+{
+  PixelShaderUid uid;
+  std::memset(&uid, 0, sizeof(uid));
+
+  for (u32 texgens = 0; texgens <= 8; texgens++)
+  {
+    auto* puid = uid.GetUidData<UberShader::pixel_ubershader_uid_data>();
+    puid->num_texgens = texgens;
+
+    for (u32 early_depth = 0; early_depth < 2; early_depth++)
+    {
+      puid->early_depth = early_depth != 0;
+      callback(uid);
+    }
+  }
+}
+
 }

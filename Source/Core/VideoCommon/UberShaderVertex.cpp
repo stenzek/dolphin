@@ -511,5 +511,17 @@ ShaderCode GenVertexShader(APIType ApiType, const vertex_ubershader_uid_data* ui
 	return out;
 }
 
+void EnumerateVertexShaderUids(const std::function<void(const VertexShaderUid&)>& callback)
+{
+  VertexShaderUid uid;
+  std::memset(&uid, 0, sizeof(uid));
+
+  for (u32 texgens = 0; texgens <= 8; texgens++)
+  {
+    auto* vuid = uid.GetUidData<UberShader::vertex_ubershader_uid_data>();
+    vuid->num_texgens = texgens;
+    callback(uid);
+  }
+}
 
 }

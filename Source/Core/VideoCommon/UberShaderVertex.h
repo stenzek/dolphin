@@ -4,12 +4,11 @@
 
 #pragma once
 
+#include <functional>
 #include "VideoCommon/PixelShaderGen.h"
 
 namespace UberShader
 {
-// TODO: Look at combining the vertex/pixel UIDs into a single ubershader UID
-// TODO: Worth having components as part of the UID?
 #pragma pack(1)
 struct vertex_ubershader_uid_data
 {
@@ -24,5 +23,5 @@ typedef ShaderUid<vertex_ubershader_uid_data> VertexShaderUid;
 VertexShaderUid GetVertexShaderUid();
 
 ShaderCode GenVertexShader(APIType api_type, const vertex_ubershader_uid_data* uid_data);
-
+void EnumerateVertexShaderUids(const std::function<void(const VertexShaderUid&)>& callback);
 }
