@@ -23,5 +23,4 @@ void WriteUberShaderCommonHeader(ShaderCode& out, APIType api_type)
               "}\n\n");
   }
 }
-
 }
