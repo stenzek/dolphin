@@ -275,7 +275,7 @@ void ProgramShaderCache::UploadConstants()
 
 SHADER* ProgramShaderCache::SetShader(u32 primitive_type)
 {
-  if (g_ActiveConfig.bDisableSpecializedShaders)
+  if (g_ActiveConfig.bDisableSpecializedShaders && g_ActiveConfig.CanUseUberShaders())
     return SetUberShader(primitive_type);
 
   SHADERUID uid;
@@ -337,7 +337,7 @@ SHADER* ProgramShaderCache::SetShader(u32 primitive_type)
   // Can we background compile this shader?
   // Requires background shader compiling to be enabled, ARB_parallel_shader_compile,
   // and all ubershaders to have been successfully compiled.
-  bool background_compile = g_ActiveConfig.bBackgroundShaderCompiling &&
+  bool background_compile = g_ActiveConfig.CanBackgroundCompileShaders() &&
                             s_can_use_parallel_shader_compile && !ubershaders.empty();
 
   // Compile the new shader program.

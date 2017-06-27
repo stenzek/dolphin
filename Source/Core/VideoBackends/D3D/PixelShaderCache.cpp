@@ -624,8 +624,11 @@ void PixelShaderCache::Shutdown()
 
 bool PixelShaderCache::SetShader()
 {
-  if (g_ActiveConfig.bDisableSpecializedShaders || g_ActiveConfig.bForcePixelUberShaders)
+  if (g_ActiveConfig.CanUseUberShaders() &&
+      (g_ActiveConfig.bDisableSpecializedShaders || g_ActiveConfig.bForcePixelUberShaders))
+  {
     return SetUberShader();
+  }
 
   PixelShaderUid uid = GetPixelShaderUid();
   if (last_entry && uid == last_uid)
@@ -653,7 +656,7 @@ bool PixelShaderCache::SetShader()
   }
 
   // Background compiling?
-  if (g_ActiveConfig.bBackgroundShaderCompiling)
+  if (g_ActiveConfig.CanBackgroundCompileShaders())
   {
     // Create a pending entry
     PSCacheEntry entry;

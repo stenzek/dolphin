@@ -255,8 +255,11 @@ void VertexShaderCache::Shutdown()
 
 bool VertexShaderCache::SetShader()
 {
-  if (g_ActiveConfig.bDisableSpecializedShaders || g_ActiveConfig.bForceVertexUberShaders)
+  if (g_ActiveConfig.CanUseUberShaders() &&
+      (g_ActiveConfig.bDisableSpecializedShaders || g_ActiveConfig.bForceVertexUberShaders))
+  {
     return SetUberShader();
+  }
 
   VertexShaderUid uid = GetVertexShaderUid();
   if (last_entry && uid == last_uid)
@@ -284,7 +287,7 @@ bool VertexShaderCache::SetShader()
   }
 
   // Background compiling?
-  if (g_ActiveConfig.bBackgroundShaderCompiling)
+  if (g_ActiveConfig.CanBackgroundCompileShaders())
   {
     // Create a pending entry
     VSCacheEntry entry;

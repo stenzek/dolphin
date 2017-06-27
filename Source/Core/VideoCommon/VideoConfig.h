@@ -253,10 +253,21 @@ struct VideoConfig final
   {
     return backend_info.bSupportsGPUTextureDecoding && bEnableGPUTextureDecoding;
   }
+  bool CanUseUberShaders() const
+  {
+    // Ubershaders are currently incompatible with per-pixel lighting.
+    return !bEnablePixelLighting;
+  }
   bool ShouldPrecompileUberShaders() const
   {
     // We don't want to precompile ubershaders if they're never going to be used.
-    return bPrecompileUberShaders && (bBackgroundShaderCompiling || bDisableSpecializedShaders);
+    return bPrecompileUberShaders && (bBackgroundShaderCompiling || bDisableSpecializedShaders) &&
+           CanUseUberShaders();
+  }
+  bool CanBackgroundCompileShaders() const
+  {
+    // We require precompiled ubershaders to background compile shaders.
+    return bBackgroundShaderCompiling && bPrecompileUberShaders && CanUseUberShaders();
   }
   bool IsStereoEnabled() const { return iStereoMode > 0; }
   bool IsMSAAEnabled() const { return iMultisamples > 1; }

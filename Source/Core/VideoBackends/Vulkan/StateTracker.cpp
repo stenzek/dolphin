@@ -160,7 +160,7 @@ void StateTracker::ReloadPipelineUIDCache()
   }
 
   // If we were using background compilation, ensure everything is ready before continuing.
-  if (g_ActiveConfig.bBackendMultithreading)
+  if (g_ActiveConfig.bBackgroundShaderCompiling)
     g_shader_cache->WaitForBackgroundCompilesToComplete();
 }
 
@@ -342,7 +342,7 @@ bool StateTracker::CheckForShaderChanges(u32 gx_primitive_type)
   bool changed = false;
 
   bool use_ubershaders = g_ActiveConfig.bDisableSpecializedShaders;
-  if (g_ActiveConfig.bBackgroundShaderCompiling && !g_ActiveConfig.bDisableSpecializedShaders)
+  if (g_ActiveConfig.CanBackgroundCompileShaders() && !g_ActiveConfig.bDisableSpecializedShaders)
   {
     // Look up both VS and PS, and check if we can compile it asynchronously.
     auto vs = g_shader_cache->GetVertexShaderForUidAsync(vs_uid);
@@ -387,8 +387,16 @@ bool StateTracker::CheckForShaderChanges(u32 gx_primitive_type)
   }
 
   // Ubershader fallback?
-  bool using_ubershaders = use_ubershaders || g_ActiveConfig.bForceVertexUberShaders ||
-                           g_ActiveConfig.bForcePixelUberShaders;
+  bool uber_vertex_shader = use_ubershaders || g_ActiveConfig.bForceVertexUberShaders;
+  bool uber_pixel_shader = use_ubershaders || g_ActiveConfig.bForcePixelUberShaders;
+  bool using_ubershaders = uber_vertex_shader || uber_pixel_shader;
+  if (!g_ActiveConfig.CanUseUberShaders())
+  {
+    // Per-pixel lighting disables ubershaders.
+    uber_vertex_shader = false;
+    uber_pixel_shader = false;
+    using_ubershaders = false;
+  }
 
   // Switching to/from ubershaders? Have to adjust the vertex format and pipeline layout.
   if (using_ubershaders != m_using_ubershaders)
@@ -398,7 +406,7 @@ bool StateTracker::CheckForShaderChanges(u32 gx_primitive_type)
     UpdatePipelineVertexFormat();
   }
 
-  if (use_ubershaders || g_ActiveConfig.bForceVertexUberShaders)
+  if (uber_vertex_shader)
   {
     UberShader::VertexShaderUid uber_vs_uid = UberShader::GetVertexShaderUid();
     VkShaderModule vs = g_shader_cache->GetVertexUberShaderForUid(uber_vs_uid);
@@ -409,7 +417,7 @@ bool StateTracker::CheckForShaderChanges(u32 gx_primitive_type)
       changed = true;
     }
   }
-  if (use_ubershaders || g_ActiveConfig.bForcePixelUberShaders)
+  if (uber_pixel_shader)
   {
     UberShader::PixelShaderUid uber_ps_uid = UberShader::GetPixelShaderUid();
     VkShaderModule ps = g_shader_cache->GetPixelUberShaderForUid(uber_ps_uid);
@@ -999,7 +1007,7 @@ void StateTracker::EndClearRenderPass()
 VkPipeline StateTracker::GetPipelineAndCacheUID()
 {
   // We can't cache ubershader uids, only normal shader uids.
-  if (g_ActiveConfig.bBackgroundShaderCompiling && !m_using_ubershaders)
+  if (g_ActiveConfig.CanBackgroundCompileShaders() && !m_using_ubershaders)
   {
     // Append to UID cache if it is a new pipeline.
     auto result = g_shader_cache->GetPipelineWithCacheResultAsync(m_pipeline_state);
