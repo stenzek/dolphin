@@ -7,6 +7,7 @@
 #include "Common/Assert.h"
 #include "Common/CommonTypes.h"
 #include "VideoCommon/BPMemory.h"
+#include "VideoCommon/DriverDetails.h"
 #include "VideoCommon/LightingShaderGen.h"
 #include "VideoCommon/NativeVertexFormat.h"
 #include "VideoCommon/VertexLoaderManager.h"
@@ -85,9 +86,7 @@ ShaderCode GenerateVertexShaderCode(APIType api_type, const vertex_shader_uid_da
   const bool ssaa = g_ActiveConfig.IsSSAAEnabled();
   const bool stereo = g_ActiveConfig.IsStereoEnabled();
   const bool vertex_rounding = g_ActiveConfig.UseVertexRounding();
-
-  // On AMD's Vulkan driver, using arrays in the interface block results in graphical corruption.
-  const bool texgen_array = api_type != APIType::Vulkan;
+  const bool texgen_array = !DriverDetails::HasBug(DriverDetails::BUG_BROKEN_VARYING_ARRAYS);
 
   out.Write("%s", s_lighting_struct);
 

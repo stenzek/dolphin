@@ -3,6 +3,7 @@
 // Refer to the license.txt file included.
 
 #include "VideoCommon/UberShaderVertex.h"
+#include "VideoCommon/DriverDetails.h"
 #include "VideoCommon/NativeVertexFormat.h"
 #include "VideoCommon/UberShaderCommon.h"
 #include "VideoCommon/VertexShaderGen.h"
@@ -27,7 +28,7 @@ ShaderCode GenVertexShader(APIType ApiType, const vertex_ubershader_uid_data* ui
 {
   const bool msaa = g_ActiveConfig.iMultisamples > 1;
   const bool ssaa = g_ActiveConfig.iMultisamples > 1 && g_ActiveConfig.bSSAA;
-  const bool out_texgen_array = ApiType != APIType::Vulkan;
+  const bool out_texgen_array = !DriverDetails::HasBug(DriverDetails::BUG_BROKEN_VARYING_ARRAYS);
   const u32 numTexgen = uid_data->num_texgens;
   ShaderCode out;
 

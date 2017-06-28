@@ -28,7 +28,7 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
   const bool early_depth = uid_data->early_depth != 0;
   const bool bounding_box =
       g_ActiveConfig.bBBoxEnable && g_ActiveConfig.BBoxUseFragmentShaderImplementation();
-  const bool in_texgen_array = ApiType != APIType::Vulkan;
+  const bool in_texgen_array = !DriverDetails::HasBug(DriverDetails::BUG_BROKEN_VARYING_ARRAYS);
   const u32 numTexgen = uid_data->num_texgens;
   ShaderCode out;
 

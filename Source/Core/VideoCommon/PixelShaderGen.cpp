@@ -421,7 +421,7 @@ ShaderCode GeneratePixelShaderCode(APIType ApiType, const pixel_shader_uid_data*
   const bool msaa = g_ActiveConfig.IsMSAAEnabled();
   const bool ssaa = g_ActiveConfig.IsSSAAEnabled();
   const bool stereo = g_ActiveConfig.IsStereoEnabled();
-  const bool texgen_array = ApiType != APIType::Vulkan;
+  const bool texgen_array = !DriverDetails::HasBug(DriverDetails::BUG_BROKEN_VARYING_ARRAYS);
   const u32 numStages = uid_data->genMode_numtevstages + 1;
 
   out.Write("//Pixel Shader for TEV stages\n");
@@ -559,7 +559,7 @@ ShaderCode GeneratePixelShaderCode(APIType ApiType, const pixel_shader_uid_data*
 
     if (g_ActiveConfig.backend_info.bSupportsGeometryShaders || ApiType == APIType::Vulkan)
     {
-      if (ApiType == APIType::Vulkan)
+      if (DriverDetails::HasBug(DriverDetails::BUG_BROKEN_VARYING_ARRAYS))
       {
         for (u32 i = 0; i < uid_data->genMode_numtexgens; ++i)
           out.Write("\tfloat3 uv%u = tex%u;\n", i, i);
