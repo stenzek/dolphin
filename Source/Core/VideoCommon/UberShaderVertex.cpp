@@ -293,19 +293,19 @@ ShaderCode GenVertexShader(APIType ApiType, const vertex_ubershader_uid_data* ui
 
 void GenVertexShaderLighting(APIType ApiType, ShaderCode& out)
 {
-  out.Write("if ((components & %uu) != 0) // VB_HAS_COL0\n", VB_HAS_COL0);
+  out.Write("if ((components & %uu) != 0u) // VB_HAS_COL0\n", VB_HAS_COL0);
   out.Write("  o.colors_0 = color0;\n"
             "else\n"
             "  o.colors_0 = float4(1.0, 1.0, 1.0, 1.0);\n"
             "\n");
-  out.Write("if ((components & %uu) != 0) // VB_HAS_COL1\n", VB_HAS_COL1);
+  out.Write("if ((components & %uu) != 0u) // VB_HAS_COL1\n", VB_HAS_COL1);
   out.Write("  o.colors_1 = color1;\n"
             "else\n"
             "  o.colors_1 = float4(1.0, 1.0, 1.0, 1.0);\n"
             "\n");
 
   out.Write("// Lighting\n");
-  out.Write("%sfor (uint chan = 0; chan < xfmem_numColorChans; chan++) {\n",
+  out.Write("%sfor (uint chan = 0u; chan < xfmem_numColorChans; chan++) {\n",
             ApiType == APIType::D3D ? "[loop] " : "");
   out.Write("  int4 mat = " I_MATERIALS "[chan + 2u];\n"
             "  int4 lacc = int4(255, 255, 255, 255);\n"
@@ -315,7 +315,7 @@ void GenVertexShaderLighting(APIType ApiType, ShaderCode& out)
             BitfieldExtract("xfmem_color[chan]", LitChannel().matsource).c_str());
   out.Write("    if ((components & (%uu << chan)) != 0u) // VB_HAS_COL0\n", VB_HAS_COL0);
   out.Write("      mat.xyz = int3(round(((chan == 0u) ? color0.xyz : color1.xyz) * 255.0));\n");
-  out.Write("    else if ((components & %uu) != 0) // VB_HAS_COLO0\n", VB_HAS_COL0);
+  out.Write("    else if ((components & %uu) != 0u) // VB_HAS_COLO0\n", VB_HAS_COL0);
   out.Write("      mat.xyz = int3(round(color0.xyz * 255.0));\n"
             "    else\n"
             "      mat.xyz = int3(255, 255, 255);\n"
@@ -326,7 +326,7 @@ void GenVertexShaderLighting(APIType ApiType, ShaderCode& out)
             BitfieldExtract("xfmem_alpha[chan]", LitChannel().matsource).c_str());
   out.Write("    if ((components & (%uu << chan)) != 0u) // VB_HAS_COL0\n", VB_HAS_COL0);
   out.Write("      mat.w = int(round(((chan == 0u) ? color0.w : color1.w) * 255.0));\n");
-  out.Write("    else if ((components & %uu) != 0) // VB_HAS_COLO0\n", VB_HAS_COL0);
+  out.Write("    else if ((components & %uu) != 0u) // VB_HAS_COLO0\n", VB_HAS_COL0);
   out.Write("      mat.w = int(round(color0.w * 255.0));\n"
             "    else\n"
             "      mat.w = 255;\n"
@@ -341,7 +341,7 @@ void GenVertexShaderLighting(APIType ApiType, ShaderCode& out)
             BitfieldExtract("xfmem_color[chan]", LitChannel().ambsource).c_str());
   out.Write("      if ((components & (%uu << chan)) != 0u) // VB_HAS_COL0\n", VB_HAS_COL0);
   out.Write("        lacc.xyz = int3(round(((chan == 0u) ? color0.xyz : color1.xyz) * 255.0));\n");
-  out.Write("      else if ((components & %uu) != 0) // VB_HAS_COLO0\n", VB_HAS_COL0);
+  out.Write("      else if ((components & %uu) != 0u) // VB_HAS_COLO0\n", VB_HAS_COL0);
   out.Write("        lacc.xyz = int3(round(color0.xyz * 255.0));\n"
             "      else\n"
             "        lacc.xyz = int3(255, 255, 255);\n"
@@ -356,8 +356,8 @@ void GenVertexShaderLighting(APIType ApiType, ShaderCode& out)
             BitfieldExtract("xfmem_color[chan]", LitChannel().attnfunc).c_str());
   out.Write("    uint diffusefunc = %s;\n",
             BitfieldExtract("xfmem_color[chan]", LitChannel().diffusefunc).c_str());
-  out.Write("    for (uint light_index = 0; light_index < 8u; light_index++) {\n"
-            "      if ((light_mask & (1u << light_index)) != 0)\n"
+  out.Write("    for (uint light_index = 0u; light_index < 8u; light_index++) {\n"
+            "      if ((light_mask & (1u << light_index)) != 0u)\n"
             "        lacc.xyz += CalculateLighting(light_index, attnfunc, diffusefunc, pos, "
             "_norm0).xyz;\n"
             "    }\n"
@@ -370,7 +370,7 @@ void GenVertexShaderLighting(APIType ApiType, ShaderCode& out)
             BitfieldExtract("xfmem_alpha[chan]", LitChannel().ambsource).c_str());
   out.Write("      if ((components & (%uu << chan)) != 0u) // VB_HAS_COL0\n", VB_HAS_COL0);
   out.Write("        lacc.w = int(round(((chan == 0u) ? color0.w : color1.w) * 255.0));\n");
-  out.Write("      else if ((components & %uu) != 0) // VB_HAS_COLO0\n", VB_HAS_COL0);
+  out.Write("      else if ((components & %uu) != 0u) // VB_HAS_COLO0\n", VB_HAS_COL0);
   out.Write("        lacc.w = int(round(color0.w * 255.0));\n"
             "      else\n"
             "        lacc.w = 255;\n"
@@ -386,8 +386,8 @@ void GenVertexShaderLighting(APIType ApiType, ShaderCode& out)
   out.Write("    uint diffusefunc = %s;\n",
             BitfieldExtract("xfmem_alpha[chan]", LitChannel().diffusefunc).c_str());
   out.Write(
-      "    for (uint light_index = 0; light_index < 8u; light_index++) {\n\n"
-      "      if ((light_mask & (1u << light_index)) != 0)\n\n"
+      "    for (uint light_index = 0u; light_index < 8u; light_index++) {\n\n"
+      "      if ((light_mask & (1u << light_index)) != 0u)\n\n"
       "        lacc.w += CalculateLighting(light_index, attnfunc, diffusefunc, pos, _norm0).w;\n"
       "    }\n"
       "  }\n"
@@ -398,13 +398,13 @@ void GenVertexShaderLighting(APIType ApiType, ShaderCode& out)
             "  // Hopefully GPUs that can support dynamic indexing will optimize this.\n"
             "  float4 lit_color = float4((mat * (lacc + (lacc >> 7))) >> 8) / 255.0;\n"
             "  switch (chan) {\n"
-            "  case 0: o.colors_0 = lit_color; break;\n"
-            "  case 1: o.colors_1 = lit_color; break;\n"
+            "  case 0u: o.colors_0 = lit_color; break;\n"
+            "  case 1u: o.colors_1 = lit_color; break;\n"
             "  }\n"
             "}\n"
             "\n");
 
-  out.Write("if (xfmem_numColorChans < 2u && (components & %uu) == 0)\n", VB_HAS_COL1);
+  out.Write("if (xfmem_numColorChans < 2u && (components & %uu) == 0u)\n", VB_HAS_COL1);
   out.Write("  o.colors_1 = o.colors_0;\n\n");
 }
 
@@ -470,16 +470,16 @@ void GenVertexShaderTexGens(APIType ApiType, u32 numTexgen, ShaderCode& out)
             "  {\n");
   out.Write("  case %uu: // XF_TEXGEN_EMBOSS_MAP\n", XF_TEXGEN_EMBOSS_MAP);
   out.Write("    {\n");
-  out.Write("      uint light = %s;",
+  out.Write("      uint light = %s;\n",
             BitfieldExtract("xfmem_texMtxInfo[texgen]", TexMtxInfo().embosslightshift).c_str());
-  out.Write("      uint source = %s;",
+  out.Write("      uint source = %s;\n",
             BitfieldExtract("xfmem_texMtxInfo[texgen]", TexMtxInfo().embosssourceshift).c_str());
   out.Write("      switch (source) {\n");
   for (u32 i = 0; i < numTexgen; i++)
-    out.Write("      case %u: output_tex.xyz = o.tex[%u]; break;", i, i);
+    out.Write("      case %uu: output_tex.xyz = o.tex[%u]; break;\n", i, i);
   out.Write("      default: output_tex.xyz = float3(0.0, 0.0, 0.0); break;\n"
             "      }\n");
-  out.Write("      if ((components & %uu) != 0) { // VB_HAS_NRM1 | VB_HAS_NRM2\n",
+  out.Write("      if ((components & %uu) != 0u) { // VB_HAS_NRM1 | VB_HAS_NRM2\n",
             VB_HAS_NRM1 | VB_HAS_NRM2);  // Should this be VB_HAS_NRM1 | VB_HAS_NRM2
   out.Write("        float3 ldir = normalize(" I_LIGHTS "[light].pos.xyz - pos.xyz);\n"
             "        output_tex.xyz += float3(dot(ldir, _norm1), dot(ldir, _norm2), 0.0);\n"
@@ -494,14 +494,14 @@ void GenVertexShaderTexGens(APIType ApiType, u32 numTexgen, ShaderCode& out)
             "    break;\n\n");
   out.Write("  default:  // Also XF_TEXGEN_REGULAR\n"
             "    {\n");
-  out.Write("      if ((components & (%uu /* VB_HAS_TEXMTXIDX0 */ << texgen)) != 0) {\n",
+  out.Write("      if ((components & (%uu /* VB_HAS_TEXMTXIDX0 */ << texgen)) != 0u) {\n",
             VB_HAS_TEXMTXIDX0);
   out.Write("        // This is messy, due to dynamic indexing of the input texture coordinates.\n"
             "        // Hopefully the compiler will unroll this whole loop anyway and the switch.\n"
             "        int tmp = 0;\n"
             "        switch (texgen) {\n");
   for (u32 i = 0; i < numTexgen; i++)
-    out.Write("        case %u: tmp = int(tex%u.z); break;", i, i);
+    out.Write("        case %uu: tmp = int(tex%u.z); break;\n", i, i);
   out.Write("        }\n"
             "\n");
   out.Write("        if (%s == %uu) {\n",
@@ -519,12 +519,12 @@ void GenVertexShaderTexGens(APIType ApiType, u32 numTexgen, ShaderCode& out)
   out.Write("        if (%s == %uu) {\n",
             BitfieldExtract("xfmem_texMtxInfo[texgen]", TexMtxInfo().projection).c_str(),
             XF_TEXPROJ_STQ);
-  out.Write("          output_tex.xyz = float3(dot(coord, " I_TEXMATRICES "[3 * texgen]),\n"
-            "                                  dot(coord, " I_TEXMATRICES "[3 * texgen + 1]),\n"
-            "                                  dot(coord, " I_TEXMATRICES "[3 * texgen + 2]));\n"
+  out.Write("          output_tex.xyz = float3(dot(coord, " I_TEXMATRICES "[3u * texgen]),\n"
+            "                                  dot(coord, " I_TEXMATRICES "[3u * texgen + 1u]),\n"
+            "                                  dot(coord, " I_TEXMATRICES "[3u * texgen + 2u]));\n"
             "        } else {\n"
-            "          output_tex.xyz = float3(dot(coord, " I_TEXMATRICES "[3 * texgen]),\n"
-            "                                  dot(coord, " I_TEXMATRICES "[3 * texgen + 1]),\n"
+            "          output_tex.xyz = float3(dot(coord, " I_TEXMATRICES "[3u * texgen]),\n"
+            "                                  dot(coord, " I_TEXMATRICES "[3u * texgen + 1u]),\n"
             "                                  1.0);\n"
             "        }\n"
             "      }\n"
@@ -562,7 +562,7 @@ void GenVertexShaderTexGens(APIType ApiType, u32 numTexgen, ShaderCode& out)
   out.Write("  // Hopefully GPUs that can support dynamic indexing will optimize this.\n");
   out.Write("  switch (texgen) {\n");
   for (u32 i = 0; i < numTexgen; i++)
-    out.Write("  case %u: o.tex[%u] = output_tex; break;\n", i, i);
+    out.Write("  case %uu: o.tex[%u] = output_tex; break;\n", i, i);
   out.Write("  }\n"
             "}\n");
 }
