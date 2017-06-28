@@ -307,12 +307,13 @@ void GenVertexShaderLighting(APIType ApiType, ShaderCode& out)
   out.Write("// Lighting\n");
   out.Write("%sfor (uint chan = 0u; chan < xfmem_numColorChans; chan++) {\n",
             ApiType == APIType::D3D ? "[loop] " : "");
-  out.Write("  int4 mat = " I_MATERIALS "[chan + 2u];\n"
+  out.Write("  uint colorreg = xfmem_color[chan];\n"
+            "  uint alphareg = xfmem_alpha[chan];\n"
+            "  int4 mat = " I_MATERIALS "[chan + 2u]; \n"
             "  int4 lacc = int4(255, 255, 255, 255);\n"
             "\n");
 
-  out.Write("  if (%s != 0u) {\n",
-            BitfieldExtract("xfmem_color[chan]", LitChannel().matsource).c_str());
+  out.Write("  if (%s != 0u) {\n", BitfieldExtract("colorreg", LitChannel().matsource).c_str());
   out.Write("    if ((components & (%uu << chan)) != 0u) // VB_HAS_COL0\n", VB_HAS_COL0);
   out.Write("      mat.xyz = int3(round(((chan == 0u) ? color0.xyz : color1.xyz) * 255.0));\n");
   out.Write("    else if ((components & %uu) != 0u) // VB_HAS_COLO0\n", VB_HAS_COL0);
@@ -322,8 +323,7 @@ void GenVertexShaderLighting(APIType ApiType, ShaderCode& out)
             "  }\n"
             "\n");
 
-  out.Write("  if (%s != 0u) {\n",
-            BitfieldExtract("xfmem_alpha[chan]", LitChannel().matsource).c_str());
+  out.Write("  if (%s != 0u) {\n", BitfieldExtract("alphareg", LitChannel().matsource).c_str());
   out.Write("    if ((components & (%uu << chan)) != 0u) // VB_HAS_COL0\n", VB_HAS_COL0);
   out.Write("      mat.w = int(round(((chan == 0u) ? color0.w : color1.w) * 255.0));\n");
   out.Write("    else if ((components & %uu) != 0u) // VB_HAS_COLO0\n", VB_HAS_COL0);
@@ -336,9 +336,8 @@ void GenVertexShaderLighting(APIType ApiType, ShaderCode& out)
             "\n");
 
   out.Write("  if (%s != 0u) {\n",
-            BitfieldExtract("xfmem_color[chan]", LitChannel().enablelighting).c_str());
-  out.Write("    if (%s != 0u) {\n",
-            BitfieldExtract("xfmem_color[chan]", LitChannel().ambsource).c_str());
+            BitfieldExtract("colorreg", LitChannel().enablelighting).c_str());
+  out.Write("    if (%s != 0u) {\n", BitfieldExtract("colorreg", LitChannel().ambsource).c_str());
   out.Write("      if ((components & (%uu << chan)) != 0u) // VB_HAS_COL0\n", VB_HAS_COL0);
   out.Write("        lacc.xyz = int3(round(((chan == 0u) ? color0.xyz : color1.xyz) * 255.0));\n");
   out.Write("      else if ((components & %uu) != 0u) // VB_HAS_COLO0\n", VB_HAS_COL0);
@@ -350,12 +349,12 @@ void GenVertexShaderLighting(APIType ApiType, ShaderCode& out)
             "    }\n"
             "\n");
   out.Write("    uint light_mask = %s | (%s << 4u);\n",
-            BitfieldExtract("xfmem_color[chan]", LitChannel().lightMask0_3).c_str(),
-            BitfieldExtract("xfmem_color[chan]", LitChannel().lightMask4_7).c_str());
+            BitfieldExtract("colorreg", LitChannel().lightMask0_3).c_str(),
+            BitfieldExtract("colorreg", LitChannel().lightMask4_7).c_str());
   out.Write("    uint attnfunc = %s;\n",
-            BitfieldExtract("xfmem_color[chan]", LitChannel().attnfunc).c_str());
+            BitfieldExtract("colorreg", LitChannel().attnfunc).c_str());
   out.Write("    uint diffusefunc = %s;\n",
-            BitfieldExtract("xfmem_color[chan]", LitChannel().diffusefunc).c_str());
+            BitfieldExtract("colorreg", LitChannel().diffusefunc).c_str());
   out.Write("    for (uint light_index = 0u; light_index < 8u; light_index++) {\n"
             "      if ((light_mask & (1u << light_index)) != 0u)\n"
             "        lacc.xyz += CalculateLighting(light_index, attnfunc, diffusefunc, pos, "
@@ -365,9 +364,8 @@ void GenVertexShaderLighting(APIType ApiType, ShaderCode& out)
             "\n");
 
   out.Write("  if (%s != 0u) {\n",
-            BitfieldExtract("xfmem_alpha[chan]", LitChannel().enablelighting).c_str());
-  out.Write("    if (%s != 0u) {\n",
-            BitfieldExtract("xfmem_alpha[chan]", LitChannel().ambsource).c_str());
+            BitfieldExtract("alphareg", LitChannel().enablelighting).c_str());
+  out.Write("    if (%s != 0u) {\n", BitfieldExtract("alphareg", LitChannel().ambsource).c_str());
   out.Write("      if ((components & (%uu << chan)) != 0u) // VB_HAS_COL0\n", VB_HAS_COL0);
   out.Write("        lacc.w = int(round(((chan == 0u) ? color0.w : color1.w) * 255.0));\n");
   out.Write("      else if ((components & %uu) != 0u) // VB_HAS_COLO0\n", VB_HAS_COL0);
@@ -379,12 +377,12 @@ void GenVertexShaderLighting(APIType ApiType, ShaderCode& out)
             "    }\n"
             "\n");
   out.Write("    uint light_mask = %s | (%s << 4u);\n",
-            BitfieldExtract("xfmem_alpha[chan]", LitChannel().lightMask0_3).c_str(),
-            BitfieldExtract("xfmem_alpha[chan]", LitChannel().lightMask4_7).c_str());
+            BitfieldExtract("alphareg", LitChannel().lightMask0_3).c_str(),
+            BitfieldExtract("alphareg", LitChannel().lightMask4_7).c_str());
   out.Write("    uint attnfunc = %s;\n",
-            BitfieldExtract("xfmem_alpha[chan]", LitChannel().attnfunc).c_str());
+            BitfieldExtract("alphareg", LitChannel().attnfunc).c_str());
   out.Write("    uint diffusefunc = %s;\n",
-            BitfieldExtract("xfmem_alpha[chan]", LitChannel().diffusefunc).c_str());
+            BitfieldExtract("alphareg", LitChannel().diffusefunc).c_str());
   out.Write(
       "    for (uint light_index = 0u; light_index < 8u; light_index++) {\n\n"
       "      if ((light_mask & (1u << light_index)) != 0u)\n\n"
@@ -423,9 +421,9 @@ void GenVertexShaderTexGens(APIType ApiType, u32 numTexgen, ShaderCode& out)
               ApiType == APIType::D3D ? "[loop] " : "", numTexgen);
 
   out.Write("  // Texcoord transforms\n");
-  out.Write("  float4 coord = float4(0.0, 0.0, 1.0, 1.0);\n");
-  out.Write("  switch (%s) {\n",
-            BitfieldExtract("xfmem_texMtxInfo[texgen]", TexMtxInfo().sourcerow).c_str());
+  out.Write("  float4 coord = float4(0.0, 0.0, 1.0, 1.0);\n"
+            "  uint texMtxInfo = xfmem_texMtxInfo[texgen];\n");
+  out.Write("  switch (%s) {\n", BitfieldExtract("texMtxInfo", TexMtxInfo().sourcerow).c_str());
   out.Write("  case %uu: // XF_SRCGEOM_INROW\n", XF_SRCGEOM_INROW);
   out.Write("    coord.xyz = rawpos.xyz;\n");
   out.Write("    break;\n\n");
@@ -457,23 +455,22 @@ void GenVertexShaderTexGens(APIType ApiType, u32 numTexgen, ShaderCode& out)
 
   out.Write("  // Input form of AB11 sets z element to 1.0\n");
   out.Write("  if (%s == %uu) // inputform == XF_TEXINPUT_AB11\n",
-            BitfieldExtract("xfmem_texMtxInfo[texgen]", TexMtxInfo().inputform).c_str(),
-            XF_TEXINPUT_AB11);
+            BitfieldExtract("texMtxInfo", TexMtxInfo().inputform).c_str(), XF_TEXINPUT_AB11);
   out.Write("    coord.z = 1.0f;\n");
   out.Write("\n");
 
   out.Write("  // first transformation\n");
   out.Write("  uint texgentype = %s;\n",
-            BitfieldExtract("xfmem_texMtxInfo[texgen]", TexMtxInfo().texgentype).c_str());
+            BitfieldExtract("texMtxInfo", TexMtxInfo().texgentype).c_str());
   out.Write("  float3 output_tex;\n"
             "  switch (texgentype)\n"
             "  {\n");
   out.Write("  case %uu: // XF_TEXGEN_EMBOSS_MAP\n", XF_TEXGEN_EMBOSS_MAP);
   out.Write("    {\n");
   out.Write("      uint light = %s;\n",
-            BitfieldExtract("xfmem_texMtxInfo[texgen]", TexMtxInfo().embosslightshift).c_str());
+            BitfieldExtract("texMtxInfo", TexMtxInfo().embosslightshift).c_str());
   out.Write("      uint source = %s;\n",
-            BitfieldExtract("xfmem_texMtxInfo[texgen]", TexMtxInfo().embosssourceshift).c_str());
+            BitfieldExtract("texMtxInfo", TexMtxInfo().embosssourceshift).c_str());
   out.Write("      switch (source) {\n");
   for (u32 i = 0; i < numTexgen; i++)
     out.Write("      case %uu: output_tex.xyz = o.tex[%u]; break;\n", i, i);
@@ -505,8 +502,7 @@ void GenVertexShaderTexGens(APIType ApiType, u32 numTexgen, ShaderCode& out)
   out.Write("        }\n"
             "\n");
   out.Write("        if (%s == %uu) {\n",
-            BitfieldExtract("xfmem_texMtxInfo[texgen]", TexMtxInfo().projection).c_str(),
-            XF_TEXPROJ_STQ);
+            BitfieldExtract("texMtxInfo", TexMtxInfo().projection).c_str(), XF_TEXPROJ_STQ);
   out.Write("          output_tex.xyz = float3(dot(coord, " I_TRANSFORMMATRICES "[tmp]),\n"
             "                                  dot(coord, " I_TRANSFORMMATRICES "[tmp + 1]),\n"
             "                                  dot(coord, " I_TRANSFORMMATRICES "[tmp + 2]));\n"
@@ -517,8 +513,7 @@ void GenVertexShaderTexGens(APIType ApiType, u32 numTexgen, ShaderCode& out)
             "        }\n"
             "      } else {\n");
   out.Write("        if (%s == %uu) {\n",
-            BitfieldExtract("xfmem_texMtxInfo[texgen]", TexMtxInfo().projection).c_str(),
-            XF_TEXPROJ_STQ);
+            BitfieldExtract("texMtxInfo", TexMtxInfo().projection).c_str(), XF_TEXPROJ_STQ);
   out.Write("          output_tex.xyz = float3(dot(coord, " I_TEXMATRICES "[3u * texgen]),\n"
             "                                  dot(coord, " I_TEXMATRICES "[3u * texgen + 1u]),\n"
             "                                  dot(coord, " I_TEXMATRICES "[3u * texgen + 2u]));\n"
@@ -534,14 +529,14 @@ void GenVertexShaderTexGens(APIType ApiType, u32 numTexgen, ShaderCode& out)
             "\n");
 
   out.Write("  if (xfmem_dualTexInfo != 0u) {\n");
+  out.Write("    uint postMtxInfo = xfmem_postMtxInfo[texgen];");
   out.Write("    uint base_index = %s;\n",
-            BitfieldExtract("xfmem_postMtxInfo[texgen]", PostMtxInfo().index).c_str());
+            BitfieldExtract("postMtxInfo", PostMtxInfo().index).c_str());
   out.Write("    float4 P0 = " I_POSTTRANSFORMMATRICES "[base_index & 0x3fu];\n"
             "    float4 P1 = " I_POSTTRANSFORMMATRICES "[(base_index + 1u) & 0x3fu];\n"
             "    float4 P2 = " I_POSTTRANSFORMMATRICES "[(base_index + 2u) & 0x3fu];\n"
             "\n");
-  out.Write("    if (%s != 0u)\n",
-            BitfieldExtract("xfmem_postMtxInfo[texgen]", PostMtxInfo().normalize).c_str());
+  out.Write("    if (%s != 0u)\n", BitfieldExtract("postMtxInfo", PostMtxInfo().normalize).c_str());
   out.Write("      output_tex.xyz = normalize(output_tex.xyz);\n"
             "\n"
             "    // multiply by postmatrix\n"
