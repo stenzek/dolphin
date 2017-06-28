@@ -443,24 +443,27 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
       }
     }
 
-    if (in_texgen_array)
+    if (numTexgen > 0)
     {
-      out.Write("#define getTexCoord(index) (tex[(index)])\n\n");
-    }
-    else
-    {
-      out.Write("float3 getTexCoord(uint index) {\n"
-                "  switch (index) {\n");
-      for (u32 i = 0; i < numTexgen; i++)
+      if (in_texgen_array)
       {
-        out.Write("  case %u:\n"
-                  "    return tex%u;\n",
-                  i, i);
+        out.Write("#define getTexCoord(index) (tex[(index)])\n\n");
       }
-      out.Write("  default:\n"
-                "    return float3(0.0, 0.0, 0.0);\n"
-                "  }\n"
-                "}\n\n");
+      else
+      {
+        out.Write("float3 getTexCoord(uint index) {\n"
+                  "  switch (index) {\n");
+        for (u32 i = 0; i < numTexgen; i++)
+        {
+          out.Write("  case %u:\n"
+                    "    return tex%u;\n",
+                    i, i);
+        }
+        out.Write("  default:\n"
+                  "    return float3(0.0, 0.0, 0.0);\n"
+                  "  }\n"
+                  "}\n\n");
+      }
     }
 
     out.Write("void main()\n{\n");
