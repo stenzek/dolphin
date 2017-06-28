@@ -1328,7 +1328,7 @@ bool ShaderCache::VertexShaderCompilerWorkItem::Compile()
 {
   ShaderCode code = GenerateVertexShaderCode(APIType::Vulkan, m_uid.GetUidData());
   if (!ShaderCompiler::CompileVertexShader(&m_spirv, code.GetBuffer().c_str(),
-                                           code.GetBuffer().length(), true))
+                                           code.GetBuffer().length()))
     return true;
 
   m_module = Util::CreateShaderModule(m_spirv.data(), m_spirv.size());
@@ -1365,7 +1365,7 @@ bool ShaderCache::PixelShaderCompilerWorkItem::Compile()
 {
   ShaderCode code = GeneratePixelShaderCode(APIType::Vulkan, m_uid.GetUidData());
   if (!ShaderCompiler::CompileFragmentShader(&m_spirv, code.GetBuffer().c_str(),
-                                             code.GetBuffer().length(), true))
+                                             code.GetBuffer().length()))
     return true;
 
   m_module = Util::CreateShaderModule(m_spirv.data(), m_spirv.size());
