@@ -29,6 +29,11 @@ struct PixelShaderConstants
 
 struct VertexShaderConstants
 {
+  u32 components;           // .x
+  u32 xfmem_dualTexInfo;    // .y
+  u32 xfmem_numColorChans;  // .z
+  u32 pad1;                 // .w
+
   float4 posnormalmatrix[6];
   float4 projection[4];
   int4 materials[4];
@@ -45,20 +50,10 @@ struct VertexShaderConstants
   float4 normalmatrices[32];
   float4 posttransformmatrices[64];
   float4 pixelcentercorrection;
-  float viewport[2];
+  float viewport[2];  // .xy
+  float pad2[2];      // .zw
 
-  // For vertex ubershaders
-  u32 components;
-  u32 xfmem_dualTexInfo;
-  u32 xfmem_numColorChans;
-  u32 pad[3];
-
-  // TODO: Pack these more efficiently
-  uint4 xfmem_texMtxInfo[8];   // .x
-  uint4 xfmem_postMtxInfo[8];  // .x
-
-  uint4 xfmem_color[2];  // .x
-  uint4 xfmem_alpha[2];  // .x
+  uint4 xfmem_pack1[8];  // .x - texMtxInfo, .y - postMtxInfo, [0..1].z = color, [0..1].w = alpha
 };
 
 struct GeometryShaderConstants
@@ -70,23 +65,20 @@ struct GeometryShaderConstants
 
 struct UberShaderConstants
 {
-  u32 genmode;          // .x
-  u32 alphaTest;        // .y
-  u32 fogParam3;        // .z
-  u32 fogRangeBase;     // .w
-  u32 dstalpha;         // x
-  u32 ztex2;            // y
-  u32 zcontrol;         // z
-  u32 projection;       // w
-  uint4 tevorder[8];    // .x
-  uint4 combiners[16];  // .xy
-  uint4 tevksel[8];     // .x
-  uint4 iref;           // .xyzw
-  uint4 tevind[16];     // .x
-  int4 konst[32];       // .rgba
-  u32 rgba6_format;     // .x
-  u32 dither;           // .y
-  u32 bounding_box;     // .z
-  u32 pad;              // .w
-  float4 debug;
+  u32 genmode;       // .x
+  u32 alphaTest;     // .y
+  u32 fogParam3;     // .z
+  u32 fogRangeBase;  // .w
+  u32 dstalpha;      // x
+  u32 ztex2;         // y
+  u32 zcontrol;      // z
+  u32 projection;    // w
+  uint4 iref;        // .xyzw
+  uint4 pack1[16];   // .xy - combiners, .z - tevind
+  uint4 pack2[8];    // .x - tevorder, .y - tevksel
+  int4 konst[32];    // .rgba
+  u32 rgba6_format;  // .x
+  u32 dither;        // .y
+  u32 bounding_box;  // .z
+  u32 pad;           // .w
 };

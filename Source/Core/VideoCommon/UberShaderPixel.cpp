@@ -55,17 +55,18 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
             "  uint  bpmem_ztex2;\n"     // TODO: We only use two bits out of this
             "  uint  bpmem_zcontrol;\n"  // TODO: We only use one bit out of this
             "  uint  xfmem_projection;\n"
-            "  uint  bpmem_tevorder[8];\n"
-            "  uint2 bpmem_combiners[16];\n"
-            "  uint  bpmem_tevksel[8];\n"
             "  uint4 bpmem_iref;\n"
-            "  uint  bpmem_tevind[16];\n"
+            "  uint4 bpmem_pack1[16];\n"  // .xy - combiners, .z - tevind
+            "  uint4 bpmem_pack2[8];\n"   // .x - tevorder, .y - tevksel
             "  int4  konstLookup[32];\n"
             "  bool  bpmem_rgba6_format;\n"
             "  bool  bpmem_dither;\n"
             "  bool  bpmem_bounding_box;\n"
-            "  float4  debug;\n"
             "};\n\n");
+  out.Write("#define bpmem_combiners(i) (bpmem_pack1[(i)].xy)\n"
+            "#define bpmem_tevind(i) (bpmem_pack1[(i)].z)\n"
+            "#define bpmem_tevorder(i) (bpmem_pack2[(i)].x)\n"
+            "#define bpmem_tevksel(i) (bpmem_pack2[(i)].y)\n\n");
 
   // TODO: Per pixel lighting (not really needed)
 
@@ -116,13 +117,13 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
             "\n"
             "  int4 ret;\n");
   out.Write("  ret.r = color[%s];\n",
-            BitfieldExtract("bpmem_tevksel[s * 2u]", TevKSel().swap1).c_str());
+            BitfieldExtract("bpmem_tevksel(s * 2u)", TevKSel().swap1).c_str());
   out.Write("  ret.g = color[%s];\n",
-            BitfieldExtract("bpmem_tevksel[s * 2u]", TevKSel().swap2).c_str());
+            BitfieldExtract("bpmem_tevksel(s * 2u)", TevKSel().swap2).c_str());
   out.Write("  ret.b = color[%s];\n",
-            BitfieldExtract("bpmem_tevksel[s * 2u + 1u]", TevKSel().swap1).c_str());
+            BitfieldExtract("bpmem_tevksel(s * 2u + 1u)", TevKSel().swap1).c_str());
   out.Write("  ret.a = color[%s];\n",
-            BitfieldExtract("bpmem_tevksel[s * 2u + 1u]", TevKSel().swap2).c_str());
+            BitfieldExtract("bpmem_tevksel(s * 2u + 1u)", TevKSel().swap2).c_str());
   out.Write("  return ret;\n"
             "}\n\n");
 
@@ -534,9 +535,9 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
 
   out.Write("  for(uint stage = 0u; stage <= num_stages; stage++)\n"
             "  {\n"
-            "    uint cc = bpmem_combiners[stage].x;\n"
-            "    uint ac = bpmem_combiners[stage].y;\n"
-            "    uint order = bpmem_tevorder[stage>>1];\n"
+            "    uint cc = bpmem_combiners(stage).x;\n"
+            "    uint ac = bpmem_combiners(stage).y;\n"
+            "    uint order = bpmem_tevorder(stage>>1);\n"
             "    if ((stage & 1u) == 1u)\n"
             "      order = order >> %d;\n\n",
             int(TwoTevStageOrders().enable1.StartBit() - TwoTevStageOrders().enable0.StartBit()));
@@ -554,7 +555,7 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
               1 << TwoTevStageOrders().enable0.StartBit());
     out.Write("\n"
               "    // Indirect textures\n"
-              "    uint tevind = bpmem_tevind[stage];\n"
+              "    uint tevind = bpmem_tevind(stage);\n"
               "    if (tevind != 0u)\n"
               "    {\n"
               "      uint bs = %s;\n",
@@ -672,7 +673,7 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
   out.Write(
       "    // Select Konst for stage\n"
       "    // TODO: a switch case might be better here than an dynamically indexed uniform lookup\n"
-      "    uint tevksel = bpmem_tevksel[stage>>1];\n"
+      "    uint tevksel = bpmem_tevksel(stage>>1);\n"
       "    if ((stage & 1u) == 0u)\n"
       "      s.KonstColor = int4(konstLookup[%s].rgb, konstLookup[%s].a);\n",
       BitfieldExtract("tevksel", bpmem.tevksel[0].kcsel0).c_str(),
@@ -839,10 +840,10 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
   out.Write("  int4 TevResult;\n");
   out.Write(
       "  TevResult.xyz = getTevReg(s, %s).xyz;\n",
-      BitfieldExtract("bpmem_combiners[num_stages].x", TevStageCombiner().colorC.dest).c_str());
+      BitfieldExtract("bpmem_combiners(num_stages).x", TevStageCombiner().colorC.dest).c_str());
   out.Write(
       "  TevResult.w = getTevReg(s, %s).w;\n",
-      BitfieldExtract("bpmem_combiners[num_stages].y", TevStageCombiner().alphaC.dest).c_str());
+      BitfieldExtract("bpmem_combiners(num_stages).y", TevStageCombiner().alphaC.dest).c_str());
 
   // TODO: Should this clamp/mask happen here? From PixelShaderGen.cpp:713
   out.Write("  TevResult &= 255;\n\n");

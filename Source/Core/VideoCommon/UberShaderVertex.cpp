@@ -307,8 +307,8 @@ void GenVertexShaderLighting(APIType ApiType, ShaderCode& out)
   out.Write("// Lighting\n");
   out.Write("%sfor (uint chan = 0u; chan < xfmem_numColorChans; chan++) {\n",
             ApiType == APIType::D3D ? "[loop] " : "");
-  out.Write("  uint colorreg = xfmem_color[chan];\n"
-            "  uint alphareg = xfmem_alpha[chan];\n"
+  out.Write("  uint colorreg = xfmem_color(chan);\n"
+            "  uint alphareg = xfmem_alpha(chan);\n"
             "  int4 mat = " I_MATERIALS "[chan + 2u]; \n"
             "  int4 lacc = int4(255, 255, 255, 255);\n"
             "\n");
@@ -422,7 +422,7 @@ void GenVertexShaderTexGens(APIType ApiType, u32 numTexgen, ShaderCode& out)
 
   out.Write("  // Texcoord transforms\n");
   out.Write("  float4 coord = float4(0.0, 0.0, 1.0, 1.0);\n"
-            "  uint texMtxInfo = xfmem_texMtxInfo[texgen];\n");
+            "  uint texMtxInfo = xfmem_texMtxInfo(texgen);\n");
   out.Write("  switch (%s) {\n", BitfieldExtract("texMtxInfo", TexMtxInfo().sourcerow).c_str());
   out.Write("  case %uu: // XF_SRCGEOM_INROW\n", XF_SRCGEOM_INROW);
   out.Write("    coord.xyz = rawpos.xyz;\n");
@@ -529,7 +529,7 @@ void GenVertexShaderTexGens(APIType ApiType, u32 numTexgen, ShaderCode& out)
             "\n");
 
   out.Write("  if (xfmem_dualTexInfo != 0u) {\n");
-  out.Write("    uint postMtxInfo = xfmem_postMtxInfo[texgen];");
+  out.Write("    uint postMtxInfo = xfmem_postMtxInfo(texgen);");
   out.Write("    uint base_index = %s;\n",
             BitfieldExtract("postMtxInfo", PostMtxInfo().index).c_str());
   out.Write("    float4 P0 = " I_POSTTRANSFORMMATRICES "[base_index & 0x3fu];\n"

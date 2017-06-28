@@ -152,7 +152,7 @@ void PixelShaderManager::SetConstants()
               bpmem.tevindref.getTexCoord(stage) | bpmem.tevindref.getTexMap(stage) << 8 | 1 << 16;
         // Note: a tevind of zero just happens to be a passthrough, so no need
         // to set an extra bit.
-        more_constants.tevind[i][0] =
+        more_constants.pack1[i][2] =
             bpmem.tevind[i].hex;  // TODO: This match shadergen, but videosw will
                                   // always wrap.
 
@@ -160,11 +160,11 @@ void PixelShaderManager::SetConstants()
         // even when texture is disabled, instead of the stage < bpmem.genMode.numindstages.
         // We set an unused bit here to indicate that the stage is active, even if it
         // is just a pass-through.
-        more_constants.tevind[i][0] |= 0x80000000;
+        more_constants.pack1[i][2] |= 0x80000000;
       }
       else
       {
-        more_constants.tevind[i][0] = 0;
+        more_constants.pack1[i][2] = 0;
       }
     }
 
@@ -420,7 +420,7 @@ void PixelShaderManager::UpdateBP(u32 bp, u32 newValue)
   else if (bp >= 0x28 && bp < 0x30)
   {
     u32 order = bp - 0x28;
-    more_constants.tevorder[order][0] = newValue;
+    more_constants.pack2[order][0] = newValue;
     dirty = true;
   }
   else if (bp == 0x42)
@@ -438,7 +438,7 @@ void PixelShaderManager::UpdateBP(u32 bp, u32 newValue)
   else if (bp >= 0xc0 && bp < 0xe0)
   {
     u32 comb = bp - 0xc0;
-    more_constants.combiners[comb >> 1][comb & 1] = newValue;
+    more_constants.pack1[comb >> 1][comb & 1] = newValue;
     dirty = true;
   }
   else if (bp == 0xe8)
@@ -463,7 +463,7 @@ void PixelShaderManager::UpdateBP(u32 bp, u32 newValue)
   else if (bp >= 0xf6 && bp < 0xfe)
   {
     u32 ksel = bp - 0xf6;
-    more_constants.tevksel[ksel][0] = newValue;
+    more_constants.pack2[ksel][1] = newValue;
     dirty = true;
   }
   else if (bp == BPMEM_IREF || (bp & 0xf0) == BPMEM_IND_CMD)

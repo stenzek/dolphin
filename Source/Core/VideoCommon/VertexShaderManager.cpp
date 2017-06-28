@@ -570,9 +570,9 @@ void VertexShaderManager::SetConstants()
     bTexMtxInfoChanged = false;
     constants.xfmem_dualTexInfo = xfmem.dualTexTrans.enabled;
     for (size_t i = 0; i < ArraySize(xfmem.texMtxInfo); i++)
-      constants.xfmem_texMtxInfo[i][0] = xfmem.texMtxInfo[i].hex;
+      constants.xfmem_pack1[i][0] = xfmem.texMtxInfo[i].hex;
     for (size_t i = 0; i < ArraySize(xfmem.postMtxInfo); i++)
-      constants.xfmem_postMtxInfo[i][0] = xfmem.postMtxInfo[i].hex;
+      constants.xfmem_pack1[i][1] = xfmem.postMtxInfo[i].hex;
 
     dirty = true;
   }
@@ -583,8 +583,8 @@ void VertexShaderManager::SetConstants()
 
     for (size_t i = 0; i < 2; i++)
     {
-      constants.xfmem_color[i][0] = xfmem.color[i].hex;
-      constants.xfmem_alpha[i][0] = xfmem.alpha[i].hex;
+      constants.xfmem_pack1[i][2] = xfmem.color[i].hex;
+      constants.xfmem_pack1[i][3] = xfmem.alpha[i].hex;
     }
     constants.xfmem_numColorChans = xfmem.numChan.numColorChans;
 
