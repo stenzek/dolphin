@@ -274,12 +274,30 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
 
   out.Write("struct State {\n"
             "  int4 Reg[4];\n"
-            "  int4 RasColor;\n"
             "  int4 TexColor;\n"
-            "  int4 KonstColor;\n"
+            "  int AlphaBump;\n"
             "};\n"
+            "struct StageState {\n"
+            "  uint stage;\n"
+            "  uint order;\n"
+            "  uint cc;\n"
+            "  uint ac;\n");
+
+  // For D3D, we need to store colors in the struct, since we access it from outside
+  // the main function, where they are declared. Hopefully the compiler can propagate
+  // these through when it inlines the function.
+  if (ApiType == APIType::D3D)
+  {
+    out.Write("  float4 colors_0;\n"
+              "  float4 colors_1;\n");
+  }
+
+  out.Write("};\n"
             "\n"
-            "int3 selectColorInput(State s, uint index) {\n"
+            "int4 getRasColor(State s, StageState ss);\n"
+            "int4 getKonstColor(State s, StageState ss);\n"
+            "\n"
+            "int3 selectColorInput(State s, StageState ss, uint index) {\n"
             "  switch (index) {\n"
             "  case 0u: // prev.rgb\n"
             "    return s.Reg[0].rgb;\n"
@@ -302,21 +320,21 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
             "  case 9u:\n"
             "    return s.TexColor.aaa;\n"
             "  case 10u:\n"
-            "    return s.RasColor.rgb;\n"
+            "    return getRasColor(s, ss).rgb;\n"
             "  case 11u:\n"
-            "    return s.RasColor.aaa;\n"
+            "    return getRasColor(s, ss).aaa;\n"
             "  case 12u: // One\n"
             "    return int3(255, 255, 255);\n"
             "  case 13u: // Half\n"
             "    return int3(128, 128, 128);\n"
             "  case 14u:\n"
-            "    return s.KonstColor.rgb;\n"
+            "    return getKonstColor(s, ss).rgb;\n"
             "  case 15u: // Zero\n"
             "    return int3(0, 0, 0);\n"
             "  }\n"
             "}\n"
             "\n"
-            "int selectAlphaInput(State s, uint index) {\n"
+            "int selectAlphaInput(State s, StageState ss, uint index) {\n"
             "  switch (index) {\n"
             "  case 0u: // prev.a\n"
             "    return s.Reg[0].a;\n"
@@ -329,9 +347,9 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
             "  case 4u:\n"
             "    return s.TexColor.a;\n"
             "  case 5u:\n"
-            "    return s.RasColor.a;\n"
+            "    return getRasColor(s, ss).a;\n"
             "  case 6u:\n"
-            "    return s.KonstColor.a;\n"
+            "    return getKonstColor(s, ss).a;\n"
             "  case 7u: // Zero\n"
             "    return 0;\n"
             "  }\n"
@@ -501,12 +519,10 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
     out.Write("#define getTexCoord(index) (tex[(index)])\n\n");
   }
 
-  out.Write("  int AlphaBump = 0;\n"
-            "  int3 tevcoord = int3(0, 0, 0);\n"
+  out.Write("  int3 tevcoord = int3(0, 0, 0);\n"
             "  State s;\n"
             "  s.TexColor = int4(0, 0, 0, 0);\n"
-            "  s.RasColor = int4(0, 0, 0, 0);\n"
-            "  s.KonstColor = int4(0, 0, 0, 0);\n"
+            "  s.AlphaBump = 0;\n"
             "\n");
   for (int i = 0; i < 4; i++)
     out.Write("  s.Reg[%d] = " I_COLORS "[%d];\n", i, i);
@@ -533,23 +549,31 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
 
   out.Write("  for(uint stage = 0u; stage <= num_stages; stage++)\n"
             "  {\n"
-            "    uint cc = bpmem_combiners(stage).x;\n"
-            "    uint ac = bpmem_combiners(stage).y;\n"
-            "    uint order = bpmem_tevorder(stage>>1);\n"
+            "    StageState ss;\n"
+            "    ss.stage = stage;\n"
+            "    ss.cc = bpmem_combiners(stage).x;\n"
+            "    ss.ac = bpmem_combiners(stage).y;\n"
+            "    ss.order = bpmem_tevorder(stage>>1);\n"
             "    if ((stage & 1u) == 1u)\n"
-            "      order = order >> %d;\n\n",
+            "      ss.order = ss.order >> %d;\n\n",
             int(TwoTevStageOrders().enable1.StartBit() - TwoTevStageOrders().enable0.StartBit()));
+
+  if (ApiType == APIType::D3D)
+  {
+    out.Write("    ss.colors_0 = colors_0;\n"
+              "    ss.colors_1 = colors_1;\n");
+  }
 
   // Disable texturing when there are no texgens (for now)
   if (numTexgen != 0)
   {
     out.Write("    uint tex_coord = %s;\n",
-              BitfieldExtract("order", TwoTevStageOrders().texcoord0).c_str());
+              BitfieldExtract("ss.order", TwoTevStageOrders().texcoord0).c_str());
     out.Write("    float3 uv = getTexCoord(tex_coord);\n"
               "    int2 fixedPoint_uv = int2((uv.z == 0.0 ? uv.xy : (uv.xy / uv.z)) * " I_TEXDIMS
               "[tex_coord].zw);\n"
               "\n"
-              "    bool texture_enabled = (order & %du) != 0u;\n",
+              "    bool texture_enabled = (ss.order & %du) != 0u;\n",
               1 << TwoTevStageOrders().enable0.StartBit());
     out.Write("\n"
               "    // Indirect textures\n"
@@ -568,7 +592,7 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
     LookupIndirectTexture("indcoord", "bt");
     // out.Write("      int3 indcoord = indtex[bt];\n");
     out.Write("      if (bs != 0u)\n"
-              "        AlphaBump = indcoord[bs - 1u];\n"
+              "        s.AlphaBump = indcoord[bs - 1u];\n"
               "      switch(fmt)\n"
               "      {\n"
               "      case %iu:\n",
@@ -576,28 +600,28 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
     out.Write("        indcoord.x = indcoord.x + ((bias & 1u) != 0u ? -128 : 0);\n"
               "        indcoord.y = indcoord.y + ((bias & 2u) != 0u ? -128 : 0);\n"
               "        indcoord.z = indcoord.z + ((bias & 4u) != 0u ? -128 : 0);\n"
-              "        AlphaBump = AlphaBump & 0xf8;\n"
+              "        s.AlphaBump = s.AlphaBump & 0xf8;\n"
               "        break;\n"
               "      case %iu:\n",
               ITF_5);
     out.Write("        indcoord.x = (indcoord.x & 0x1f) + ((bias & 1u) != 0u ? 1 : 0);\n"
               "        indcoord.y = (indcoord.y & 0x1f) + ((bias & 2u) != 0u ? 1 : 0);\n"
               "        indcoord.z = (indcoord.z & 0x1f) + ((bias & 4u) != 0u ? 1 : 0);\n"
-              "        AlphaBump = AlphaBump & 0xe0;\n"
+              "        s.AlphaBump = s.AlphaBump & 0xe0;\n"
               "        break;\n"
               "      case %iu:\n",
               ITF_4);
     out.Write("        indcoord.x = (indcoord.x & 0x0f) + ((bias & 1u) != 0u ? 1 : 0);\n"
               "        indcoord.y = (indcoord.y & 0x0f) + ((bias & 2u) != 0u ? 1 : 0);\n"
               "        indcoord.z = (indcoord.z & 0x0f) + ((bias & 4u) != 0u ? 1 : 0);\n"
-              "        AlphaBump = AlphaBump & 0xf0;\n"
+              "        s.AlphaBump = s.AlphaBump & 0xf0;\n"
               "        break;\n"
               "      case %iu:\n",
               ITF_3);
     out.Write("        indcoord.x = (indcoord.x & 0x07) + ((bias & 1u) != 0u ? 1 : 0);\n"
               "        indcoord.y = (indcoord.y & 0x07) + ((bias & 2u) != 0u ? 1 : 0);\n"
               "        indcoord.z = (indcoord.z & 0x07) + ((bias & 4u) != 0u ? 1 : 0);\n"
-              "        AlphaBump = AlphaBump & 0xf8;\n"
+              "        s.AlphaBump = s.AlphaBump & 0xf8;\n"
               "        break;\n"
               "      }\n"
               "\n"
@@ -652,14 +676,14 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
               "    // Sample texture for stage\n"
               "    if(texture_enabled) {\n"
               "      uint sampler_num = %s;\n",
-              BitfieldExtract("order", TwoTevStageOrders().texmap0).c_str());
+              BitfieldExtract("ss.order", TwoTevStageOrders().texmap0).c_str());
     out.Write("\n"
               "      float2 uv = (float2(tevcoord.xy)) * " I_TEXDIMS "[sampler_num].xy;\n"
               "\n"
               "      int4 color = sampleTexture(sampler_num, uv);\n"
               "\n"
               "      uint swap = %s;\n",
-              BitfieldExtract("ac", TevStageCombiner().alphaC.tswap).c_str());
+              BitfieldExtract("ss.ac", TevStageCombiner().alphaC.tswap).c_str());
     out.Write("      s.TexColor = Swizzle(swap, color);\n");
     out.Write("    } else {\n"
               "      // Texture is disabled\n"
@@ -668,69 +692,38 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
               "\n");
   }
 
-  out.Write(
-      "    // Select Konst for stage\n"
-      "    // TODO: a switch case might be better here than an dynamically indexed uniform lookup\n"
-      "    uint tevksel = bpmem_tevksel(stage>>1);\n"
-      "    if ((stage & 1u) == 0u)\n"
-      "      s.KonstColor = int4(konstLookup[%s].rgb, konstLookup[%s].a);\n",
-      BitfieldExtract("tevksel", bpmem.tevksel[0].kcsel0).c_str(),
-      BitfieldExtract("tevksel", bpmem.tevksel[0].kasel0).c_str());
-  out.Write("    else\n"
-            "      s.KonstColor = int4(konstLookup[%s].rgb, konstLookup[%s].a);\n\n",
-            BitfieldExtract("tevksel", bpmem.tevksel[0].kcsel1).c_str(),
-            BitfieldExtract("tevksel", bpmem.tevksel[0].kasel1).c_str());
-  out.Write("\n");
-
-  out.Write("    // Select Ras for stage\n"
-            "    uint ras = %s;\n",
-            BitfieldExtract("order", TwoTevStageOrders().colorchan0).c_str());
-  out.Write("    if (ras < 2u) { // Lighting Channel 0 or 1\n"
-            "      int4 color = iround(((ras == 0u) ? colors_0 : colors_1) * 255.0);\n"
-            "      uint swap = %s;\n",
-            BitfieldExtract("ac", TevStageCombiner().alphaC.rswap).c_str());
-  out.Write("      s.RasColor = Swizzle(swap, color);\n");
-  out.Write("    } else if (ras == 5u) { // Alpha Bumb\n"
-            "      s.RasColor = int4(AlphaBump, AlphaBump, AlphaBump, AlphaBump);\n"
-            "    } else if (ras == 6u) { // Normalzied Alpha Bump\n"
-            "      int normalized = AlphaBump | AlphaBump >> 5;\n"
-            "      s.RasColor = int4(normalized, normalized, normalized, normalized);\n"
-            "    } else {\n"
-            "      s.RasColor = int4(0, 0, 0, 0);\n"
-            "    }\n"
-            "\n");
-
   out.Write("    // This is the Meat of TEV\n"
             "    {\n"
             "      // Color Combiner\n");
   out.Write("      uint color_a = %s;\n",
-            BitfieldExtract("cc", TevStageCombiner().colorC.a).c_str());
+            BitfieldExtract("ss.cc", TevStageCombiner().colorC.a).c_str());
   out.Write("      uint color_b = %s;\n",
-            BitfieldExtract("cc", TevStageCombiner().colorC.b).c_str());
+            BitfieldExtract("ss.cc", TevStageCombiner().colorC.b).c_str());
   out.Write("      uint color_c = %s;\n",
-            BitfieldExtract("cc", TevStageCombiner().colorC.c).c_str());
+            BitfieldExtract("ss.cc", TevStageCombiner().colorC.c).c_str());
   out.Write("      uint color_d = %s;\n",
-            BitfieldExtract("cc", TevStageCombiner().colorC.d).c_str());
+            BitfieldExtract("ss.cc", TevStageCombiner().colorC.d).c_str());
 
   out.Write("      uint color_bias = %s;\n",
-            BitfieldExtract("cc", TevStageCombiner().colorC.bias).c_str());
+            BitfieldExtract("ss.cc", TevStageCombiner().colorC.bias).c_str());
   out.Write("      bool color_op = bool(%s);\n",
-            BitfieldExtract("cc", TevStageCombiner().colorC.op).c_str());
+            BitfieldExtract("ss.cc", TevStageCombiner().colorC.op).c_str());
   out.Write("      bool color_clamp = bool(%s);\n",
-            BitfieldExtract("cc", TevStageCombiner().colorC.clamp).c_str());
+            BitfieldExtract("ss.cc", TevStageCombiner().colorC.clamp).c_str());
   out.Write("      uint color_shift = %s;\n",
-            BitfieldExtract("cc", TevStageCombiner().colorC.shift).c_str());
+            BitfieldExtract("ss.cc", TevStageCombiner().colorC.shift).c_str());
   out.Write("      uint color_dest = %s;\n",
-            BitfieldExtract("cc", TevStageCombiner().colorC.dest).c_str());
+            BitfieldExtract("ss.cc", TevStageCombiner().colorC.dest).c_str());
 
   out.Write(
       "      uint color_compare_op = color_shift << 1 | uint(color_op);\n"
       "\n"
-      "      int3 color_A = selectColorInput(s, color_a) & int3(255, 255, 255);\n"
-      "      int3 color_B = selectColorInput(s, color_b) & int3(255, 255, 255);\n"
-      "      int3 color_C = selectColorInput(s, color_c) & int3(255, 255, 255);\n"
-      "      int3 color_D = selectColorInput(s, color_d);  // 10 bits + sign\n"  // TODO: do we need
-                                                                                 // to sign extend?
+      "      int3 color_A = selectColorInput(s, ss, color_a) & int3(255, 255, 255);\n"
+      "      int3 color_B = selectColorInput(s, ss, color_b) & int3(255, 255, 255);\n"
+      "      int3 color_C = selectColorInput(s, ss, color_c) & int3(255, 255, 255);\n"
+      "      int3 color_D = selectColorInput(s, ss, color_d);  // 10 bits + sign\n"  // TODO: do we
+                                                                                     // need to sign
+                                                                                     // extend?
       "\n"
       "      int3 color;\n"
       "      if(color_bias != 3u) { // Normal mode\n"
@@ -769,24 +762,24 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
   // Alpha combiner
   out.Write("      // Alpha Combiner\n");
   out.Write("      uint alpha_a = %s;\n",
-            BitfieldExtract("ac", TevStageCombiner().alphaC.a).c_str());
+            BitfieldExtract("ss.ac", TevStageCombiner().alphaC.a).c_str());
   out.Write("      uint alpha_b = %s;\n",
-            BitfieldExtract("ac", TevStageCombiner().alphaC.b).c_str());
+            BitfieldExtract("ss.ac", TevStageCombiner().alphaC.b).c_str());
   out.Write("      uint alpha_c = %s;\n",
-            BitfieldExtract("ac", TevStageCombiner().alphaC.c).c_str());
+            BitfieldExtract("ss.ac", TevStageCombiner().alphaC.c).c_str());
   out.Write("      uint alpha_d = %s;\n",
-            BitfieldExtract("ac", TevStageCombiner().alphaC.d).c_str());
+            BitfieldExtract("ss.ac", TevStageCombiner().alphaC.d).c_str());
 
   out.Write("      uint alpha_bias = %s;\n",
-            BitfieldExtract("ac", TevStageCombiner().alphaC.bias).c_str());
+            BitfieldExtract("ss.ac", TevStageCombiner().alphaC.bias).c_str());
   out.Write("      bool alpha_op = bool(%s);\n",
-            BitfieldExtract("ac", TevStageCombiner().alphaC.op).c_str());
+            BitfieldExtract("ss.ac", TevStageCombiner().alphaC.op).c_str());
   out.Write("      bool alpha_clamp = bool(%s);\n",
-            BitfieldExtract("ac", TevStageCombiner().alphaC.clamp).c_str());
+            BitfieldExtract("ss.ac", TevStageCombiner().alphaC.clamp).c_str());
   out.Write("      uint alpha_shift = %s;\n",
-            BitfieldExtract("ac", TevStageCombiner().alphaC.shift).c_str());
+            BitfieldExtract("ss.ac", TevStageCombiner().alphaC.shift).c_str());
   out.Write("      uint alpha_dest = %s;\n",
-            BitfieldExtract("ac", TevStageCombiner().alphaC.dest).c_str());
+            BitfieldExtract("ss.ac", TevStageCombiner().alphaC.dest).c_str());
 
   out.Write(
       "      uint alpha_compare_op = alpha_shift << 1 | uint(alpha_op);\n"
@@ -795,13 +788,13 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
       "      int alpha_B;\n"
       "      if (alpha_bias != 3u || alpha_compare_op > 5u) {\n"
       "        // Small optimisation here: alpha_A and alpha_B are unused by compare ops 0-5\n"
-      "        alpha_A = selectAlphaInput(s, alpha_a) & 255;\n"
-      "        alpha_B = selectAlphaInput(s, alpha_b) & 255;\n"
+      "        alpha_A = selectAlphaInput(s, ss, alpha_a) & 255;\n"
+      "        alpha_B = selectAlphaInput(s, ss, alpha_b) & 255;\n"
       "      };\n"
-      "      int alpha_C = selectAlphaInput(s, alpha_c) & 255;\n"
-      "      int alpha_D = selectAlphaInput(s, alpha_d); // 10 bits + sign\n"  // TODO: do we
-                                                                               // need to sign
-                                                                               // extend?
+      "      int alpha_C = selectAlphaInput(s, ss, alpha_c) & 255;\n"
+      "      int alpha_D = selectAlphaInput(s, ss, alpha_d); // 10 bits + sign\n"  // TODO: do we
+                                                                                   // need to sign
+                                                                                   // extend?
       "\n"
       "      int alpha;\n"
       "      if(alpha_bias != 3u) { // Normal mode\n"
@@ -1052,6 +1045,41 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
     out.Write("  }\n");
   }
 
+  out.Write("}\n"
+            "\n"
+            "int4 getRasColor(State s, StageState ss) {\n"
+            "  // Select Ras for stage\n"
+            "  uint ras = %s;\n",
+            BitfieldExtract("ss.order", TwoTevStageOrders().colorchan0).c_str());
+  out.Write("  if (ras < 2u) { // Lighting Channel 0 or 1\n"
+            "    int4 color = iround(((ras == 0u) ? %scolors_0 : %scolors_1) * 255.0);\n",
+            (ApiType == APIType::D3D) ? "ss." : "", (ApiType == APIType::D3D) ? "ss." : "");
+  out.Write("    uint swap = %s;\n",
+            BitfieldExtract("ss.ac", TevStageCombiner().alphaC.rswap).c_str());
+  out.Write("    return Swizzle(swap, color);\n");
+  out.Write("  } else if (ras == 5u) { // Alpha Bumb\n"
+            "    return int4(s.AlphaBump, s.AlphaBump, s.AlphaBump, s.AlphaBump);\n"
+            "  } else if (ras == 6u) { // Normalzied Alpha Bump\n"
+            "    int normalized = s.AlphaBump | s.AlphaBump >> 5;\n"
+            "    return int4(normalized, normalized, normalized, normalized);\n"
+            "  } else {\n"
+            "    return int4(0, 0, 0, 0);\n"
+            "  }\n"
+            "}\n"
+            "\n"
+            "int4 getKonstColor(State s, StageState ss) {\n"
+            "  // Select Konst for stage\n"
+            "  // TODO: a switch case might be better here than an dynamically"
+            "  // indexed uniform lookup\n"
+            "  uint tevksel = bpmem_tevksel(ss.stage>>1);\n"
+            "  if ((ss.stage & 1u) == 0u)\n"
+            "    return int4(konstLookup[%s].rgb, konstLookup[%s].a);\n",
+            BitfieldExtract("tevksel", bpmem.tevksel[0].kcsel0).c_str(),
+            BitfieldExtract("tevksel", bpmem.tevksel[0].kasel0).c_str());
+  out.Write("  else\n"
+            "    return int4(konstLookup[%s].rgb, konstLookup[%s].a);\n",
+            BitfieldExtract("tevksel", bpmem.tevksel[0].kcsel1).c_str(),
+            BitfieldExtract("tevksel", bpmem.tevksel[0].kasel1).c_str());
   out.Write("}\n");
 
   return out;
