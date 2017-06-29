@@ -503,8 +503,6 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
 
   out.Write("  int AlphaBump = 0;\n"
             "  int3 tevcoord = int3(0, 0, 0);\n"
-            "  int4 icolors_0 = iround(colors_0 * 255.0);\n"
-            "  int4 icolors_1 = iround(colors_1 * 255.0);\n"
             "  State s;\n"
             "  s.TexColor = int4(0, 0, 0, 0);\n"
             "  s.RasColor = int4(0, 0, 0, 0);\n"
@@ -688,7 +686,7 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
             "    uint ras = %s;\n",
             BitfieldExtract("order", TwoTevStageOrders().colorchan0).c_str());
   out.Write("    if (ras < 2u) { // Lighting Channel 0 or 1\n"
-            "      int4 color = (ras == 0u) ? icolors_0 : icolors_1;\n"
+            "      int4 color = iround(((ras == 0u) ? colors_0 : colors_1) * 255.0);\n"
             "      uint swap = %s;\n",
             BitfieldExtract("ac", TevStageCombiner().alphaC.rswap).c_str());
   out.Write("      s.RasColor = Swizzle(swap, color);\n");
