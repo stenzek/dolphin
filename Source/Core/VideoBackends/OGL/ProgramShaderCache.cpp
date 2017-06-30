@@ -10,12 +10,14 @@
 #include "Common/Align.h"
 #include "Common/CommonTypes.h"
 #include "Common/FileUtil.h"
+#include "Common/GL/GLInterfaceBase.h"
 #include "Common/Logging/Log.h"
 #include "Common/MsgHandler.h"
 #include "Common/StringUtil.h"
 #include "Common/Timer.h"
 
 #include "Core/ConfigManager.h"
+#include "Core/Host.h"
 
 #include "VideoBackends/OGL/Render.h"
 #include "VideoBackends/OGL/StreamBuffer.h"
@@ -36,6 +38,8 @@ namespace OGL
 static const u32 UBO_LENGTH = 32 * 1024 * 1024;
 
 bool ProgramShaderCache::s_can_use_parallel_shader_compile;
+std::shared_ptr<ProgramShaderCache::SharedContextAsyncShaderCompiler>
+    ProgramShaderCache::s_async_compiler;
 u32 ProgramShaderCache::s_ubo_buffer_size;
 s32 ProgramShaderCache::s_ubo_align;
 
@@ -299,7 +303,7 @@ SHADER* ProgramShaderCache::SetShader(u32 primitive_type)
     if (entry->pending)
     {
       // If the compile is still pending, keep using the ubershader.
-      if (!entry->shader.CheckParallelCompileStatus())
+      if (s_async_compiler || !entry->shader.CheckParallelCompileStatus())
         return SetUberShader(primitive_type);
 
       // If the shader failed compilation, leave the entry, but don't use the shader.
@@ -316,6 +320,24 @@ SHADER* ProgramShaderCache::SetShader(u32 primitive_type)
     return &last_entry->shader;
   }
 
+  // Can we background compile this shader? Requires background shader compiling to be enabled,
+  // and all ubershaders to have been successfully compiled.
+  bool can_background_compile =
+      g_ActiveConfig.CanBackgroundCompileShaders() && !ubershaders.empty();
+
+  // Compile the new shader program.
+  PCacheEntry& newentry = pshaders[uid];
+  newentry.in_cache = false;
+  newentry.pending = true;
+
+  // Multi-context compiling?
+  if (can_background_compile && s_async_compiler)
+  {
+    s_async_compiler->QueueWorkItem(s_async_compiler->CreateWorkItem<ShaderCompileWorkItem>(uid));
+    return SetUberShader(primitive_type);
+  }
+
+  // Parallel/normal shader compiling.
   ShaderCode vcode;
   if (!g_ActiveConfig.bForceVertexUberShaders)
     vcode = GenerateVertexShaderCode(APIType::OpenGL, uid.vuid.GetUidData());
@@ -334,16 +356,7 @@ SHADER* ProgramShaderCache::SetShader(u32 primitive_type)
       !uid.guid.GetUidData()->IsPassthrough())
     gcode = GenerateGeometryShaderCode(APIType::OpenGL, uid.guid.GetUidData());
 
-  // Can we background compile this shader?
-  // Requires background shader compiling to be enabled, ARB_parallel_shader_compile,
-  // and all ubershaders to have been successfully compiled.
-  bool background_compile = g_ActiveConfig.CanBackgroundCompileShaders() &&
-                            s_can_use_parallel_shader_compile && !ubershaders.empty();
-
-  // Compile the new shader program.
-  PCacheEntry& newentry = pshaders[uid];
-  newentry.in_cache = false;
-  newentry.pending = background_compile;
+  bool background_compile = can_background_compile && s_can_use_parallel_shader_compile;
   if (!CompileShader(newentry.shader, vcode.GetBuffer(), pcode.GetBuffer(), gcode.GetBuffer(),
                      background_compile))
   {
@@ -360,6 +373,7 @@ SHADER* ProgramShaderCache::SetShader(u32 primitive_type)
 
   last_uid = uid;
   last_entry = &newentry;
+  last_entry->pending = false;
   last_entry->shader.Bind();
   return &last_entry->shader;
 }
@@ -681,6 +695,13 @@ void ProgramShaderCache::Init()
     glMaxShaderCompilerThreadsARB(static_cast<GLuint>(max_threads));
     s_can_use_parallel_shader_compile = true;
   }
+  else
+  {
+    // Use multi-context path.
+    s_async_compiler = std::make_shared<SharedContextAsyncShaderCompiler>();
+    if (g_ActiveConfig.GetShaderCompilerThreads() > 0)
+      s_async_compiler->StartWorkerThreads(g_ActiveConfig.GetShaderCompilerThreads());
+  }
 
   // Read our shader cache, only if supported and enabled
   if (g_ogl_config.bSupportsGLSLCache && g_ActiveConfig.bShaderCache)
@@ -698,6 +719,12 @@ void ProgramShaderCache::Init()
 
 void ProgramShaderCache::Reload()
 {
+  if (s_async_compiler)
+  {
+    s_async_compiler->WaitUntilCompletion();
+    s_async_compiler->RetrieveWorkItems();
+  }
+
   const bool use_cache = g_ogl_config.bSupportsGLSLCache && g_ActiveConfig.bShaderCache;
   if (use_cache)
     SaveProgramBinaries();
@@ -721,6 +748,14 @@ void ProgramShaderCache::Reload()
 
 void ProgramShaderCache::Shutdown()
 {
+  if (s_async_compiler)
+  {
+    s_async_compiler->WaitUntilCompletion();
+    s_async_compiler->StopWorkerThreads();
+    s_async_compiler->RetrieveWorkItems();
+    s_async_compiler.reset();
+  }
+
   // store all shaders in cache on disk
   if (g_ogl_config.bSupportsGLSLCache && g_ActiveConfig.bShaderCache)
     SaveProgramBinaries();
@@ -1061,6 +1096,18 @@ void ProgramShaderCache::PrecompileUberShaders()
         if (!success || ubershaders.find(uid) != ubershaders.end())
           return;
 
+        PCacheEntry& entry = ubershaders[uid];
+        entry.in_cache = false;
+        entry.pending = true;
+
+        // Multi-context path?
+        if (s_async_compiler)
+        {
+          s_async_compiler->QueueWorkItem(
+              s_async_compiler->CreateWorkItem<UberShaderCompileWorkItem>(uid));
+          return;
+        }
+
         ShaderCode vcode = UberShader::GenVertexShader(APIType::OpenGL, uid.vuid.GetUidData());
         ShaderCode pcode = UberShader::GenPixelShader(APIType::OpenGL, uid.puid.GetUidData());
         ShaderCode gcode;
@@ -1072,9 +1119,6 @@ void ProgramShaderCache::PrecompileUberShaders()
 
         // Always background compile, even when it's not supported.
         // This way hopefully the driver can still compile the shaders in parallel.
-        PCacheEntry& entry = ubershaders[uid];
-        entry.in_cache = false;
-        entry.pending = true;
         if (!CompileShader(entry.shader, vcode.GetBuffer(), pcode.GetBuffer(), gcode.GetBuffer(),
                            true))
         {
@@ -1086,18 +1130,31 @@ void ProgramShaderCache::PrecompileUberShaders()
     });
   });
 
+  if (s_async_compiler)
+  {
+    s_async_compiler->WaitUntilCompletion([](size_t completed, size_t total) {
+      Host_UpdateProgressDialog(GetStringT("Compiling shaders...").c_str(),
+                                static_cast<int>(completed), static_cast<int>(total));
+    });
+    s_async_compiler->RetrieveWorkItems();
+    Host_UpdateProgressDialog("", -1, -1);
+  }
+
   // Ensure all the ubershaders are compiled before booting.
   if (success)
   {
     for (auto& it : ubershaders)
     {
       PCacheEntry* entry = &it.second;
-      if (entry->pending && !entry->FinishParallelCompile())
+      if (entry->pending)
       {
-        // If any ubershaders failed to compile, throw out all of them.
-        // Otherwise, we'll potentially use an invalid/non-existent ubershader.
-        success = false;
-        break;
+        if (!entry->shader.glprogid || (!s_async_compiler && !entry->FinishParallelCompile()))
+        {
+          // If any ubershaders failed to compile, throw out all of them.
+          // Otherwise, we'll potentially use an invalid/non-existent ubershader.
+          success = false;
+          break;
+        }
       }
     }
   }
@@ -1110,4 +1167,107 @@ void ProgramShaderCache::PrecompileUberShaders()
     ubershaders.clear();
   }
 }
+
+bool ProgramShaderCache::SharedContextAsyncShaderCompiler::WorkerThreadInitMainThread(void** param)
+{
+  auto ctx = GLInterface->CreateSharedContext();
+  if (!ctx)
+  {
+    PanicAlert("Failed to create shared context for shader compiling.");
+    return false;
+  }
+
+  *param = ctx.release();
+  return true;
+}
+
+bool ProgramShaderCache::SharedContextAsyncShaderCompiler::WorkerThreadInitWorkerThread(void* param)
+{
+  cInterfaceBase* ctx = reinterpret_cast<cInterfaceBase*>(param);
+  if (!ctx->MakeCurrent())
+  {
+    PanicAlert("Failed to make shared context current.");
+    ctx->Shutdown();
+    delete ctx;
+    return false;
+  }
+
+  return true;
+}
+
+void ProgramShaderCache::SharedContextAsyncShaderCompiler::WorkerThreadExit(void* param)
+{
+  cInterfaceBase* ctx = reinterpret_cast<cInterfaceBase*>(param);
+  ctx->Shutdown();
+  delete ctx;
+}
+
+ProgramShaderCache::ShaderCompileWorkItem::ShaderCompileWorkItem(const SHADERUID& uid)
+{
+  std::memcpy(&m_uid, &uid, sizeof(m_uid));
+}
+
+bool ProgramShaderCache::ShaderCompileWorkItem::Compile()
+{
+  ShaderCode vcode = GenerateVertexShaderCode(APIType::OpenGL, m_uid.vuid.GetUidData());
+  ShaderCode pcode = GeneratePixelShaderCode(APIType::OpenGL, m_uid.puid.GetUidData());
+  ShaderCode gcode;
+  if (g_ActiveConfig.backend_info.bSupportsGeometryShaders &&
+      !m_uid.guid.GetUidData()->IsPassthrough())
+    gcode = GenerateGeometryShaderCode(APIType::OpenGL, m_uid.guid.GetUidData());
+
+  CompileShader(m_program, vcode.GetBuffer(), pcode.GetBuffer(), gcode.GetBuffer(), false);
+  return true;
+}
+
+void ProgramShaderCache::ShaderCompileWorkItem::Retrieve()
+{
+  auto iter = pshaders.find(m_uid);
+  if (iter != pshaders.end() && !iter->second.pending)
+  {
+    // Main thread already compiled this shader.
+    m_program.Destroy();
+    return;
+  }
+
+  PCacheEntry& entry = pshaders[m_uid];
+  entry.shader = m_program;
+  entry.in_cache = false;
+  entry.pending = false;
+}
+
+ProgramShaderCache::UberShaderCompileWorkItem::UberShaderCompileWorkItem(const UBERSHADERUID& uid)
+{
+  std::memcpy(&m_uid, &uid, sizeof(m_uid));
+}
+
+bool ProgramShaderCache::UberShaderCompileWorkItem::Compile()
+{
+  ShaderCode vcode = UberShader::GenVertexShader(APIType::OpenGL, m_uid.vuid.GetUidData());
+  ShaderCode pcode = UberShader::GenPixelShader(APIType::OpenGL, m_uid.puid.GetUidData());
+  ShaderCode gcode;
+  if (g_ActiveConfig.backend_info.bSupportsGeometryShaders &&
+      !m_uid.guid.GetUidData()->IsPassthrough())
+    gcode = GenerateGeometryShaderCode(APIType::OpenGL, m_uid.guid.GetUidData());
+
+  CompileShader(m_program, vcode.GetBuffer(), pcode.GetBuffer(), gcode.GetBuffer(), false);
+  return true;
+}
+
+void ProgramShaderCache::UberShaderCompileWorkItem::Retrieve()
+{
+  auto iter = ubershaders.find(m_uid);
+  if (iter != ubershaders.end() && !iter->second.pending)
+  {
+    // Main thread already compiled this shader.
+    m_program.Destroy();
+    return;
+  }
+
+  PCacheEntry& entry = ubershaders[m_uid];
+  entry.shader = m_program;
+  entry.in_cache = false;
+  entry.pending = false;
+}
+
 }  // namespace OGL

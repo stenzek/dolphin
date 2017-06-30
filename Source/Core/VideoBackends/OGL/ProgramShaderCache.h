@@ -141,6 +141,40 @@ private:
     std::map<UIDType, PCacheEntry>& m_shader_map;
   };
 
+  class SharedContextAsyncShaderCompiler : public VideoCommon::AsyncShaderCompiler
+  {
+  protected:
+    virtual bool WorkerThreadInitMainThread(void** param) override;
+    virtual bool WorkerThreadInitWorkerThread(void* param) override;
+    virtual void WorkerThreadExit(void* param) override;
+  };
+
+  class ShaderCompileWorkItem : public VideoCommon::AsyncShaderCompiler::WorkItem
+  {
+  public:
+    ShaderCompileWorkItem(const SHADERUID& uid);
+
+    bool Compile() override;
+    void Retrieve() override;
+
+  private:
+    SHADERUID m_uid;
+    SHADER m_program;
+  };
+
+  class UberShaderCompileWorkItem : public VideoCommon::AsyncShaderCompiler::WorkItem
+  {
+  public:
+    UberShaderCompileWorkItem(const UBERSHADERUID& uid);
+
+    bool Compile() override;
+    void Retrieve() override;
+
+  private:
+    UBERSHADERUID m_uid;
+    SHADER m_program;
+  };
+
   typedef std::map<SHADERUID, PCacheEntry> PCache;
   typedef std::map<UBERSHADERUID, PCacheEntry> UberPCache;
 
@@ -159,6 +193,7 @@ private:
   static UBERSHADERUID last_uber_uid;
 
   static bool s_can_use_parallel_shader_compile;
+  static std::shared_ptr<SharedContextAsyncShaderCompiler> s_async_compiler;
   static u32 s_ubo_buffer_size;
   static s32 s_ubo_align;
 };
