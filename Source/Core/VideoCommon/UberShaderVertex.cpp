@@ -87,12 +87,13 @@ ShaderCode GenVertexShader(APIType ApiType, const vertex_ubershader_uid_data* ui
             "\n"
             "  switch (diffusefunc) {\n");
   out.Write("  case %uu: // LIGHTDIF_NONE\n", LIGHTDIF_NONE);
-  out.Write("    return int4(round(attn * " I_LIGHTS "[index].color));\n\n");
+  out.Write("    return int4(round(attn * float4(" I_LIGHTS "[index].color)));\n\n");
   out.Write("  case %uu: // LIGHTDIF_SIGN\n", LIGHTDIF_SIGN);
-  out.Write("    return int4(round(attn * dot(ldir, _norm0) * " I_LIGHTS "[index].color));\n\n");
+  out.Write("    return int4(round(attn * dot(ldir, _norm0) * float4(" I_LIGHTS
+            "[index].color)));\n\n");
   out.Write("  case %uu: // LIGHTDIF_CLAMP\n", LIGHTDIF_CLAMP);
-  out.Write("    return int4(round(attn * max(0.0, dot(ldir, _norm0)) * " I_LIGHTS
-            "[index].color));\n\n");
+  out.Write("    return int4(round(attn * max(0.0, dot(ldir, _norm0)) * float4(" I_LIGHTS
+            "[index].color)));\n\n");
   out.Write("  default:\n"
             "    return int4(0, 0, 0, 0);\n"
             "  }\n"
