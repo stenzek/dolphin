@@ -28,7 +28,6 @@ ShaderCode GenVertexShader(APIType ApiType, const vertex_ubershader_uid_data* ui
 {
   const bool msaa = g_ActiveConfig.iMultisamples > 1;
   const bool ssaa = g_ActiveConfig.iMultisamples > 1 && g_ActiveConfig.bSSAA;
-  const bool out_texgen_array = !DriverDetails::HasBug(DriverDetails::BUG_BROKEN_VARYING_ARRAYS);
   const u32 numTexgen = uid_data->num_texgens;
   ShaderCode out;
 
@@ -100,7 +99,7 @@ ShaderCode GenVertexShader(APIType ApiType, const vertex_ubershader_uid_data* ui
             "}\n\n");
 
   out.Write("struct VS_OUTPUT {\n");
-  GenerateVSOutputMembers(out, ApiType, numTexgen, true, false, "");
+  GenerateVSOutputMembers(out, ApiType, numTexgen, false, "");
   out.Write("};\n\n");
 
   if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
@@ -116,7 +115,7 @@ ShaderCode GenVertexShader(APIType ApiType, const vertex_ubershader_uid_data* ui
       out.Write("ATTRIBUTE_LOCATION(%d) in float3 tex%d;\n", SHADER_TEXTURE0_ATTRIB + i, i);
 
     out.Write("VARYING_LOCATION(0) out VertexData {\n");
-    GenerateVSOutputMembers(out, ApiType, numTexgen, out_texgen_array, false,
+    GenerateVSOutputMembers(out, ApiType, numTexgen, false,
                             GetInterpolationQualifier(msaa, ssaa, true));
     out.Write("} vs;\n\n");
 
@@ -258,14 +257,14 @@ ShaderCode GenVertexShader(APIType ApiType, const vertex_ubershader_uid_data* ui
   {
     if (g_ActiveConfig.backend_info.bSupportsGeometryShaders || ApiType == APIType::Vulkan)
     {
-      AssignVSOutputMembers(out, "vs", "o", numTexgen, out_texgen_array, true, false);
+      AssignVSOutputMembers(out, "vs", "o", numTexgen, false);
     }
     else
     {
       // TODO: Pass interface blocks between shader stages even if geometry shaders
       // are not supported, however that will require at least OpenGL 3.2 support.
       for (u32 i = 0; i < numTexgen; ++i)
-        out.Write("uv%d.xyz = o.tex[%d];\n", i, i);
+        out.Write("uv%d.xyz = o.tex%d;\n", i, i);
       out.Write("clipPos = o.clipPos;\n");
       out.Write("colors_0 = o.colors_0;\n");
       out.Write("colors_1 = o.colors_1;\n");
@@ -412,7 +411,7 @@ void GenVertexShaderTexGens(APIType ApiType, u32 numTexgen, ShaderCode& out)
   // The HLSL compiler complains that the output texture coordinates are uninitialized when trying
   // to dynamically index them.
   for (u32 i = 0; i < numTexgen; i++)
-    out.Write("o.tex[%u] = float3(0.0, 0.0, 0.0);\n", i);
+    out.Write("o.tex%u = float3(0.0, 0.0, 0.0);\n", i);
 
   out.Write("// Texture coordinate generation\n");
   if (numTexgen == 1)
@@ -474,7 +473,7 @@ void GenVertexShaderTexGens(APIType ApiType, u32 numTexgen, ShaderCode& out)
             BitfieldExtract("texMtxInfo", TexMtxInfo().embosssourceshift).c_str());
   out.Write("      switch (source) {\n");
   for (u32 i = 0; i < numTexgen; i++)
-    out.Write("      case %uu: output_tex.xyz = o.tex[%u]; break;\n", i, i);
+    out.Write("      case %uu: output_tex.xyz = o.tex%u; break;\n", i, i);
   out.Write("      default: output_tex.xyz = float3(0.0, 0.0, 0.0); break;\n"
             "      }\n");
   out.Write("      if ((components & %uu) != 0u) { // VB_HAS_NRM1 | VB_HAS_NRM2\n",
@@ -558,7 +557,7 @@ void GenVertexShaderTexGens(APIType ApiType, u32 numTexgen, ShaderCode& out)
   out.Write("  // Hopefully GPUs that can support dynamic indexing will optimize this.\n");
   out.Write("  switch (texgen) {\n");
   for (u32 i = 0; i < numTexgen; i++)
-    out.Write("  case %uu: o.tex[%u] = output_tex; break;\n", i, i);
+    out.Write("  case %uu: o.tex%u = output_tex; break;\n", i, i);
   out.Write("  }\n"
             "}\n");
 }

@@ -173,26 +173,15 @@ inline void DefineOutputMember(T& object, APIType api_type, const char* qualifie
 }
 
 template <class T>
-inline void GenerateVSOutputMembers(T& object, APIType api_type, u32 texgens, bool texgen_array,
+inline void GenerateVSOutputMembers(T& object, APIType api_type, u32 texgens,
                                     bool per_pixel_lighting, const char* qualifier)
 {
   DefineOutputMember(object, api_type, qualifier, "float4", "pos", -1, "POSITION");
   DefineOutputMember(object, api_type, qualifier, "float4", "colors_", 0, "COLOR", 0);
   DefineOutputMember(object, api_type, qualifier, "float4", "colors_", 1, "COLOR", 1);
 
-  if (texgens != 0)
-  {
-    if (texgen_array)
-    {
-      std::string tex = StringFromFormat("tex[%d]", texgens);
-      DefineOutputMember(object, api_type, qualifier, "float3", tex.c_str(), -1, "TEXCOORD", 0);
-    }
-    else
-    {
-      for (u32 i = 0; i < texgens; i++)
-        DefineOutputMember(object, api_type, qualifier, "float3", "tex", i, "TEXCOORD", i);
-    }
-  }
+  for (u32 i = 0; i < texgens; i++)
+    DefineOutputMember(object, api_type, qualifier, "float3", "tex", i, "TEXCOORD", i);
 
   DefineOutputMember(object, api_type, qualifier, "float4", "clipPos", -1, "TEXCOORD", texgens);
 
@@ -210,7 +199,6 @@ inline void GenerateVSOutputMembers(T& object, APIType api_type, u32 texgens, bo
 
 template <class T>
 inline void AssignVSOutputMembers(T& object, const char* a, const char* b, u32 texgens,
-                                  bool out_texgen_array, bool in_texgen_array,
                                   bool per_pixel_lighting)
 {
   object.Write("\t%s.pos = %s.pos;\n", a, b);
@@ -218,17 +206,7 @@ inline void AssignVSOutputMembers(T& object, const char* a, const char* b, u32 t
   object.Write("\t%s.colors_1 = %s.colors_1;\n", a, b);
 
   for (u32 i = 0; i < texgens; ++i)
-  {
-    if (out_texgen_array)
-      object.Write("\t%s.tex[%u] = ", a, i);
-    else
-      object.Write("\t%s.tex%u = ", a, i);
-
-    if (in_texgen_array)
-      object.Write("%s.tex[%u];\n", b, i);
-    else
-      object.Write("%s.tex%u;\n", b, i);
-  }
+    object.Write("\t%s.tex%u = %s.tex%u;\n", a, i, b, i);
 
   object.Write("\t%s.clipPos = %s.clipPos;\n", a, b);
 

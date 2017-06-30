@@ -247,13 +247,6 @@ enum Bug
   // fail compilation with no useful diagnostic log. This can be worked around by storing
   // the negated value to a temporary variable then using that in the bitwise op.
   BUG_BROKEN_BITWISE_OP_NEGATION,
-
-  // BUG: Using arrays in shader outputs/inputs causes corruption on AMD Vulkan drivers.
-  // Started Version: -1
-  // Ended Version: -1
-  // This happens with our texture coordinate array. Instead, replace it with separate
-  // variables, and use a switch to replace the array indexing.
-  BUG_BROKEN_VARYING_ARRAYS,
 };
 
 // Initializes our internal vendor, device family, and driver version

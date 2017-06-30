@@ -421,7 +421,6 @@ ShaderCode GeneratePixelShaderCode(APIType ApiType, const pixel_shader_uid_data*
   const bool msaa = g_ActiveConfig.IsMSAAEnabled();
   const bool ssaa = g_ActiveConfig.IsSSAAEnabled();
   const bool stereo = g_ActiveConfig.IsStereoEnabled();
-  const bool texgen_array = !DriverDetails::HasBug(DriverDetails::BUG_BROKEN_VARYING_ARRAYS);
   const u32 numStages = uid_data->genMode_numtevstages + 1;
 
   out.Write("//Pixel Shader for TEV stages\n");
@@ -445,7 +444,7 @@ ShaderCode GeneratePixelShaderCode(APIType ApiType, const pixel_shader_uid_data*
   }
 
   out.Write("struct VS_OUTPUT {\n");
-  GenerateVSOutputMembers(out, ApiType, uid_data->genMode_numtexgens, true, per_pixel_lighting, "");
+  GenerateVSOutputMembers(out, ApiType, uid_data->genMode_numtexgens, per_pixel_lighting, "");
   out.Write("};\n");
 
   if (uid_data->forced_early_z)
@@ -528,8 +527,7 @@ ShaderCode GeneratePixelShaderCode(APIType ApiType, const pixel_shader_uid_data*
     if (g_ActiveConfig.backend_info.bSupportsGeometryShaders || ApiType == APIType::Vulkan)
     {
       out.Write("VARYING_LOCATION(0) in VertexData {\n");
-      GenerateVSOutputMembers(out, ApiType, uid_data->genMode_numtexgens, texgen_array,
-                              per_pixel_lighting,
+      GenerateVSOutputMembers(out, ApiType, uid_data->genMode_numtexgens, per_pixel_lighting,
                               GetInterpolationQualifier(msaa, ssaa, true, true));
 
       if (stereo)
@@ -559,16 +557,8 @@ ShaderCode GeneratePixelShaderCode(APIType ApiType, const pixel_shader_uid_data*
 
     if (g_ActiveConfig.backend_info.bSupportsGeometryShaders || ApiType == APIType::Vulkan)
     {
-      if (DriverDetails::HasBug(DriverDetails::BUG_BROKEN_VARYING_ARRAYS))
-      {
-        for (u32 i = 0; i < uid_data->genMode_numtexgens; ++i)
-          out.Write("\tfloat3 uv%u = tex%u;\n", i, i);
-      }
-      else
-      {
-        for (u32 i = 0; i < uid_data->genMode_numtexgens; ++i)
-          out.Write("\tfloat3 uv%u = tex[%u];\n", i, i);
-      }
+      for (u32 i = 0; i < uid_data->genMode_numtexgens; ++i)
+        out.Write("\tfloat3 uv%u = tex%u;\n", i, i);
     }
 
     out.Write("\tfloat4 rawpos = gl_FragCoord;\n");

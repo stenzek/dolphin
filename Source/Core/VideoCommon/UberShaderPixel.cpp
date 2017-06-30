@@ -28,7 +28,6 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
   const bool early_depth = uid_data->early_depth != 0;
   const bool bounding_box =
       g_ActiveConfig.bBBoxEnable && g_ActiveConfig.BBoxUseFragmentShaderImplementation();
-  const bool in_texgen_array = !DriverDetails::HasBug(DriverDetails::BUG_BROKEN_VARYING_ARRAYS);
   const u32 numTexgen = uid_data->num_texgens;
   ShaderCode out;
 
@@ -39,7 +38,7 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
 
   // TODO: This is variable based on number of texcoord gens
   out.Write("struct VS_OUTPUT {\n");
-  GenerateVSOutputMembers(out, ApiType, numTexgen, true, false, "");
+  GenerateVSOutputMembers(out, ApiType, numTexgen, false, "");
   out.Write("};\n");
 
   // TEV constants
@@ -67,6 +66,86 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
             "#define bpmem_tevind(i) (bpmem_pack1[(i)].z)\n"
             "#define bpmem_tevorder(i) (bpmem_pack2[(i)].x)\n"
             "#define bpmem_tevksel(i) (bpmem_pack2[(i)].y)\n\n");
+
+  // Shader inputs/outputs in GLSL (HLSL is in main).
+  if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
+  {
+    if (use_dual_source)
+    {
+      if (DriverDetails::HasBug(DriverDetails::BUG_BROKEN_FRAGMENT_SHADER_INDEX_DECORATION))
+      {
+        out.Write("FRAGMENT_OUTPUT_LOCATION(0) out vec4 ocol0;\n");
+        out.Write("FRAGMENT_OUTPUT_LOCATION(1) out vec4 ocol1;\n");
+      }
+      else
+      {
+        out.Write("FRAGMENT_OUTPUT_LOCATION_INDEXED(0, 0) out vec4 ocol0;\n");
+        out.Write("FRAGMENT_OUTPUT_LOCATION_INDEXED(0, 1) out vec4 ocol1;\n");
+      }
+    }
+    else
+    {
+      out.Write("FRAGMENT_OUTPUT_LOCATION(0) out vec4 ocol0;\n");
+    }
+
+    if (!early_depth)
+      out.Write("#define depth gl_FragDepth\n");
+
+    if (g_ActiveConfig.backend_info.bSupportsGeometryShaders || ApiType == APIType::Vulkan)
+    {
+      out.Write("VARYING_LOCATION(0) in VertexData {\n");
+      GenerateVSOutputMembers(out, ApiType, numTexgen, false,
+                              GetInterpolationQualifier(msaa, ssaa));
+
+      if (g_ActiveConfig.iStereoMode > 0)
+        out.Write("  flat int layer;\n");
+
+      out.Write("};\n\n");
+    }
+    else
+    {
+      out.Write("%s in float4 colors_0;\n", GetInterpolationQualifier(msaa, ssaa));
+      out.Write("%s in float4 colors_1;\n", GetInterpolationQualifier(msaa, ssaa));
+      // compute window position if needed because binding semantic WPOS is not widely supported
+      // Let's set up attributes
+      for (u32 i = 0; i < numTexgen; ++i)
+        out.Write("%s in float3 tex%d;\n", GetInterpolationQualifier(msaa, ssaa), i);
+      out.Write("%s in float4 clipPos;\n", GetInterpolationQualifier(msaa, ssaa));
+      if (g_ActiveConfig.bEnablePixelLighting)
+      {
+        out.Write("%s in float3 Normal;\n", GetInterpolationQualifier(msaa, ssaa));
+        out.Write("%s in float3 WorldPos;\n", GetInterpolationQualifier(msaa, ssaa));
+      }
+    }
+  }
+
+  // Uniform index -> texture coordinates
+  if (numTexgen > 0)
+  {
+    if (ApiType != APIType::D3D)
+    {
+      out.Write("float3 selectTexCoord(uint index) {\n");
+    }
+    else
+    {
+      out.Write("float3 selectTexCoord(uint index");
+      for (u32 i = 0; i < numTexgen; i++)
+        out.Write(", float3 tex%u", i);
+      out.Write(") {\n");
+    }
+
+    out.Write("  switch (index) {\n");
+    for (u32 i = 0; i < numTexgen; i++)
+    {
+      out.Write("  case %u:\n"
+                "    return tex%u;\n",
+                i, i);
+    }
+    out.Write("  default:\n"
+              "    return float3(0.0, 0.0, 0.0);\n"
+              "  }\n"
+              "}\n\n");
+  }
 
   // TODO: Per pixel lighting (not really needed)
 
@@ -288,6 +367,8 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
   // these through when it inlines the function.
   if (ApiType == APIType::D3D)
   {
+    for (u32 i = 0; i < numTexgen; i++)
+      out.Write("  float3 tex%d;\n", i);
     out.Write("  float4 colors_0;\n"
               "  float4 colors_1;\n");
   }
@@ -405,91 +486,36 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
             "}\n"
             "\n");
 
-  if (early_depth && g_ActiveConfig.backend_info.bSupportsEarlyZ)
+  // Since the texture coodinate variables aren't global, we need to pass
+  // them to the select function in D3D.
+  if (numTexgen > 0)
   {
-    if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
-      out.Write("FORCE_EARLY_Z;\n");
+    if (ApiType != APIType::D3D)
+    {
+      out.Write("#define getTexCoord(index) selectTexCoord((index))\n\n");
+    }
     else
-      out.Write("[earlydepthstencil]\n");
+    {
+      out.Write("#define getTexCoord(index) selectTexCoord((index)");
+      for (u32 i = 0; i < numTexgen; i++)
+        out.Write(", tex%u", i);
+      out.Write(")\n\n");
+    }
   }
 
   if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
   {
-    if (use_dual_source)
-    {
-      if (DriverDetails::HasBug(DriverDetails::BUG_BROKEN_FRAGMENT_SHADER_INDEX_DECORATION))
-      {
-        out.Write("FRAGMENT_OUTPUT_LOCATION(0) out vec4 ocol0;\n");
-        out.Write("FRAGMENT_OUTPUT_LOCATION(1) out vec4 ocol1;\n");
-      }
-      else
-      {
-        out.Write("FRAGMENT_OUTPUT_LOCATION_INDEXED(0, 0) out vec4 ocol0;\n");
-        out.Write("FRAGMENT_OUTPUT_LOCATION_INDEXED(0, 1) out vec4 ocol1;\n");
-      }
-    }
-    else
-    {
-      out.Write("FRAGMENT_OUTPUT_LOCATION(0) out vec4 ocol0;\n");
-    }
-
-    if (!early_depth)
-      out.Write("#define depth gl_FragDepth\n");
-
-    if (g_ActiveConfig.backend_info.bSupportsGeometryShaders || ApiType == APIType::Vulkan)
-    {
-      out.Write("VARYING_LOCATION(0) in VertexData {\n");
-      GenerateVSOutputMembers(out, ApiType, numTexgen, in_texgen_array, false,
-                              GetInterpolationQualifier(msaa, ssaa));
-
-      if (g_ActiveConfig.iStereoMode > 0)
-        out.Write("  flat int layer;\n");
-
-      out.Write("};\n\n");
-    }
-    else
-    {
-      out.Write("%s in float4 colors_0;\n", GetInterpolationQualifier(msaa, ssaa));
-      out.Write("%s in float4 colors_1;\n", GetInterpolationQualifier(msaa, ssaa));
-      // compute window position if needed because binding semantic WPOS is not widely supported
-      // Let's set up attributes
-      out.Write("%s in float3 uv[%u];\n", GetInterpolationQualifier(msaa, ssaa), numTexgen);
-      out.Write("%s in float4 clipPos;\n", GetInterpolationQualifier(msaa, ssaa));
-      if (g_ActiveConfig.bEnablePixelLighting)
-      {
-        out.Write("%s in float3 Normal;\n", GetInterpolationQualifier(msaa, ssaa));
-        out.Write("%s in float3 WorldPos;\n", GetInterpolationQualifier(msaa, ssaa));
-      }
-    }
-
-    if (numTexgen > 0)
-    {
-      if (in_texgen_array)
-      {
-        out.Write("#define getTexCoord(index) (tex[(index)])\n\n");
-      }
-      else
-      {
-        out.Write("float3 getTexCoord(uint index) {\n"
-                  "  switch (index) {\n");
-        for (u32 i = 0; i < numTexgen; i++)
-        {
-          out.Write("  case %u:\n"
-                    "    return tex%u;\n",
-                    i, i);
-        }
-        out.Write("  default:\n"
-                  "    return float3(0.0, 0.0, 0.0);\n"
-                  "  }\n"
-                  "}\n\n");
-      }
-    }
+    if (early_depth && g_ActiveConfig.backend_info.bSupportsEarlyZ)
+      out.Write("FORCE_EARLY_Z;\n");
 
     out.Write("void main()\n{\n");
     out.Write("  float4 rawpos = gl_FragCoord;\n");
   }
   else  // D3D
   {
+    if (early_depth && g_ActiveConfig.backend_info.bSupportsEarlyZ)
+      out.Write("[earlydepthstencil]\n");
+
     out.Write("void main(\n"
               "  out float4 ocol0 : SV_Target0,\n"
               "  out float4 ocol1 : SV_Target1,\n"
@@ -498,25 +524,24 @@ ShaderCode GenPixelShader(APIType ApiType, const pixel_ubershader_uid_data* uid_
     out.Write("  in float4 rawpos : SV_Position,\n");
 
     out.Write("  in %s float4 colors_0 : COLOR0,\n", GetInterpolationQualifier(msaa, ssaa));
-    out.Write("  in %s float4 colors_1 : COLOR1\n", GetInterpolationQualifier(msaa, ssaa));
+    out.Write("  in %s float4 colors_1 : COLOR1", GetInterpolationQualifier(msaa, ssaa));
 
     // compute window position if needed because binding semantic WPOS is not widely supported
-    if (numTexgen > 0)
-      out.Write(",\n  in %s float3 tex[%d] : TEXCOORD0", GetInterpolationQualifier(msaa, ssaa),
-                numTexgen);
-    out.Write(",\n  in %s float4 clipPos : TEXCOORD%d", GetInterpolationQualifier(msaa, ssaa),
+    for (u32 i = 0; i < numTexgen; ++i)
+      out.Write(",\n  in %s float3 tex%u : TEXCOORD%u", GetInterpolationQualifier(msaa, ssaa), i,
+                i);
+    out.Write("\n,\n  in %s float4 clipPos : TEXCOORD%u", GetInterpolationQualifier(msaa, ssaa),
               numTexgen);
     if (g_ActiveConfig.bEnablePixelLighting)
     {
-      out.Write(",\n  in %s float3 Normal : TEXCOORD%d", GetInterpolationQualifier(msaa, ssaa),
+      out.Write(",\n  in %s float3 Normal : TEXCOORD%u", GetInterpolationQualifier(msaa, ssaa),
                 numTexgen + 1);
-      out.Write(",\n  in %s float3 WorldPos : TEXCOORD%d", GetInterpolationQualifier(msaa, ssaa),
+      out.Write(",\n  in %s float3 WorldPos : TEXCOORD%u", GetInterpolationQualifier(msaa, ssaa),
                 numTexgen + 2);
     }
     if (g_ActiveConfig.iStereoMode > 0)
       out.Write(",\n  in uint layer : SV_RenderTargetArrayIndex\n");
-    out.Write("        ) {\n");
-    out.Write("#define getTexCoord(index) (tex[(index)])\n\n");
+    out.Write("\n        ) {\n");
   }
 
   out.Write("  int3 tevcoord = int3(0, 0, 0);\n"
