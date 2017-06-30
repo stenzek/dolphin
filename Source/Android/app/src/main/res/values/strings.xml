@@ -179,6 +179,11 @@
     <string name="fast_depth_calculation_descrip">Uses a less accurate algorithm to calculate depth values.</string>
     <string name="aspect_ratio">Aspect Ratio</string>
     <string name="aspect_ratio_descrip">Select what aspect ratio to use when rendering</string>
+    <string name="ubershaders">Ubershaders</string>
+    <string name="disable_specialized_shaders">Disable specialized shaders</string>
+    <string name="disable_specialized_shaders_descrip">Disable specialized shaders (i.e. Always use Ubershaders - likely slower but less jank)</string>
+    <string name="background_shader_compiling">Background shader compilation</string>
+    <string name="background_shader_compiling_descrip">Compile specialised shaders in a background thread - may reduce jank</string>
 
     <!-- Miscellaneous -->
     <string name="yes">Yes</string>
