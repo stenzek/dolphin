@@ -4,11 +4,8 @@
 
 #include <algorithm>
 
-<<<<<<< HEAD
-=======
 #include "Common/CPUDetect.h"
 #include "Common/CommonPaths.h"
->>>>>>> cde06da... VideoConfig: Add config options for ubershaders
 #include "Common/CommonTypes.h"
 #include "Common/StringUtil.h"
 #include "Core/Config/GraphicsSettings.h"
