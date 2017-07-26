@@ -87,6 +87,8 @@ ShaderCode GenPixelShader(APIType ApiType, const ShaderHostConfig& host_config,
         out.Write("  flat int layer;\n");
 
       out.Write("};\n\n");
+      for (unsigned int i = 0; i < numTexgen; ++i)
+        out.Write("\tfloat3 uv%d = tex%d;\n", i, i);
     }
     else
     {
@@ -95,7 +97,7 @@ ShaderCode GenPixelShader(APIType ApiType, const ShaderHostConfig& host_config,
       // compute window position if needed because binding semantic WPOS is not widely supported
       // Let's set up attributes
       for (u32 i = 0; i < numTexgen; ++i)
-        out.Write("%s in float3 tex%d;\n", GetInterpolationQualifier(msaa, ssaa), i);
+        out.Write("%s in float3 uv%d;\n", GetInterpolationQualifier(msaa, ssaa), i);
       out.Write("%s in float4 clipPos;\n", GetInterpolationQualifier(msaa, ssaa));
       if (per_pixel_lighting)
       {
@@ -124,7 +126,7 @@ ShaderCode GenPixelShader(APIType ApiType, const ShaderHostConfig& host_config,
     for (u32 i = 0; i < numTexgen; i++)
     {
       out.Write("  case %uu:\n"
-                "    return tex%u;\n",
+                "    return uv%u;\n",
                 i, i);
     }
     out.Write("  default:\n"
@@ -482,7 +484,7 @@ ShaderCode GenPixelShader(APIType ApiType, const ShaderHostConfig& host_config,
     {
       out.Write("#define getTexCoord(index) selectTexCoord((index)");
       for (u32 i = 0; i < numTexgen; i++)
-        out.Write(", tex%u", i);
+        out.Write(", uv%u", i);
       out.Write(")\n\n");
     }
   }
@@ -512,7 +514,7 @@ ShaderCode GenPixelShader(APIType ApiType, const ShaderHostConfig& host_config,
 
     // compute window position if needed because binding semantic WPOS is not widely supported
     for (u32 i = 0; i < numTexgen; ++i)
-      out.Write(",\n  in %s float3 tex%u : TEXCOORD%u", GetInterpolationQualifier(msaa, ssaa), i,
+      out.Write(",\n  in %s float3 uv%u : TEXCOORD%u", GetInterpolationQualifier(msaa, ssaa), i,
                 i);
     out.Write("\n,\n  in %s float4 clipPos : TEXCOORD%u", GetInterpolationQualifier(msaa, ssaa),
               numTexgen);
