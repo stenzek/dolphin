@@ -522,7 +522,7 @@ Renderer::Renderer()
       g_ogl_config.bSupportsTextureStorage = true;
       g_ogl_config.bSupports2DTextureStorageMultisample = true;
       g_Config.backend_info.bSupportsBitfield = true;
-      g_Config.backend_info.bSupportsDynamicSamplerIndexing = true;
+      g_Config.backend_info.bSupportsDynamicSamplerIndexing = g_ogl_config.bSupportsAEP;
       if (g_ActiveConfig.iStereoMode > 0 && g_ActiveConfig.iMultisamples > 1 &&
           !g_ogl_config.bSupports3DTextureStorageMultisample)
       {
