@@ -961,6 +961,9 @@ PFNDOLOBJECTPTRLABELPROC dolObjectPtrLabel;
 PFNDOLPOPDEBUGGROUPPROC dolPopDebugGroup;
 PFNDOLPUSHDEBUGGROUPPROC dolPushDebugGroup;
 
+// KHR_parallel_shader_compile
+PFNDOLMAXSHADERCOMPILERTHREADSKHRPROC dolMaxShaderCompilerThreadsKHR;
+
 // ARB_buffer_storage
 PFNDOLBUFFERSTORAGEPROC dolBufferStorage;
 
@@ -1803,6 +1806,9 @@ const GLFunc gl_function_array[] = {
                     "GL_KHR_debug !VERSION_GLES_3 !VERSION_GL_4_3 |VERSION_GLES_3_2"),
     GLFUNC_REQUIRES(glPushDebugGroup,
                     "GL_KHR_debug !VERSION_GLES_3 !VERSION_GL_4_3 |VERSION_GLES_3_2"),
+
+    // KHR_parallel_shader_compile
+    GLFUNC_REQUIRES(glMaxShaderCompilerThreadsKHR, "GL_KHR_parallel_shader_compile"),
 
     // ARB_buffer_storage
     GLFUNC_REQUIRES(glBufferStorage, "GL_ARB_buffer_storage !VERSION_4_4"),
