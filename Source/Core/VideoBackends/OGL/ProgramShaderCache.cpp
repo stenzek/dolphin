@@ -61,6 +61,7 @@ ProgramShaderCache::PCacheEntry* ProgramShaderCache::last_uber_entry;
 SHADERUID ProgramShaderCache::last_uid;
 UBERSHADERUID ProgramShaderCache::last_uber_uid;
 static std::string s_glsl_header = "";
+static bool s_use_parallel_shader_compile = false;
 
 static std::string GetGLSLVersionString()
 {
@@ -89,6 +90,23 @@ static std::string GetGLSLVersionString()
     // Shouldn't ever hit this
     return "#version ERROR";
   }
+}
+
+bool SHADER::CheckCompletionStatus() const
+{
+  if (!s_use_parallel_shader_compile)
+    return true;
+
+  GLint status;
+  if ((vsid != 0 && (glGetShaderiv(vsid, GL_COMPLETION_STATUS_KHR, &status), !status)) ||
+      (gsid != 0 && (glGetShaderiv(gsid, GL_COMPLETION_STATUS_KHR, &status), !status)) ||
+      (psid != 0 && (glGetShaderiv(psid, GL_COMPLETION_STATUS_KHR, &status), !status)))
+  {
+    return false;
+  }
+
+  glGetShaderiv(glprogid, GL_COMPLETION_STATUS_KHR, &status);
+  return (status != 0);
 }
 
 void SHADER::SetProgramVariables()
@@ -246,7 +264,18 @@ SHADER* ProgramShaderCache::SetShader(u32 primitive_type, const GLVertexFormat* 
   {
     PCacheEntry* entry = &iter->second;
     if (entry->pending)
-      return SetUberShader(primitive_type, vertex_format);
+    {
+      if (!s_use_parallel_shader_compile || !entry->shader.CheckCompletionStatus())
+        return SetUberShader(primitive_type, vertex_format);
+
+      entry->pending = false;
+      if (!CheckParallelCompileResult(entry->shader))
+      {
+        entry->shader.Destroy();
+        pshaders.erase(iter);
+        return nullptr;
+      }
+    }
 
     last_uid = uid;
     last_entry = entry;
@@ -278,8 +307,11 @@ SHADER* ProgramShaderCache::SetShader(u32 primitive_type, const GLVertexFormat* 
       !uid.guid.GetUidData()->IsPassthrough())
     gcode = GenerateGeometryShaderCode(APIType::OpenGL, host_config, uid.guid.GetUidData());
 
-  if (!CompileShader(newentry.shader, vcode.GetBuffer(), pcode.GetBuffer(), gcode.GetBuffer()))
+  if (!CompileShader(newentry.shader, vcode.GetBuffer(), pcode.GetBuffer(), gcode.GetBuffer(),
+                     s_use_parallel_shader_compile))
+  {
     return nullptr;
+  }
 
   INCSTAT(stats.numPixelShadersCreated);
   SETSTAT(stats.numPixelShadersAlive, pshaders.size());
@@ -355,7 +387,8 @@ SHADER* ProgramShaderCache::SetUberShader(u32 primitive_type, const GLVertexForm
 }
 
 bool ProgramShaderCache::CompileShader(SHADER& shader, const std::string& vcode,
-                                       const std::string& pcode, const std::string& gcode)
+                                       const std::string& pcode, const std::string& gcode,
+                                       bool async)
 {
 #if defined(_DEBUG) || defined(DEBUGFAST)
   if (g_ActiveConfig.iLog & CONF_SAVESHADERS)
@@ -377,13 +410,13 @@ bool ProgramShaderCache::CompileShader(SHADER& shader, const std::string& vcode,
   }
 #endif
 
-  shader.vsid = CompileSingleShader(GL_VERTEX_SHADER, vcode);
-  shader.psid = CompileSingleShader(GL_FRAGMENT_SHADER, pcode);
+  shader.vsid = CompileSingleShader(GL_VERTEX_SHADER, vcode, async);
+  shader.psid = CompileSingleShader(GL_FRAGMENT_SHADER, pcode, async);
 
   // Optional geometry shader
   shader.gsid = 0;
   if (!gcode.empty())
-    shader.gsid = CompileSingleShader(GL_GEOMETRY_SHADER, gcode);
+    shader.gsid = CompileSingleShader(GL_GEOMETRY_SHADER, gcode, async);
 
   if (!shader.vsid || !shader.psid || (!gcode.empty() && !shader.gsid))
   {
@@ -405,6 +438,9 @@ bool ProgramShaderCache::CompileShader(SHADER& shader, const std::string& vcode,
   shader.SetProgramBindings(false);
 
   glLinkProgram(shader.glprogid);
+
+  if (async)
+    return true;
 
   if (!CheckProgramLinkResult(shader.glprogid, vcode, pcode, gcode))
   {
@@ -455,7 +491,7 @@ bool ProgramShaderCache::CompileComputeShader(SHADER& shader, const std::string&
   return true;
 }
 
-GLuint ProgramShaderCache::CompileSingleShader(GLenum type, const std::string& code)
+GLuint ProgramShaderCache::CompileSingleShader(GLenum type, const std::string& code, bool async)
 {
   GLuint result = glCreateShader(type);
 
@@ -463,6 +499,9 @@ GLuint ProgramShaderCache::CompileSingleShader(GLenum type, const std::string& c
 
   glShaderSource(result, 2, src, nullptr);
   glCompileShader(result);
+
+  if (async)
+    return result;
 
   if (!CheckShaderCompileResult(result, type, code))
   {
@@ -569,6 +608,21 @@ bool ProgramShaderCache::CheckProgramLinkResult(GLuint id, const std::string& vc
   return true;
 }
 
+bool ProgramShaderCache::CheckParallelCompileResult(SHADER& shader)
+{
+  if ((shader.vsid != 0 && !CheckShaderCompileResult(shader.vsid, GL_VERTEX_SHADER, "")) ||
+      (shader.gsid != 0 && !CheckShaderCompileResult(shader.gsid, GL_GEOMETRY_SHADER, "")) ||
+      (shader.psid != 0 && !CheckShaderCompileResult(shader.psid, GL_FRAGMENT_SHADER, "")))
+  {
+    return false;
+  }
+
+  if (!CheckProgramLinkResult(shader.glprogid, "", "", ""))
+    return false;
+
+  return true;
+}
+
 ProgramShaderCache::PCacheEntry ProgramShaderCache::GetShaderProgram()
 {
   return *last_entry;
@@ -591,13 +645,24 @@ void ProgramShaderCache::Init()
   // Then once more to get bytes
   s_buffer = StreamBuffer::Create(GL_UNIFORM_BUFFER, UBO_LENGTH);
 
-  // The GPU shader code appears to be context-specific on Mesa/i965.
-  // This means that if we compiled the ubershaders asynchronously, they will be recompiled
-  // on the main thread the first time they are used, causing stutter. Nouveau has been
-  // reported to crash if draw calls are invoked on the shared context threads. For now,
-  // disable asynchronous compilation on Mesa.
-  if (!DriverDetails::HasBug(DriverDetails::BUG_SHARED_CONTEXT_SHADER_COMPILATION))
-    s_async_compiler = std::make_unique<SharedContextAsyncShaderCompiler>();
+  s_use_parallel_shader_compile = GLExtensions::Supports("GL_KHR_parallel_shader_compile");
+  if (s_use_parallel_shader_compile)
+  {
+    INFO_LOG(VIDEO, "Using GL_KHR_parallel_shader_compile for asynchronous shader compilation.");
+  }
+  else
+  {
+    // The GPU shader code appears to be context-specific on Mesa/i965.
+    // This means that if we compiled the ubershaders asynchronously, they will be recompiled
+    // on the main thread the first time they are used, causing stutter. Nouveau has been
+    // reported to crash if draw calls are invoked on the shared context threads. For now,
+    // disable asynchronous compilation on Mesa.
+    if (!DriverDetails::HasBug(DriverDetails::BUG_SHARED_CONTEXT_SHADER_COMPILATION))
+    {
+      INFO_LOG(VIDEO, "Using shared contexts for asynchronous shader compilation.");
+      s_async_compiler = std::make_unique<SharedContextAsyncShaderCompiler>();
+    }
+  }
 
   // Read our shader cache, only if supported and enabled
   if (g_ogl_config.bSupportsGLSLCache && g_ActiveConfig.bShaderCache)
@@ -613,6 +678,8 @@ void ProgramShaderCache::Init()
   {
     if (s_async_compiler)
       s_async_compiler->ResizeWorkerThreads(g_ActiveConfig.GetShaderPrecompilerThreads());
+    if (s_use_parallel_shader_compile)
+      glMaxShaderCompilerThreadsKHR(g_ActiveConfig.GetShaderPrecompilerThreads());
     PrecompileUberShaders();
   }
 
@@ -622,6 +689,8 @@ void ProgramShaderCache::Init()
     s_async_compiler->ResizeWorkerThreads(g_ActiveConfig.GetShaderCompilerThreads());
     if (!s_async_compiler->HasWorkerThreads())
       s_async_compiler.reset();
+    if (s_use_parallel_shader_compile)
+      glMaxShaderCompilerThreadsKHR(g_ActiveConfig.GetShaderCompilerThreads());
   }
 }
 
@@ -1004,14 +1073,14 @@ void ProgramShaderCache::PrecompileUberShaders()
         if (!success || ubershaders.find(uid) != ubershaders.end())
           return;
 
+        bool compile_async = s_use_parallel_shader_compile || s_async_compiler;
         PCacheEntry& entry = ubershaders[uid];
         entry.in_cache = false;
-        entry.pending = false;
+        entry.pending = compile_async;
 
         // Multi-context path?
         if (s_async_compiler)
         {
-          entry.pending = true;
           s_async_compiler->QueueWorkItem(
               s_async_compiler->CreateWorkItem<UberShaderCompileWorkItem>(uid));
           return;
@@ -1031,7 +1100,8 @@ void ProgramShaderCache::PrecompileUberShaders()
 
         // Always background compile, even when it's not supported.
         // This way hopefully the driver can still compile the shaders in parallel.
-        if (!CompileShader(entry.shader, vcode.GetBuffer(), pcode.GetBuffer(), gcode.GetBuffer()))
+        if (!CompileShader(entry.shader, vcode.GetBuffer(), pcode.GetBuffer(), gcode.GetBuffer(),
+                           compile_async))
         {
           // Stop compiling shaders if any of them fail, no point continuing.
           success = false;
@@ -1048,6 +1118,26 @@ void ProgramShaderCache::PrecompileUberShaders()
                                 static_cast<int>(completed), static_cast<int>(total));
     });
     s_async_compiler->RetrieveWorkItems();
+    Host_UpdateProgressDialog("", -1, -1);
+  }
+
+  if (s_use_parallel_shader_compile)
+  {
+    int completed = 0;
+    int total = static_cast<int>(ubershaders.size());
+    for (auto& iter : ubershaders)
+    {
+      if (!iter.second.pending)
+        continue;
+
+      iter.second.pending = false;
+      if (!CheckParallelCompileResult(iter.second.shader))
+        success = false;
+
+      completed++;
+      Host_UpdateProgressDialog(GetStringT("Compiling shaders...").c_str(), completed, total);
+    }
+
     Host_UpdateProgressDialog("", -1, -1);
   }
 

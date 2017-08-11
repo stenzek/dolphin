@@ -75,6 +75,7 @@ struct SHADER
   GLuint psid = 0;
   GLuint glprogid = 0;
 
+  bool CheckCompletionStatus() const;
   void SetProgramVariables();
   void SetProgramBindings(bool is_compute);
   void Bind() const;
@@ -101,12 +102,13 @@ public:
   static void BindLastVertexFormat();
 
   static bool CompileShader(SHADER& shader, const std::string& vcode, const std::string& pcode,
-                            const std::string& gcode = "");
+                            const std::string& gcode = "", bool async = false);
   static bool CompileComputeShader(SHADER& shader, const std::string& code);
-  static GLuint CompileSingleShader(GLenum type, const std::string& code);
+  static GLuint CompileSingleShader(GLenum type, const std::string& code, bool async = false);
   static bool CheckShaderCompileResult(GLuint id, GLenum type, const std::string& code);
   static bool CheckProgramLinkResult(GLuint id, const std::string& vcode, const std::string& pcode,
                                      const std::string& gcode);
+  static bool CheckParallelCompileResult(SHADER& shader);
   static void UploadConstants();
 
   static void Init();
