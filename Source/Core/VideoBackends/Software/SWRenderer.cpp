@@ -17,6 +17,7 @@
 
 #include "VideoBackends/Software/EfbCopy.h"
 #include "VideoBackends/Software/SWOGLWindow.h"
+#include "VideoBackends/Software/SWTexture.h"
 
 #include "VideoCommon/BoundingBox.h"
 #include "VideoCommon/OnScreenDisplay.h"
@@ -48,6 +49,11 @@ void SWRenderer::Init()
 void SWRenderer::Shutdown()
 {
   UpdateActiveConfig();
+}
+
+std::unique_ptr<AbstractTexture> SWRenderer::CreateTexture(const TextureConfig& config)
+{
+  return std::make_unique<SW::SWTexture>(config);
 }
 
 void SWRenderer::RenderText(const std::string& pstr, int left, int top, u32 color)

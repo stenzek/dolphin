@@ -32,7 +32,9 @@
 #include "VideoCommon/RenderState.h"
 #include "VideoCommon/VideoCommon.h"
 
+class AbstractTexture;
 class PostProcessingShaderImplementation;
+struct TextureConfig;
 enum class EFBAccessType;
 
 struct EfbPokeData
@@ -77,6 +79,8 @@ public:
   virtual void RestoreState() {}
   virtual void ResetAPIState() {}
   virtual void RestoreAPIState() {}
+  virtual std::unique_ptr<AbstractTexture> CreateTexture(const TextureConfig& config) = 0;
+
   // Ideal internal resolution - multiple of the native EFB resolution
   int GetTargetWidth() const { return m_target_width; }
   int GetTargetHeight() const { return m_target_height; }

@@ -24,6 +24,7 @@
 #include "VideoBackends/D3D/D3DBase.h"
 #include "VideoBackends/D3D/D3DState.h"
 #include "VideoBackends/D3D/D3DUtil.h"
+#include "VideoBackends/D3D/DXTexture.h"
 #include "VideoBackends/D3D/FramebufferManager.h"
 #include "VideoBackends/D3D/GeometryShaderCache.h"
 #include "VideoBackends/D3D/PixelShaderCache.h"
@@ -262,6 +263,11 @@ Renderer::~Renderer()
   D3D::EndFrame();
   D3D::Present();
   D3D::Close();
+}
+
+std::unique_ptr<AbstractTexture> Renderer::CreateTexture(const TextureConfig& config)
+{
+  return std::make_unique<DXTexture>(config);
 }
 
 void Renderer::RenderText(const std::string& text, int left, int top, u32 color)

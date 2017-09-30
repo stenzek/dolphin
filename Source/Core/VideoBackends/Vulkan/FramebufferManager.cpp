@@ -1391,7 +1391,7 @@ std::unique_ptr<XFBSourceBase> FramebufferManager::CreateXFBSource(unsigned int 
   config.height = target_height;
   config.layers = layers;
   config.rendertarget = true;
-  auto texture = TextureCache::GetInstance()->CreateTexture(config);
+  auto texture = g_renderer->CreateTexture(config);
   if (!texture)
   {
     PanicAlert("Failed to create texture for XFB source");

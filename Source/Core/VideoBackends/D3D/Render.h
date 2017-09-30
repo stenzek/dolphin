@@ -21,6 +21,7 @@ public:
   ~Renderer() override;
 
   StateCache& GetStateCache() { return m_state_cache; }
+  std::unique_ptr<AbstractTexture> CreateTexture(const TextureConfig& config) override;
 
   void SetBlendingState(const BlendingState& state) override;
   void SetScissorRect(const EFBRectangle& rc) override;

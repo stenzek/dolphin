@@ -237,8 +237,6 @@ private:
   std::pair<TexAddrCache::iterator, TexAddrCache::iterator>
   FindOverlappingTextures(u32 addr, u32 size_in_bytes);
 
-  virtual std::unique_ptr<AbstractTexture> CreateTexture(const TextureConfig& config) = 0;
-
   virtual void CopyEFBToCacheEntry(TCacheEntry* entry, bool is_depth_copy,
                                    const EFBRectangle& src_rect, bool scale_by_half,
                                    unsigned int cbuf_id, const float* colmat) = 0;
