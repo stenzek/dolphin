@@ -106,9 +106,6 @@ elseif(HAIKU)
 elseif(USE_X11)
   if (NOT USE_EGL)
     set(SRCS ${SRCS} GL/GLInterface/GLX.cpp)
-    # GLX has a hard dependency on libGL.
-    # Make sure to link to it if using GLX.
-    set(LIBS ${LIBS} ${OPENGL_LIBRARIES})
   endif()
   set(SRCS ${SRCS} GL/GLInterface/X11_Util.cpp)
   set(LIBS ${LIBS} ${XRANDR_LIBRARIES})

@@ -3,7 +3,10 @@
 // Refer to the license.txt file included.
 
 #include <array>
+#include <atomic>
+#include <dlfcn.h>
 #include <sstream>
+#include <thread>
 
 #include "Common/GL/GLInterface/GLX.h"
 #include "Common/Logging/Log.h"
@@ -11,15 +14,122 @@
 #define GLX_CONTEXT_MAJOR_VERSION_ARB 0x2091
 #define GLX_CONTEXT_MINOR_VERSION_ARB 0x2092
 
+typedef GLXFBConfig* (*PFNGLXCHOOSEFBCONFIGPROC)(Display* dpy, int screen, const int* attrib_list,
+                                                 int* nelements);
+typedef XVisualInfo* (*PFNGLXGETVISUALFROMFBCONFIGPROC)(Display* dpy, GLXFBConfig config);
+typedef GLXContext (*PFNGLXCREATECONTEXTPROC)(Display* dpy, XVisualInfo* vis, GLXContext shareList,
+                                              Bool direct);
+typedef void (*PFNGLXDESTROYCONTEXTPROC)(Display* dpy, GLXContext ctx);
+typedef Bool (*PFNGLXMAKECURRENTPROC)(Display* dpy, GLXDrawable drawable, GLXContext ctx);
+typedef void (*PFNGLXCOPYCONTEXTPROC)(Display* dpy, GLXContext src, GLXContext dst,
+                                      unsigned long mask);
+typedef void (*PFNGLXSWAPBUFFERSPROC)(Display* dpy, GLXDrawable drawable);
+typedef Bool (*PFNGLXQUERYVERSIONPROC)(Display* dpy, int* maj, int* min);
+typedef __GLXextFuncPtr (*PFNGLXGETPROCADDRESSPROC)(const GLubyte* procName);
+typedef const char* (*PFNGLXQUERYEXTENSIONSSTRINGPROC)(Display* dpy, int screen);
 typedef GLXContext (*PFNGLXCREATECONTEXTATTRIBSPROC)(Display*, GLXFBConfig, GLXContext, Bool,
                                                      const int*);
 typedef int (*PFNGLXSWAPINTERVALSGIPROC)(int interval);
 
-static PFNGLXCREATECONTEXTATTRIBSPROC glXCreateContextAttribs = nullptr;
-static PFNGLXSWAPINTERVALSGIPROC glXSwapIntervalSGI = nullptr;
+static PFNGLXCHOOSEFBCONFIGPROC pglXChooseFBConfig;
+static PFNGLXGETVISUALFROMFBCONFIGPROC pglXGetVisualFromFBConfig;
+static PFNGLXCREATECONTEXTPROC pglXCreateContext;
+static PFNGLXDESTROYCONTEXTPROC pglXDestroyContext;
+static PFNGLXMAKECURRENTPROC pglXMakeCurrent;
+static PFNGLXCOPYCONTEXTPROC pglXCopyContext;
+static PFNGLXSWAPBUFFERSPROC pglXSwapBuffers;
+static PFNGLXQUERYVERSIONPROC pglXQueryVersion;
+static PFNGLXQUERYEXTENSIONSSTRINGPROC pglXQueryExtensionsString;
+static PFNGLXGETPROCADDRESSPROC pglXGetProcAddress;
+static PFNGLXCREATECONTEXTATTRIBSPROC pglXCreateContextAttribs;
+static PFNGLXSWAPINTERVALSGIPROC pglXSwapIntervalSGI;
+static PFNGLXCREATEGLXPBUFFERSGIXPROC pglXCreateGLXPbufferSGIX;
+static PFNGLXDESTROYGLXPBUFFERSGIXPROC pglXDestroyGLXPbufferSGIX;
 
-static PFNGLXCREATEGLXPBUFFERSGIXPROC glXCreateGLXPbufferSGIX = nullptr;
-static PFNGLXDESTROYGLXPBUFFERSGIXPROC glXDestroyGLXPbufferSGIX = nullptr;
+static std::atomic_int s_glx_reference_count{0};
+static void* s_glx_module = nullptr;
+
+template <typename T>
+static bool ResolveSymbol(void* module, T& func_ptr, const char* name)
+{
+  func_ptr = reinterpret_cast<typename std::remove_reference<decltype(func_ptr)>::type>(
+      dlsym(module, name));
+  return func_ptr != nullptr;
+}
+
+template <typename T>
+static bool ResolveSymbol(T& func_ptr, const char* name)
+{
+  func_ptr = reinterpret_cast<typename std::remove_reference<decltype(func_ptr)>::type>(
+      pglXGetProcAddress(reinterpret_cast<const GLubyte*>(name)));
+  return func_ptr != nullptr;
+}
+
+static bool InitGLX()
+{
+  // SStrictly speaking this isn't race-free, as two threads could call InitGLX
+  // at the same time, and attempt to use the function pointers before the thread
+  // which resolves the symbols finishes executing. But at the time of writing,
+  // that wasn't the case.
+  if (s_glx_reference_count.fetch_add(1) > 0)
+    return s_glx_module != nullptr;
+
+  void* mod = dlopen("libGL.so", RTLD_NOW);
+  if (!mod)
+  {
+    ERROR_LOG(VIDEO, "Failed to load libGL.so");
+    return false;
+  }
+
+  if (!ResolveSymbol(mod, pglXChooseFBConfig, "glXChooseFBConfig") ||
+      !ResolveSymbol(mod, pglXGetVisualFromFBConfig, "glXGetVisualFromFBConfig") ||
+      !ResolveSymbol(mod, pglXCreateContext, "glXCreateContext") ||
+      !ResolveSymbol(mod, pglXDestroyContext, "glXDestroyContext") ||
+      !ResolveSymbol(mod, pglXMakeCurrent, "glXMakeCurrent") ||
+      !ResolveSymbol(mod, pglXCopyContext, "glXCopyContext") ||
+      !ResolveSymbol(mod, pglXSwapBuffers, "glXSwapBuffers") ||
+      !ResolveSymbol(mod, pglXQueryVersion, "glXQueryVersion") ||
+      !ResolveSymbol(mod, pglXQueryExtensionsString, "glXQueryExtensionsString") ||
+      !ResolveSymbol(mod, pglXGetProcAddress, "glXGetProcAddress"))
+  {
+    ERROR_LOG(VIDEO, "Failed to resolve one or more symbols from libGL.so");
+    dlclose(mod);
+    return false;
+  }
+
+  // Optional symbols.
+  ResolveSymbol(pglXCreateContextAttribs, "glXCreateContextAttribsARB");
+  ResolveSymbol(pglXSwapIntervalSGI, "glXSwapIntervalSGI");
+  ResolveSymbol(pglXCreateGLXPbufferSGIX, "glXCreateGLXPbufferSGIX");
+  ResolveSymbol(pglXDestroyGLXPbufferSGIX, "glXDestroyGLXPbufferSGIX");
+
+  s_glx_module = mod;
+  return true;
+}
+
+static void ShutdownGLX()
+{
+  if (s_glx_reference_count.fetch_sub(1) > 1)
+    return;
+
+  pglXChooseFBConfig = nullptr;
+  pglXGetVisualFromFBConfig = nullptr;
+  pglXCreateContext = nullptr;
+  pglXDestroyContext = nullptr;
+  pglXMakeCurrent = nullptr;
+  pglXCopyContext = nullptr;
+  pglXSwapBuffers = nullptr;
+  pglXGetProcAddress = nullptr;
+  pglXCreateContextAttribs = nullptr;
+  pglXSwapIntervalSGI = nullptr;
+  pglXCreateGLXPbufferSGIX = nullptr;
+  pglXDestroyGLXPbufferSGIX = nullptr;
+  if (s_glx_module)
+  {
+    dlclose(s_glx_module);
+    s_glx_module = nullptr;
+  }
+}
 
 static bool s_glxError;
 static int ctxErrorHandler(Display* dpy, XErrorEvent* ev)
@@ -30,19 +140,19 @@ static int ctxErrorHandler(Display* dpy, XErrorEvent* ev)
 
 void cInterfaceGLX::SwapInterval(int Interval)
 {
-  if (glXSwapIntervalSGI && m_has_handle)
-    glXSwapIntervalSGI(Interval);
+  if (pglXSwapIntervalSGI && m_has_handle)
+    pglXSwapIntervalSGI(Interval);
   else
     ERROR_LOG(VIDEO, "No support for SwapInterval (framerate clamped to monitor refresh rate).");
 }
 void* cInterfaceGLX::GetFuncAddress(const std::string& name)
 {
-  return (void*)glXGetProcAddress((const GLubyte*)name.c_str());
+  return (void*)pglXGetProcAddress((const GLubyte*)name.c_str());
 }
 
 void cInterfaceGLX::Swap()
 {
-  glXSwapBuffers(dpy, win);
+  pglXSwapBuffers(dpy, win);
 }
 
 // Create rendering window.
@@ -55,9 +165,13 @@ bool cInterfaceGLX::Create(void* window_handle, bool stereo, bool core)
   dpy = XOpenDisplay(nullptr);
   int screen = DefaultScreen(dpy);
 
+  // Load GLX functions.
+  if (!InitGLX())
+    return false;
+
   // checking glx version
   int glxMajorVersion, glxMinorVersion;
-  glXQueryVersion(dpy, &glxMajorVersion, &glxMinorVersion);
+  pglXQueryVersion(dpy, &glxMajorVersion, &glxMinorVersion);
   if (glxMajorVersion < 1 || (glxMajorVersion == 1 && glxMinorVersion < 4))
   {
     ERROR_LOG(VIDEO, "glX-Version %d.%d detected, but need at least 1.4", glxMajorVersion,
@@ -66,9 +180,7 @@ bool cInterfaceGLX::Create(void* window_handle, bool stereo, bool core)
   }
 
   // loading core context creation function
-  glXCreateContextAttribs =
-      (PFNGLXCREATECONTEXTATTRIBSPROC)GetFuncAddress("glXCreateContextAttribsARB");
-  if (!glXCreateContextAttribs)
+  if (!pglXCreateContextAttribs)
   {
     ERROR_LOG(VIDEO,
               "glXCreateContextAttribsARB not found, do you support GLX_ARB_create_context?");
@@ -98,7 +210,7 @@ bool cInterfaceGLX::Create(void* window_handle, bool stereo, bool core)
                           stereo ? True : False,
                           None};
   int fbcount = 0;
-  GLXFBConfig* fbc = glXChooseFBConfig(dpy, screen, visual_attribs, &fbcount);
+  GLXFBConfig* fbc = pglXChooseFBConfig(dpy, screen, visual_attribs, &fbcount);
   if (!fbc || !fbcount)
   {
     ERROR_LOG(VIDEO, "Failed to retrieve a framebuffer config");
@@ -119,7 +231,7 @@ bool cInterfaceGLX::Create(void* window_handle, bool stereo, bool core)
   ctx = nullptr;
   if (core)
   {
-    ctx = glXCreateContextAttribs(dpy, fbconfig, 0, True, &context_attribs[0]);
+    ctx = pglXCreateContextAttribs(dpy, fbconfig, 0, True, &context_attribs[0]);
     XSync(dpy, False);
     m_attribs.insert(m_attribs.end(), context_attribs.begin(), context_attribs.end());
   }
@@ -130,7 +242,7 @@ bool cInterfaceGLX::Create(void* window_handle, bool stereo, bool core)
          GLX_CONTEXT_PROFILE_MASK_ARB, GLX_CONTEXT_CORE_PROFILE_BIT_ARB, GLX_CONTEXT_FLAGS_ARB,
          GLX_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB, None}};
     s_glxError = false;
-    ctx = glXCreateContextAttribs(dpy, fbconfig, 0, True, &context_attribs_33[0]);
+    ctx = pglXCreateContextAttribs(dpy, fbconfig, 0, True, &context_attribs_33[0]);
     XSync(dpy, False);
     m_attribs.clear();
     m_attribs.insert(m_attribs.end(), context_attribs_33.begin(), context_attribs_33.end());
@@ -140,7 +252,7 @@ bool cInterfaceGLX::Create(void* window_handle, bool stereo, bool core)
     std::array<int, 5> context_attribs_legacy = {
         {GLX_CONTEXT_MAJOR_VERSION_ARB, 1, GLX_CONTEXT_MINOR_VERSION_ARB, 0, None}};
     s_glxError = false;
-    ctx = glXCreateContextAttribs(dpy, fbconfig, 0, True, &context_attribs_legacy[0]);
+    ctx = pglXCreateContextAttribs(dpy, fbconfig, 0, True, &context_attribs_legacy[0]);
     XSync(dpy, False);
     m_attribs.clear();
     m_attribs.insert(m_attribs.end(), context_attribs_legacy.begin(), context_attribs_legacy.end());
@@ -153,20 +265,11 @@ bool cInterfaceGLX::Create(void* window_handle, bool stereo, bool core)
   }
 
   std::string tmp;
-  std::istringstream buffer(glXQueryExtensionsString(dpy, screen));
+  std::istringstream buffer(pglXQueryExtensionsString(dpy, screen));
   while (buffer >> tmp)
   {
     if (tmp == "GLX_SGIX_pbuffer")
       m_supports_pbuffer = true;
-  }
-
-  if (m_supports_pbuffer)
-  {
-    // Get the function pointers we require
-    glXCreateGLXPbufferSGIX =
-        (PFNGLXCREATEGLXPBUFFERSGIXPROC)GetFuncAddress("glXCreateGLXPbufferSGIX");
-    glXDestroyGLXPbufferSGIX =
-        (PFNGLXDESTROYGLXPBUFFERSGIXPROC)GetFuncAddress("glXDestroyGLXPbufferSGIX");
   }
 
   if (!CreateWindowSurface())
@@ -191,7 +294,7 @@ bool cInterfaceGLX::Create(cInterfaceBase* main_context)
   s_glxError = false;
   XErrorHandler oldHandler = XSetErrorHandler(&ctxErrorHandler);
 
-  ctx = glXCreateContextAttribs(dpy, fbconfig, glx_context->ctx, True, &glx_context->m_attribs[0]);
+  ctx = pglXCreateContextAttribs(dpy, fbconfig, glx_context->ctx, True, &glx_context->m_attribs[0]);
   XSync(dpy, False);
 
   if (!ctx || s_glxError)
@@ -225,7 +328,7 @@ bool cInterfaceGLX::CreateWindowSurface()
   if (m_has_handle)
   {
     // Get an appropriate visual
-    XVisualInfo* vi = glXGetVisualFromFBConfig(dpy, fbconfig);
+    XVisualInfo* vi = pglXGetVisualFromFBConfig(dpy, fbconfig);
 
     XWindow.Initialize(dpy);
 
@@ -244,7 +347,7 @@ bool cInterfaceGLX::CreateWindowSurface()
   }
   else if (m_supports_pbuffer)
   {
-    win = m_pbuffer = glXCreateGLXPbufferSGIX(dpy, fbconfig, 1, 1, nullptr);
+    win = m_pbuffer = pglXCreateGLXPbufferSGIX(dpy, fbconfig, 1, 1, nullptr);
     if (!m_pbuffer)
       return false;
   }
@@ -260,26 +363,19 @@ void cInterfaceGLX::DestroyWindowSurface()
   }
   else if (m_supports_pbuffer && m_pbuffer)
   {
-    glXDestroyGLXPbufferSGIX(dpy, m_pbuffer);
+    pglXDestroyGLXPbufferSGIX(dpy, m_pbuffer);
     m_pbuffer = 0;
   }
 }
 
 bool cInterfaceGLX::MakeCurrent()
 {
-  bool success = glXMakeCurrent(dpy, win, ctx);
-  if (success && !glXSwapIntervalSGI)
-  {
-    // load this function based on the current bound context
-    glXSwapIntervalSGI =
-        (PFNGLXSWAPINTERVALSGIPROC)GLInterface->GetFuncAddress("glXSwapIntervalSGI");
-  }
-  return success;
+  return pglXMakeCurrent(dpy, win, ctx);
 }
 
 bool cInterfaceGLX::ClearCurrent()
 {
-  return glXMakeCurrent(dpy, None, nullptr);
+  return pglXMakeCurrent(dpy, None, nullptr);
 }
 
 // Close backend
@@ -288,7 +384,7 @@ void cInterfaceGLX::Shutdown()
   DestroyWindowSurface();
   if (ctx)
   {
-    glXDestroyContext(dpy, ctx);
+    pglXDestroyContext(dpy, ctx);
 
     // Don't close the display connection if we are a shared context.
     // Saves doing reference counting on this object, and the main context will always
@@ -299,4 +395,5 @@ void cInterfaceGLX::Shutdown()
       ctx = nullptr;
     }
   }
+  ShutdownGLX();
 }
