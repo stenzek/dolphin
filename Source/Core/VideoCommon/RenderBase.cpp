@@ -399,6 +399,21 @@ bool Renderer::IsHeadless() const
   return !m_surface_handle;
 }
 
+void Renderer::ChangeSurface(void* new_surface_handle)
+{
+  std::lock_guard<std::mutex> lock(m_surface_change_mutex);
+  m_new_surface_handle = new_surface_handle;
+  m_surface_needs_change.Set();
+}
+
+void Renderer::ResizeSurface(int new_width, int new_height)
+{
+  std::lock_guard<std::mutex> lock(m_surface_change_mutex);
+  m_new_backbuffer_width = new_width;
+  m_new_backbuffer_height = new_height;
+  m_surface_resized.Set();
+}
+
 std::tuple<float, float> Renderer::ScaleToDisplayAspectRatio(const int width,
                                                              const int height) const
 {

@@ -468,6 +468,22 @@ bool SwapChain::RecreateSurface(void* native_handle)
   if (m_surface == VK_NULL_HANDLE)
     return false;
 
+  // The validation layers get angry at us if we don't call this before creating the swapchain.
+  VkBool32 present_supported = VK_TRUE;
+  VkResult res = vkGetPhysicalDeviceSurfaceSupportKHR(
+      g_vulkan_context->GetPhysicalDevice(), g_vulkan_context->GetPresentQueueFamilyIndex(),
+      m_surface, &present_supported);
+  if (res != VK_SUCCESS)
+  {
+    LOG_VULKAN_ERROR(res, "vkGetPhysicalDeviceSurfaceSupportKHR failed: ");
+    return false;
+  }
+  if (!present_supported)
+  {
+    PanicAlert("Recreated surface does not support presenting.");
+    return false;
+  }
+
   // Finally re-create the swap chain
   if (!CreateSwapChain() || !SetupSwapChainImages() || !CreateRenderPass())
     return false;

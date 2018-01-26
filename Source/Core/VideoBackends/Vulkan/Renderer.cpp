@@ -500,6 +500,10 @@ void Renderer::SwapImpl(AbstractTexture* texture, const EFBRectangle& xfb_region
   StateTracker::GetInstance()->EndRenderPass();
   StateTracker::GetInstance()->OnEndFrame();
 
+  // Handle host window resizes.
+  CheckForSurfaceChange();
+  CheckForSurfaceResize();
+
   // There are a few variables which can alter the final window draw rectangle, and some of them
   // are determined by guest state. Currently, the only way to catch these is to update every frame.
   UpdateDrawRectangle();
@@ -542,9 +546,6 @@ void Renderer::SwapImpl(AbstractTexture* texture, const EFBRectangle& xfb_region
 
   // Determine what (if anything) has changed in the config.
   CheckForConfigChanges();
-
-  // Handle host window resizes.
-  CheckForSurfaceChange();
 
   // Update the window size based on the frame that was just rendered.
   // Due to depending on guest state, we need to call this every frame.
@@ -654,68 +655,93 @@ void Renderer::BlitScreen(VkRenderPass render_pass, const TargetRectangle& dst_r
 
 void Renderer::CheckForSurfaceChange()
 {
-  if (!m_surface_needs_change.IsSet())
+  if (!m_surface_needs_change.TestAndClear())
     return;
 
-  // Wait for the GPU to catch up since we're going to destroy the swap chain.
+  void* new_surface_handle;
+  {
+    std::lock_guard<std::mutex> guard(m_surface_change_mutex);
+    new_surface_handle = m_new_surface_handle;
+    m_new_surface_handle = nullptr;
+    m_surface_handle = m_new_surface_handle;
+  }
+
+  // Submit the current draws up until rendering the XFB.
+  g_command_buffer_mgr->ExecuteCommandBuffer(false, false);
   g_command_buffer_mgr->WaitForGPUIdle();
 
   // Clear the present failed flag, since we don't want to resize after recreating.
   g_command_buffer_mgr->CheckLastPresentFail();
 
-  // Fast path, if the surface handle is the same, the window has just been resized.
-  if (m_swap_chain && m_new_surface_handle == m_swap_chain->GetNativeHandle())
+  // Did we previously have a swap chain?
+  if (m_swap_chain)
   {
-    INFO_LOG(VIDEO, "Detected window resize.");
-    m_swap_chain->RecreateSwapChain();
-
-    // Notify the main thread we are done.
-    m_surface_needs_change.Clear();
-    m_new_surface_handle = nullptr;
-    m_surface_changed.Set();
-  }
-  else
-  {
-    // Did we previously have a swap chain?
-    if (m_swap_chain)
+    if (!new_surface_handle)
     {
-      if (!m_new_surface_handle)
-      {
-        // If there is no surface now, destroy the swap chain.
-        m_swap_chain.reset();
-      }
-      else
-      {
-        // Recreate the surface. If this fails we're in trouble.
-        if (!m_swap_chain->RecreateSurface(m_new_surface_handle))
-          PanicAlert("Failed to recreate Vulkan surface. Cannot continue.");
-      }
+      // If there is no surface now, destroy the swap chain.
+      m_swap_chain.reset();
     }
     else
     {
-      // Previously had no swap chain. So create one.
-      VkSurfaceKHR surface = SwapChain::CreateVulkanSurface(g_vulkan_context->GetVulkanInstance(),
-                                                            m_new_surface_handle);
-      if (surface != VK_NULL_HANDLE)
-      {
-        m_swap_chain = SwapChain::Create(m_new_surface_handle, surface, g_ActiveConfig.IsVSync());
-        if (!m_swap_chain)
-          PanicAlert("Failed to create swap chain.");
-      }
-      else
-      {
-        PanicAlert("Failed to create surface.");
-      }
+      // Recreate the surface. If this fails we're in trouble.
+      if (!m_swap_chain->RecreateSurface(new_surface_handle))
+        PanicAlert("Failed to recreate Vulkan surface. Cannot continue.");
     }
-
-    // Notify calling thread.
-    m_surface_needs_change.Clear();
-    m_surface_handle = m_new_surface_handle;
-    m_new_surface_handle = nullptr;
-    m_surface_changed.Set();
+  }
+  else
+  {
+    // Previously had no swap chain. So create one.
+    VkSurfaceKHR surface = SwapChain::CreateVulkanSurface(g_vulkan_context->GetVulkanInstance(),
+                                                          new_surface_handle);
+    if (surface != VK_NULL_HANDLE)
+    {
+      m_swap_chain = SwapChain::Create(new_surface_handle, surface, g_ActiveConfig.IsVSync());
+      if (!m_swap_chain)
+        PanicAlert("Failed to create swap chain.");
+    }
+    else
+    {
+      PanicAlert("Failed to create surface.");
+    }
   }
 
   // Handle case where the dimensions are now different.
+  OnSwapChainResized();
+}
+
+void Renderer::CheckForSurfaceResize()
+{
+  if (!m_surface_resized.TestAndClear())
+    return;
+
+  {
+    std::lock_guard<std::mutex> guard(m_surface_change_mutex);
+    m_backbuffer_width = m_new_backbuffer_width;
+    m_backbuffer_height = m_new_backbuffer_height;
+  }
+
+  // If we don't have a surface, how can we resize the swap chain?
+  // CheckForSurfaceChange should handle this case.
+  if (!m_swap_chain)
+  {
+    WARN_LOG(VIDEO, "Surface resize event received without active surface, ignoring");
+    return;
+  }
+
+  // Wait for the GPU to catch up since we're going to destroy the swap chain.
+  g_command_buffer_mgr->ExecuteCommandBuffer(false, false);  
+  g_command_buffer_mgr->WaitForGPUIdle();
+
+  // Clear the present failed flag, since we don't want to resize after recreating.
+  g_command_buffer_mgr->CheckLastPresentFail();
+
+  // Resize the swap chain.
+  m_swap_chain->RecreateSwapChain();
+
+  // In case the actual swap chain size differs (e.g. exclusive fullscreen),
+  // use the values that the driver gives us back instead.
+  m_backbuffer_width = static_cast<int>(m_swap_chain->GetWidth());
+  m_backbuffer_height = static_cast<int>(m_swap_chain->GetHeight());
   OnSwapChainResized();
 }
 
@@ -951,14 +977,6 @@ void Renderer::SetViewport()
   // clipping depth range on the hardware.
   VkViewport viewport = {x, y, width, height, 1.0f - max_depth, 1.0f - min_depth};
   StateTracker::GetInstance()->SetViewport(viewport);
-}
-
-void Renderer::ChangeSurface(void* new_surface_handle)
-{
-  // Called by the main thread when the window is resized.
-  m_new_surface_handle = new_surface_handle;
-  m_surface_needs_change.Set();
-  m_surface_changed.Set();
 }
 
 void Renderer::RecompileShaders()

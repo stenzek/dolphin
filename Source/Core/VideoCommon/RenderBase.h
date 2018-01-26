@@ -151,7 +151,8 @@ public:
   PostProcessingShaderImplementation* GetPostProcessor() const { return m_post_processor.get(); }
   // Final surface changing
   // This is called when the surface is resized (WX) or the window changes (Android).
-  virtual void ChangeSurface(void* new_surface_handle) {}
+  void ChangeSurface(void* new_surface_handle);
+  void ResizeSurface(int new_width, int new_height);
   bool UseVertexDepthRange() const;
 
   void ShutdownFrameDumping();
@@ -175,9 +176,11 @@ protected:
   int m_target_width = 0;
   int m_target_height = 0;
 
-  // TODO: Add functionality to reinit all the render targets when the window is resized.
+  // Backbuffer (window) size and render area
   int m_backbuffer_width = 0;
   int m_backbuffer_height = 0;
+  int m_new_backbuffer_width = 0;
+  int m_new_backbuffer_height = 0;
   TargetRectangle m_target_rectangle = {};
 
   FPSCounter m_fps_counter;
@@ -189,7 +192,8 @@ protected:
   void* m_surface_handle = nullptr;
   void* m_new_surface_handle = nullptr;
   Common::Flag m_surface_needs_change;
-  Common::Event m_surface_changed;
+  Common::Flag m_surface_resized;
+  std::mutex m_surface_change_mutex;
 
   u32 m_last_host_config_bits = 0;
 

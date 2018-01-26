@@ -69,8 +69,6 @@ public:
   void SetInterlacingMode() override;
   void SetViewport() override;
 
-  void ChangeSurface(void* new_surface_handle) override;
-
 private:
   bool CreateSemaphores();
   void DestroySemaphores();
@@ -78,6 +76,7 @@ private:
   void BeginFrame();
 
   void CheckForSurfaceChange();
+  void CheckForSurfaceResize();
   void CheckForConfigChanges();
 
   void ResetSamplerStates();
