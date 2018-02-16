@@ -57,7 +57,8 @@ ShaderCode GenPixelShader(APIType ApiType, const ShaderHostConfig& host_config,
 
   out.Write("// Pixel UberShader for %u texgens%s%s\n", numTexgen,
             early_depth ? ", early-depth" : "", per_pixel_depth ? ", per-pixel depth" : "");
-  WritePixelShaderCommonHeader(out, ApiType, numTexgen, per_pixel_lighting, bounding_box);
+  WritePixelShaderCommonHeader(out, ApiType, numTexgen, per_pixel_lighting, bounding_box, msaa,
+                               ssaa, stereo);
   WriteUberShaderCommonHeader(out, ApiType, host_config);
   if (per_pixel_lighting)
     WriteLightingFunction(out);
@@ -105,7 +106,7 @@ ShaderCode GenPixelShader(APIType ApiType, const ShaderHostConfig& host_config,
     {
       out.Write("VARYING_LOCATION(0) in VertexData {\n");
       GenerateVSOutputMembers(out, ApiType, numTexgen, per_pixel_lighting,
-                              GetInterpolationQualifier(msaa, ssaa, true, true));
+                              GetInterpolationQualifier(msaa, ssaa, true, true), true);
 
       if (stereo)
         out.Write("  flat int layer;\n");
@@ -244,13 +245,13 @@ ShaderCode GenPixelShader(APIType ApiType, const ShaderHostConfig& host_config,
             "\n"
             "  int4 ret;\n");
   out.Write("  ret.r = color[%s];\n",
-            BitfieldExtract("bpmem_tevksel(s * 2u)", TevKSel().swap1).c_str());
+            BitfieldExtract("pu.bpmem_tevksel(s * 2u)", TevKSel().swap1).c_str());
   out.Write("  ret.g = color[%s];\n",
-            BitfieldExtract("bpmem_tevksel(s * 2u)", TevKSel().swap2).c_str());
+            BitfieldExtract("pu.bpmem_tevksel(s * 2u)", TevKSel().swap2).c_str());
   out.Write("  ret.b = color[%s];\n",
-            BitfieldExtract("bpmem_tevksel(s * 2u + 1u)", TevKSel().swap1).c_str());
+            BitfieldExtract("pu.bpmem_tevksel(s * 2u + 1u)", TevKSel().swap1).c_str());
   out.Write("  ret.a = color[%s];\n",
-            BitfieldExtract("bpmem_tevksel(s * 2u + 1u)", TevKSel().swap2).c_str());
+            BitfieldExtract("pu.bpmem_tevksel(s * 2u + 1u)", TevKSel().swap2).c_str());
   out.Write("  return ret;\n"
             "}\n\n");
 
@@ -271,7 +272,7 @@ ShaderCode GenPixelShader(APIType ApiType, const ShaderHostConfig& host_config,
   // ======================
   auto LookupIndirectTexture = [&out, stereo](const char* out_var_name, const char* in_index_name) {
     out.Write("{\n"
-              "  uint iref = bpmem_iref(%s);\n"
+              "  uint iref = pu.bpmem_iref(%s);\n"
               "  if ( iref != 0u)\n"
               "  {\n"
               "    uint texcoord = bitfieldExtract(iref, 0, 3);\n"
@@ -744,7 +745,7 @@ ShaderCode GenPixelShader(APIType ApiType, const ShaderHostConfig& host_config,
   }
 
   out.Write("  uint num_stages = %s;\n\n",
-            BitfieldExtract("bpmem_genmode", bpmem.genMode.numtevstages).c_str());
+            BitfieldExtract("pu.bpmem_genmode", bpmem.genMode.numtevstages).c_str());
 
   out.Write("  // Main tev loop\n");
   if (ApiType == APIType::D3D)
@@ -757,9 +758,9 @@ ShaderCode GenPixelShader(APIType ApiType, const ShaderHostConfig& host_config,
             "  {\n"
             "    StageState ss;\n"
             "    ss.stage = stage;\n"
-            "    ss.cc = bpmem_combiners(stage).x;\n"
-            "    ss.ac = bpmem_combiners(stage).y;\n"
-            "    ss.order = bpmem_tevorder(stage>>1);\n"
+            "    ss.cc = pu.bpmem_combiners(stage).x;\n"
+            "    ss.ac = pu.bpmem_combiners(stage).y;\n"
+            "    ss.order = pu.bpmem_tevorder(stage>>1);\n"
             "    if ((stage & 1u) == 1u)\n"
             "      ss.order = ss.order >> %d;\n\n",
             int(TwoTevStageOrders().enable1.StartBit() - TwoTevStageOrders().enable0.StartBit()));
@@ -777,7 +778,7 @@ ShaderCode GenPixelShader(APIType ApiType, const ShaderHostConfig& host_config,
               1 << TwoTevStageOrders().enable0.StartBit());
     out.Write("\n"
               "    // Indirect textures\n"
-              "    uint tevind = bpmem_tevind(stage);\n"
+              "    uint tevind = pu.bpmem_tevind(stage);\n"
               "    if (tevind != 0u)\n"
               "    {\n"
               "      uint bs = %s;\n",
@@ -1037,10 +1038,10 @@ ShaderCode GenPixelShader(APIType ApiType, const ShaderHostConfig& host_config,
   out.Write("  int4 TevResult;\n");
   out.Write(
       "  TevResult.xyz = getTevReg(s, %s).xyz;\n",
-      BitfieldExtract("bpmem_combiners(num_stages).x", TevStageCombiner().colorC.dest).c_str());
+      BitfieldExtract("pu.bpmem_combiners(num_stages).x", TevStageCombiner().colorC.dest).c_str());
   out.Write(
       "  TevResult.w = getTevReg(s, %s).w;\n",
-      BitfieldExtract("bpmem_combiners(num_stages).y", TevStageCombiner().alphaC.dest).c_str());
+      BitfieldExtract("pu.bpmem_combiners(num_stages).y", TevStageCombiner().alphaC.dest).c_str());
 
   out.Write("  TevResult &= 255;\n\n");
 
@@ -1067,7 +1068,7 @@ ShaderCode GenPixelShader(APIType ApiType, const ShaderHostConfig& host_config,
   {
     // Zfreeze forces early depth off
     out.Write("  // ZFreeze\n"
-              "  if ((bpmem_genmode & %du) != 0u) {\n",
+              "  if ((pu.bpmem_genmode & %du) != 0u) {\n",
               1 << GenMode().zfreeze.StartBit());
     out.Write("    float2 screenpos = rawpos.xy * " I_EFBSCALE ".xy;\n");
     if (ApiType == APIType::OpenGL)
@@ -1086,12 +1087,12 @@ ShaderCode GenPixelShader(APIType ApiType, const ShaderHostConfig& host_config,
 
   out.Write("  // Depth Texture\n"
             "  int early_zCoord = zCoord;\n"
-            "  if (bpmem_ztex_op != 0u) {\n"
+            "  if (pu.bpmem_ztex_op != 0u) {\n"
             "    int ztex = int(" I_ZBIAS "[1].w); // fixed bias\n"
             "\n"
             "    // Whatever texture was in our last stage, it's now our depth texture\n"
             "    ztex += idot(s.TexColor.xyzw, " I_ZBIAS "[0].xyzw);\n"
-            "    ztex += (bpmem_ztex_op == 1u) ? zCoord : 0;\n"
+            "    ztex += (pu.bpmem_ztex_op == 1u) ? zCoord : 0;\n"
             "    zCoord = ztex & 0xFFFFFF;\n"
             "  }\n"
             "\n");
@@ -1100,7 +1101,7 @@ ShaderCode GenPixelShader(APIType ApiType, const ShaderHostConfig& host_config,
   {
     out.Write("  // If early depth is enabled, write to zbuffer before depth textures\n");
     out.Write("  // If early depth isn't enabled, we write to the zbuffer here\n");
-    out.Write("  int zbuffer_zCoord = bpmem_late_ztest ? zCoord : early_zCoord;\n");
+    out.Write("  int zbuffer_zCoord = pu.bpmem_late_ztest ? zCoord : early_zCoord;\n");
     if (!host_config.backend_reversed_depth_range)
       out.Write("  depth = 1.0 - float(zbuffer_zCoord) / 16777216.0;\n");
     else
@@ -1108,16 +1109,16 @@ ShaderCode GenPixelShader(APIType ApiType, const ShaderHostConfig& host_config,
   }
 
   out.Write("  // Alpha Test\n"
-            "  if (bpmem_alphaTest != 0u) {\n"
+            "  if (pu.bpmem_alphaTest != 0u) {\n"
             "    bool comp0 = alphaCompare(TevResult.a, " I_ALPHA ".r, %s);\n",
-            BitfieldExtract("bpmem_alphaTest", AlphaTest().comp0).c_str());
+            BitfieldExtract("pu.bpmem_alphaTest", AlphaTest().comp0).c_str());
   out.Write("    bool comp1 = alphaCompare(TevResult.a, " I_ALPHA ".g, %s);\n",
-            BitfieldExtract("bpmem_alphaTest", AlphaTest().comp1).c_str());
+            BitfieldExtract("pu.bpmem_alphaTest", AlphaTest().comp1).c_str());
   out.Write("\n"
             "    // These if statements are written weirdly to work around intel and qualcom bugs "
             "with handling booleans.\n"
             "    switch (%s) {\n",
-            BitfieldExtract("bpmem_alphaTest", AlphaTest().logic).c_str());
+            BitfieldExtract("pu.bpmem_alphaTest", AlphaTest().logic).c_str());
   out.Write("    case 0u: // AND\n"
             "      if (comp0 && comp1) break; else discard; break;\n"
             "    case 1u: // OR\n"
@@ -1133,7 +1134,7 @@ ShaderCode GenPixelShader(APIType ApiType, const ShaderHostConfig& host_config,
   // =========
   // Dithering
   // =========
-  out.Write("  if (bpmem_dither) {\n"
+  out.Write("  if (pu.bpmem_dither) {\n"
             "    // Flipper uses a standard 2x2 Bayer Matrix for 6 bit dithering\n"
             "    // Here the matrix is encoded into the two factor constants\n"
             "    int2 dither = int2(rawpos.xy) & 1;\n"
@@ -1149,12 +1150,12 @@ ShaderCode GenPixelShader(APIType ApiType, const ShaderHostConfig& host_config,
   //        Should be fixed point, and should not make guesses about Range-Based adjustments.
   out.Write("  // Fog\n"
             "  uint fog_function = %s;\n",
-            BitfieldExtract("bpmem_fogParam3", FogParam3().fsel).c_str());
+            BitfieldExtract("pu.bpmem_fogParam3", FogParam3().fsel).c_str());
   out.Write("  if (fog_function != 0u) {\n"
             "    // TODO: This all needs to be converted from float to fixed point\n"
             "    float ze;\n"
             "    if (%s == 0u) {\n",
-            BitfieldExtract("bpmem_fogParam3", FogParam3().proj).c_str());
+            BitfieldExtract("pu.bpmem_fogParam3", FogParam3().proj).c_str());
   out.Write("      // perspective\n"
             "      // ze = A/(B - (Zs >> B_SHF)\n"
             "      ze = (" I_FOGF ".x * 16777216.0) / float(" I_FOGI ".y - (zCoord >> " I_FOGI
@@ -1166,7 +1167,7 @@ ShaderCode GenPixelShader(APIType ApiType, const ShaderHostConfig& host_config,
             "    }\n"
             "\n"
             "    if (bool(%s)) {\n",
-            BitfieldExtract("bpmem_fogRangeBase", FogRangeParams::RangeBase().Enabled).c_str());
+            BitfieldExtract("pu.bpmem_fogRangeBase", FogRangeParams::RangeBase().Enabled).c_str());
   out.Write("      // x_adjust = sqrt((x-center)^2 + k^2)/k\n"
             "      // ze *= x_adjust\n"
             "      float offset = (2.0 * (rawpos.x / " I_FOGF ".w)) - 1.0 - " I_FOGF ".z;\n"
@@ -1208,7 +1209,7 @@ ShaderCode GenPixelShader(APIType ApiType, const ShaderHostConfig& host_config,
   // D3D requires that the shader outputs be uint when writing to a uint render target for logic op.
   if (ApiType == APIType::D3D && uid_data->uint_output)
   {
-    out.Write("  if (bpmem_rgba6_format)\n"
+    out.Write("  if (pu.bpmem_rgba6_format)\n"
               "    ocol0 = uint4(TevResult & 0xFC);\n"
               "  else\n"
               "    ocol0 = uint4(TevResult);\n"
@@ -1216,14 +1217,14 @@ ShaderCode GenPixelShader(APIType ApiType, const ShaderHostConfig& host_config,
   }
   else
   {
-    out.Write("  if (bpmem_rgba6_format)\n"
+    out.Write("  if (pu.bpmem_rgba6_format)\n"
               "    ocol0.rgb = float3(TevResult.rgb >> 2) / 63.0;\n"
               "  else\n"
               "    ocol0.rgb = float3(TevResult.rgb) / 255.0;\n"
               "\n"
-              "  if (bpmem_dstalpha != 0u)\n");
+              "  if (pu.bpmem_dstalpha != 0u)\n");
     out.Write("    ocol0.a = float(%s >> 2) / 63.0;\n",
-              BitfieldExtract("bpmem_dstalpha", ConstantAlpha().alpha).c_str());
+              BitfieldExtract("pu.bpmem_dstalpha", ConstantAlpha().alpha).c_str());
     out.Write("  else\n"
               "    ocol0.a = float(TevResult.a >> 2) / 63.0;\n"
               "  \n");
@@ -1241,7 +1242,7 @@ ShaderCode GenPixelShader(APIType ApiType, const ShaderHostConfig& host_config,
   {
     const char* atomic_op =
         (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan) ? "atomic" : "Interlocked";
-    out.Write("  if (bpmem_bounding_box) {\n");
+    out.Write("  if (pu.bpmem_bounding_box) {\n");
     out.Write("    if(bbox_data[0] > int(rawpos.x)) %sMin(bbox_data[0], int(rawpos.x));\n",
               atomic_op);
     out.Write("    if(bbox_data[1] < int(rawpos.x)) %sMax(bbox_data[1], int(rawpos.x));\n",
@@ -1296,16 +1297,16 @@ ShaderCode GenPixelShader(APIType ApiType, const ShaderHostConfig& host_config,
         "1.0 - initial_ocol0.a;",  // INVDSTALPHA
     };
 
-    out.Write("  if (blend_enable) {\n"
+    out.Write("  if (pu.blend_enable) {\n"
               "    float4 blend_src;\n"
-              "    switch (blend_src_factor) {\n");
+              "    switch (pu.blend_src_factor) {\n");
     for (unsigned i = 0; i < blendSrcFactor.size(); i++)
     {
       out.Write("      case %uu: blend_src.rgb = %s; break;\n", i, blendSrcFactor[i]);
     }
 
     out.Write("    }\n"
-              "    switch (blend_src_factor_alpha) {\n");
+              "    switch (pu.blend_src_factor_alpha) {\n");
     for (unsigned i = 0; i < blendSrcFactorAlpha.size(); i++)
     {
       out.Write("      case %uu: blend_src.a = %s; break;\n", i, blendSrcFactorAlpha[i]);
@@ -1313,13 +1314,13 @@ ShaderCode GenPixelShader(APIType ApiType, const ShaderHostConfig& host_config,
 
     out.Write("    }\n"
               "    float4 blend_dst;\n"
-              "    switch (blend_dst_factor) {\n");
+              "    switch (pu.blend_dst_factor) {\n");
     for (unsigned i = 0; i < blendDstFactor.size(); i++)
     {
       out.Write("      case %uu: blend_dst.rgb = %s; break;\n", i, blendDstFactor[i]);
     }
     out.Write("    }\n"
-              "    switch (blend_dst_factor_alpha) {\n");
+              "    switch (pu.blend_dst_factor_alpha) {\n");
     for (unsigned i = 0; i < blendDstFactorAlpha.size(); i++)
     {
       out.Write("      case %uu: blend_dst.a = %s; break;\n", i, blendDstFactorAlpha[i]);
@@ -1328,13 +1329,13 @@ ShaderCode GenPixelShader(APIType ApiType, const ShaderHostConfig& host_config,
     out.Write(
         "    }\n"
         "    float4 blend_result;\n"
-        "    if (blend_subtract)\n"
+        "    if (pu.blend_subtract)\n"
         "      blend_result.rgb = initial_ocol0.rgb * blend_dst.rgb - ocol0.rgb * blend_src.rgb;\n"
         "    else\n"
         "      blend_result.rgb = initial_ocol0.rgb * blend_dst.rgb + ocol0.rgb * "
         "blend_src.rgb;\n");
 
-    out.Write("    if (blend_subtract_alpha)\n"
+    out.Write("    if (pu.blend_subtract_alpha)\n"
               "      blend_result.a = initial_ocol0.a * blend_dst.a - ocol0.a * blend_src.a;\n"
               "    else\n"
               "      blend_result.a = initial_ocol0.a * blend_dst.a + ocol0.a * blend_src.a;\n");
@@ -1371,13 +1372,13 @@ ShaderCode GenPixelShader(APIType ApiType, const ShaderHostConfig& host_config,
             "  // Select Konst for stage\n"
             "  // TODO: a switch case might be better here than an dynamically"
             "  // indexed uniform lookup\n"
-            "  uint tevksel = bpmem_tevksel(ss.stage>>1);\n"
+            "  uint tevksel = pu.bpmem_tevksel(ss.stage>>1);\n"
             "  if ((ss.stage & 1u) == 0u)\n"
-            "    return int4(konstLookup[%s].rgb, konstLookup[%s].a);\n",
+            "    return int4(pu.konstLookup[%s].rgb, pu.konstLookup[%s].a);\n",
             BitfieldExtract("tevksel", bpmem.tevksel[0].kcsel0).c_str(),
             BitfieldExtract("tevksel", bpmem.tevksel[0].kasel0).c_str());
   out.Write("  else\n"
-            "    return int4(konstLookup[%s].rgb, konstLookup[%s].a);\n",
+            "    return int4(pu.konstLookup[%s].rgb, pu.konstLookup[%s].a);\n",
             BitfieldExtract("tevksel", bpmem.tevksel[0].kcsel1).c_str(),
             BitfieldExtract("tevksel", bpmem.tevksel[0].kasel1).c_str());
   out.Write("}\n");
@@ -1414,4 +1415,4 @@ void EnumeratePixelShaderUids(const std::function<void(const PixelShaderUid&)>& 
     }
   }
 }
-}
+}  // namespace UberShader

@@ -190,9 +190,9 @@ std::string GetDiskShaderCacheFileName(APIType api_type, const char* type, bool 
                                        bool include_host_config, bool include_api = true);
 
 template <class T>
-inline void DefineOutputMember(T& object, APIType api_type, const char* qualifier, const char* type,
-                               const char* name, int var_index, const char* semantic = "",
-                               int semantic_index = -1)
+inline void DefineOutputMember(T& object, APIType api_type, const char* qualifier, bool in,
+                               const char* type, const char* name, int var_index,
+                               const char* semantic = "", int semantic_index = -1)
 {
   object.Write("\t%s %s %s", qualifier, type, name);
 
@@ -206,33 +206,40 @@ inline void DefineOutputMember(T& object, APIType api_type, const char* qualifie
     else
       object.Write(" : %s", semantic);
   }
+  else if (api_type == APIType::Metal && !in)
+  {
+    if (strcmp(semantic, "POSITION") == 0)
+      object.Write(" [[position]]");
+    // else if (strcmp(semantic, "SV_ClipDistance") == 0)
+    // object.Write(" [[clip_distance]]");
+  }
 
   object.Write(";\n");
 }
 
 template <class T>
 inline void GenerateVSOutputMembers(T& object, APIType api_type, u32 texgens,
-                                    bool per_pixel_lighting, const char* qualifier)
+                                    bool per_pixel_lighting, const char* qualifier, bool in)
 {
-  DefineOutputMember(object, api_type, qualifier, "float4", "pos", -1, "POSITION");
-  DefineOutputMember(object, api_type, qualifier, "float4", "colors_", 0, "COLOR", 0);
-  DefineOutputMember(object, api_type, qualifier, "float4", "colors_", 1, "COLOR", 1);
+  DefineOutputMember(object, api_type, qualifier, in, "float4", "pos", -1, "POSITION");
+  DefineOutputMember(object, api_type, qualifier, in, "float4", "colors_", 0, "COLOR", 0);
+  DefineOutputMember(object, api_type, qualifier, in, "float4", "colors_", 1, "COLOR", 1);
 
   for (unsigned int i = 0; i < texgens; ++i)
-    DefineOutputMember(object, api_type, qualifier, "float3", "tex", i, "TEXCOORD", i);
+    DefineOutputMember(object, api_type, qualifier, in, "float3", "tex", i, "TEXCOORD", i);
 
-  DefineOutputMember(object, api_type, qualifier, "float4", "clipPos", -1, "TEXCOORD", texgens);
+  DefineOutputMember(object, api_type, qualifier, in, "float4", "clipPos", -1, "TEXCOORD", texgens);
 
   if (per_pixel_lighting)
   {
-    DefineOutputMember(object, api_type, qualifier, "float3", "Normal", -1, "TEXCOORD",
+    DefineOutputMember(object, api_type, qualifier, in, "float3", "Normal", -1, "TEXCOORD",
                        texgens + 1);
-    DefineOutputMember(object, api_type, qualifier, "float3", "WorldPos", -1, "TEXCOORD",
+    DefineOutputMember(object, api_type, qualifier, in, "float3", "WorldPos", -1, "TEXCOORD",
                        texgens + 2);
   }
 
-  DefineOutputMember(object, api_type, qualifier, "float", "clipDist", 0, "SV_ClipDistance", 0);
-  DefineOutputMember(object, api_type, qualifier, "float", "clipDist", 1, "SV_ClipDistance", 1);
+  DefineOutputMember(object, api_type, qualifier, in, "float", "clipDist", 0, "SV_ClipDistance", 0);
+  DefineOutputMember(object, api_type, qualifier, in, "float", "clipDist", 1, "SV_ClipDistance", 1);
 }
 
 template <class T>
@@ -291,30 +298,30 @@ inline const char* GetInterpolationQualifier(bool msaa, bool ssaa,
 }
 
 // Constant variable names
-#define I_COLORS "color"
-#define I_KCOLORS "k"
-#define I_ALPHA "alphaRef"
-#define I_TEXDIMS "texdim"
-#define I_ZBIAS "czbias"
-#define I_INDTEXSCALE "cindscale"
-#define I_INDTEXMTX "cindmtx"
-#define I_FOGCOLOR "cfogcolor"
-#define I_FOGI "cfogi"
-#define I_FOGF "cfogf"
-#define I_FOGRANGE "cfogrange"
-#define I_ZSLOPE "czslope"
-#define I_EFBSCALE "cefbscale"
+#define I_COLORS "pu.color"
+#define I_KCOLORS "pu.k"
+#define I_ALPHA "pu.alphaRef"
+#define I_TEXDIMS "pu.texdim"
+#define I_ZBIAS "pu.czbias"
+#define I_INDTEXSCALE "pu.cindscale"
+#define I_INDTEXMTX "pu.cindmtx"
+#define I_FOGCOLOR "pu.cfogcolor"
+#define I_FOGI "pu.cfogi"
+#define I_FOGF "pu.cfogf"
+#define I_FOGRANGE "pu.cfogrange"
+#define I_ZSLOPE "pu.czslope"
+#define I_EFBSCALE "pu.cefbscale"
 
-#define I_POSNORMALMATRIX "cpnmtx"
-#define I_PROJECTION "cproj"
-#define I_MATERIALS "cmtrl"
-#define I_LIGHTS "clights"
-#define I_TEXMATRICES "ctexmtx"
-#define I_TRANSFORMMATRICES "ctrmtx"
-#define I_NORMALMATRICES "cnmtx"
-#define I_POSTTRANSFORMMATRICES "cpostmtx"
-#define I_PIXELCENTERCORRECTION "cpixelcenter"
-#define I_VIEWPORT_SIZE "cviewport"
+#define I_POSNORMALMATRIX "vu.cpnmtx"
+#define I_PROJECTION "vu.cproj"
+#define I_MATERIALS "vu.cmtrl"
+#define I_LIGHTS "vu.clights"
+#define I_TEXMATRICES "vu.ctexmtx"
+#define I_TRANSFORMMATRICES "vu.ctrmtx"
+#define I_NORMALMATRICES "vu.cnmtx"
+#define I_POSTTRANSFORMMATRICES "vu.cpostmtx"
+#define I_PIXELCENTERCORRECTION "vu.cpixelcenter"
+#define I_VIEWPORT_SIZE "vu.cviewport"
 
 #define I_STEREOPARAMS "cstereo"
 #define I_LINEPTPARAMS "clinept"
@@ -323,18 +330,18 @@ inline const char* GetInterpolationQualifier(bool msaa, bool ssaa,
 static const char s_shader_uniforms[] = "\tuint    components;\n"
                                         "\tuint    xfmem_dualTexInfo;\n"
                                         "\tuint    xfmem_numColorChans;\n"
-                                        "\tfloat4 " I_POSNORMALMATRIX "[6];\n"
-                                        "\tfloat4 " I_PROJECTION "[4];\n"
-                                        "\tint4 " I_MATERIALS "[4];\n"
-                                        "\tLight " I_LIGHTS "[8];\n"
-                                        "\tfloat4 " I_TEXMATRICES "[24];\n"
-                                        "\tfloat4 " I_TRANSFORMMATRICES "[64];\n"
-                                        "\tfloat4 " I_NORMALMATRICES "[32];\n"
-                                        "\tfloat4 " I_POSTTRANSFORMMATRICES "[64];\n"
-                                        "\tfloat4 " I_PIXELCENTERCORRECTION ";\n"
-                                        "\tfloat2 " I_VIEWPORT_SIZE ";\n"
+                                        "\tfloat4  cpnmtx[6];\n"
+                                        "\tfloat4  cproj[4];\n"
+                                        "\tint4    cmtrl[4];\n"
+                                        "\tLight   clights[8];\n"
+                                        "\tfloat4  ctexmtx[24];\n"
+                                        "\tfloat4  ctrmtx[64];\n"
+                                        "\tfloat4  cnmtx[32];\n"
+                                        "\tfloat4  cpostmtx[64];\n"
+                                        "\tfloat4  cpixelcenter;\n"
+                                        "\tfloat2  cviewport;\n"
                                         "\tuint4   xfmem_pack1[8];\n"
-                                        "\t#define xfmem_texMtxInfo(i) (xfmem_pack1[(i)].x)\n"
-                                        "\t#define xfmem_postMtxInfo(i) (xfmem_pack1[(i)].y)\n"
-                                        "\t#define xfmem_color(i) (xfmem_pack1[(i)].z)\n"
-                                        "\t#define xfmem_alpha(i) (xfmem_pack1[(i)].w)\n";
+                                        "\t#define xfmem_texMtxInfo(i) xfmem_pack1[(i)].x\n"
+                                        "\t#define xfmem_postMtxInfo(i) xfmem_pack1[(i)].y\n"
+                                        "\t#define xfmem_color(i) xfmem_pack1[(i)].z\n"
+                                        "\t#define xfmem_alpha(i) xfmem_pack1[(i)].w\n";

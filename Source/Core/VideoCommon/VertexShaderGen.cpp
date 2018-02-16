@@ -81,27 +81,73 @@ ShaderCode GenerateVertexShaderCode(APIType api_type, const ShaderHostConfig& ho
 {
   ShaderCode out;
 
-  const bool per_pixel_lighting = g_ActiveConfig.bEnablePixelLighting;
+  const bool per_pixel_lighting = host_config.per_pixel_lighting;
   const bool msaa = host_config.msaa;
   const bool ssaa = host_config.ssaa;
   const bool vertex_rounding = host_config.vertex_rounding;
+  const bool use_input_interface_block = api_type == APIType::D3D || api_type == APIType::Metal;
+  const bool use_interface_blocks =
+      host_config.backend_geometry_shaders || api_type != APIType::OpenGL;
 
   out.Write("%s", s_lighting_struct);
 
   // uniforms
   if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
-    out.Write("UBO_BINDING(std140, 2) uniform VSBlock {\n");
+    out.Write("UBO_BINDING(std140, 2) uniform VSBlock {\n%s\n} vu;\n", s_shader_uniforms);
   else
-    out.Write("cbuffer VSBlock {\n");
+    out.Write("struct VSBlock {\n%s\n};\n", s_shader_uniforms);
 
-  out.Write(s_shader_uniforms);
-  out.Write("};\n");
+  if (api_type == APIType::D3D)
+    out.Write("cbuffer VSConstants : register(b0) {\n  VSBlock vu;\n}\n");
 
-  out.Write("struct VS_OUTPUT {\n");
-  GenerateVSOutputMembers(out, api_type, uid_data->numTexGens, per_pixel_lighting, "");
-  out.Write("};\n");
+  if (use_input_interface_block)
+  {
+    auto WriteAttribute = [&out, api_type](const char* type, const char* name, int name_index,
+                                           const char* semantic, int semantic_index, int attrib) {
+      if (api_type == APIType::D3D)
+      {
+        if (name_index >= 0)
+          out.Write("  %s %s%d : %s%d;\n", type, name, name_index, semantic, semantic_index);
+        else
+          out.Write("  %s %s : %s;\n", type, name, semantic);
+      }
+      else if (api_type == APIType::Metal)
+      {
+        if (name_index >= 0)
+          out.Write("  %s %s%d [[attribute(%d)]];\n", type, name, name_index, attrib);
+        else
+          out.Write("  %s %s [[attribute(%d)]];\n", type, name, attrib);
+      }
+    };
 
-  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
+    out.Write("struct VS_INPUT {\n");
+
+    WriteAttribute("float4", "rawpos", -1, "POSITION", -1, SHADER_POSITION_ATTRIB);
+    if (uid_data->components & VB_HAS_POSMTXIDX)
+      WriteAttribute("uint4", "posmtx", -1, "BLENDINDICES", -1, SHADER_POSMTX_ATTRIB);
+    for (int i = 0; i < 3; i++)
+    {
+      if (uid_data->components & (VB_HAS_NRM0 << i))
+        WriteAttribute("float3", "rawnorm", i, "NORMAL", i, SHADER_NORM0_ATTRIB + i);
+    }
+    for (int i = 0; i < 2; i++)
+    {
+      if (uid_data->components & (VB_HAS_COL0 << i))
+        WriteAttribute("float4", "rawcolor", i, "COLOR", i, SHADER_COLOR0_ATTRIB + i);
+    }
+    for (int i = 0; i < 8; ++i)
+    {
+      u32 hastexmtx = (uid_data->components & (VB_HAS_TEXMTXIDX0 << i));
+      if ((uid_data->components & (VB_HAS_UV0 << i)) || hastexmtx)
+      {
+        WriteAttribute(hastexmtx ? "float3" : "float2", "rawtex", i, "TEXCOORD", i,
+                       SHADER_TEXTURE0_ATTRIB + i);
+      }
+    }
+
+    out.Write("};\n");
+  }
+  else
   {
     out.Write("ATTRIBUTE_LOCATION(%d) in float4 rawpos;\n", SHADER_POSITION_ATTRIB);
     if (uid_data->components & VB_HAS_POSMTXIDX)
@@ -127,13 +173,20 @@ ShaderCode GenerateVertexShaderCode(APIType api_type, const ShaderHostConfig& ho
                   hastexmtx ? 3 : 2, i);
       }
     }
+  }
 
+  out.Write("struct VS_OUTPUT {\n");
+  GenerateVSOutputMembers(out, api_type, uid_data->numTexGens, per_pixel_lighting, "", false);
+  out.Write("};\n");
+
+  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
+  {
     // We need to always use output blocks for Vulkan, but geometry shaders are also optional.
-    if (host_config.backend_geometry_shaders || api_type == APIType::Vulkan)
+    if (use_interface_blocks)
     {
       out.Write("VARYING_LOCATION(0) out VertexData {\n");
       GenerateVSOutputMembers(out, api_type, uid_data->numTexGens, per_pixel_lighting,
-                              GetInterpolationQualifier(msaa, ssaa, true, false));
+                              GetInterpolationQualifier(msaa, ssaa, true, false), false);
       out.Write("} vs;\n");
     }
     else
@@ -155,33 +208,49 @@ ShaderCode GenerateVertexShaderCode(APIType api_type, const ShaderHostConfig& ho
       out.Write("%s out float4 colors_0;\n", GetInterpolationQualifier(msaa, ssaa));
       out.Write("%s out float4 colors_1;\n", GetInterpolationQualifier(msaa, ssaa));
     }
-
-    out.Write("void main()\n{\n");
   }
-  else  // D3D
-  {
-    out.Write("VS_OUTPUT main(\n");
 
-    // inputs
-    if (uid_data->components & VB_HAS_NRM0)
-      out.Write("  float3 rawnorm0 : NORMAL0,\n");
-    if (uid_data->components & VB_HAS_NRM1)
-      out.Write("  float3 rawnorm1 : NORMAL1,\n");
-    if (uid_data->components & VB_HAS_NRM2)
-      out.Write("  float3 rawnorm2 : NORMAL2,\n");
-    if (uid_data->components & VB_HAS_COL0)
-      out.Write("  float4 rawcolor0 : COLOR0,\n");
-    if (uid_data->components & VB_HAS_COL1)
-      out.Write("  float4 rawcolor1 : COLOR1,\n");
+  // Write main function signature.
+  switch (api_type)
+  {
+  case APIType::D3D:
+    out.Write("VS_OUTPUT main(in VS_INPUT vin)\n{\n");
+    break;
+  case APIType::OpenGL:
+  case APIType::Vulkan:
+    out.Write("void main()\n{\n");
+    break;
+  case APIType::Metal:
+    out.Write("vertex VS_OUTPUT vmain(VS_INPUT vin [[stage_in]],\n"
+              "                       constant VSBlock& vu [[buffer(1)]])\n{\n");
+    break;
+  default:
+    break;
+  }
+
+  // When using interface blocks, we have to copy the inputs to local variables.
+  // This is because GLSL does not support interface blocks for VS inputs.
+  if (use_input_interface_block)
+  {
+    out.Write("  #define rawpos vin.rawpos\n");
+    if (uid_data->components & VB_HAS_POSMTXIDX)
+      out.Write("  #define posmtx vin.posmtx\n");
+    for (int i = 0; i < 3; i++)
+    {
+      if (uid_data->components & (VB_HAS_NRM0 << i))
+        out.Write("  #define rawnorm%d vin.rawnorm%d\n", i, i);
+    }
+    for (int i = 0; i < 2; i++)
+    {
+      if (uid_data->components & (VB_HAS_COL0 << i))
+        out.Write("  #define rawcolor%d vin.rawcolor%d\n", i, i);
+    }
     for (int i = 0; i < 8; ++i)
     {
       u32 hastexmtx = (uid_data->components & (VB_HAS_TEXMTXIDX0 << i));
       if ((uid_data->components & (VB_HAS_UV0 << i)) || hastexmtx)
-        out.Write("  float%d rawtex%d : TEXCOORD%d,\n", hastexmtx ? 3 : 2, i, i);
+        out.Write("  #define rawtex%d vin.rawtex%d\n", i, i);
     }
-    if (uid_data->components & VB_HAS_POSMTXIDX)
-      out.Write("  uint4 posmtx : BLENDINDICES,\n");
-    out.Write("  float4 rawpos : POSITION) {\n");
   }
 
   out.Write("VS_OUTPUT o;\n");
@@ -485,7 +554,7 @@ ShaderCode GenerateVertexShaderCode(APIType api_type, const ShaderHostConfig& ho
 
   if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
   {
-    if (host_config.backend_geometry_shaders || api_type == APIType::Vulkan)
+    if (use_interface_blocks)
     {
       AssignVSOutputMembers(out, "vs", "o", uid_data->numTexGens, per_pixel_lighting);
     }
@@ -517,7 +586,7 @@ ShaderCode GenerateVertexShaderCode(APIType api_type, const ShaderHostConfig& ho
     else
       out.Write("gl_Position = o.pos;\n");
   }
-  else  // D3D
+  else  // D3D/Metal
   {
     out.Write("return o;\n");
   }

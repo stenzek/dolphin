@@ -30,6 +30,9 @@ ShaderCode GenVertexShader(APIType ApiType, const ShaderHostConfig& host_config,
   const bool ssaa = host_config.ssaa;
   const bool per_pixel_lighting = host_config.per_pixel_lighting;
   const bool vertex_rounding = host_config.vertex_rounding;
+  const bool use_input_interface_block = ApiType == APIType::D3D || ApiType == APIType::Metal;
+  const bool use_interface_blocks =
+      host_config.backend_geometry_shaders || ApiType != APIType::OpenGL;
   const u32 numTexgen = uid_data->num_texgens;
   ShaderCode out;
 
@@ -38,20 +41,50 @@ ShaderCode GenVertexShader(APIType ApiType, const ShaderHostConfig& host_config,
 
   // uniforms
   if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
-    out.Write("UBO_BINDING(std140, 2) uniform VSBlock {\n");
+    out.Write("UBO_BINDING(std140, 2) uniform VSBlock {\n%s\n} vu;\n", s_shader_uniforms);
   else
-    out.Write("cbuffer VSBlock {\n");
-  out.Write(s_shader_uniforms);
-  out.Write("};\n");
+    out.Write("struct VSBlock {\n%s\n};\n", s_shader_uniforms);
 
-  out.Write("struct VS_OUTPUT {\n");
-  GenerateVSOutputMembers(out, ApiType, numTexgen, per_pixel_lighting, "");
-  out.Write("};\n\n");
+  if (ApiType == APIType::D3D)
+    out.Write("cbuffer VSConstants : register(b0) {\n  VSBlock vu;\n}\n");
 
   WriteUberShaderCommonHeader(out, ApiType, host_config);
   WriteLightingFunction(out);
 
-  if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
+  if (use_input_interface_block)
+  {
+    auto WriteAttribute = [&out, ApiType](const char* type, const char* name, int name_index,
+                                          const char* semantic, int semantic_index, int attrib) {
+      if (ApiType == APIType::D3D)
+      {
+        if (name_index >= 0)
+          out.Write("  %s %s%d : %s%d;\n", type, name, name_index, semantic, semantic_index);
+        else
+          out.Write("  %s %s : %s;\n", type, name, semantic);
+      }
+      else if (ApiType == APIType::Metal)
+      {
+        if (name_index >= 0)
+          out.Write("  %s %s%d [[attribute(%d)]];\n", type, name, name_index, attrib);
+        else
+          out.Write("  %s %s [[attribute(%d)]];\n", type, name, attrib);
+      }
+    };
+
+    out.Write("struct VS_INPUT {\n");
+
+    WriteAttribute("float4", "rawpos", -1, "POSITION", -1, SHADER_POSITION_ATTRIB);
+    WriteAttribute("uint4", "posmtx", -1, "BLENDINDICES", -1, SHADER_POSMTX_ATTRIB);
+    for (int i = 0; i < 3; i++)
+      WriteAttribute("float3", "rawnorm", i, "NORMAL", i, SHADER_NORM0_ATTRIB + i);
+    for (int i = 0; i < 2; i++)
+      WriteAttribute("float4", "rawcolor", i, "COLOR", i, SHADER_COLOR0_ATTRIB + i);
+    for (int i = 0; i < 8; ++i)
+      WriteAttribute("float3", "rawtex", i, "TEXCOORD", i, SHADER_TEXTURE0_ATTRIB + i);
+
+    out.Write("};\n");
+  }
+  else
   {
     out.Write("ATTRIBUTE_LOCATION(%d) in float4 rawpos;\n", SHADER_POSITION_ATTRIB);
     out.Write("ATTRIBUTE_LOCATION(%d) in uint4 posmtx;\n", SHADER_POSMTX_ATTRIB);
@@ -62,13 +95,20 @@ ShaderCode GenVertexShader(APIType ApiType, const ShaderHostConfig& host_config,
     out.Write("ATTRIBUTE_LOCATION(%d) in float4 rawcolor1;\n", SHADER_COLOR1_ATTRIB);
     for (int i = 0; i < 8; ++i)
       out.Write("ATTRIBUTE_LOCATION(%d) in float3 rawtex%d;\n", SHADER_TEXTURE0_ATTRIB + i, i);
+  }
 
+  out.Write("struct VS_OUTPUT {\n");
+  GenerateVSOutputMembers(out, ApiType, numTexgen, per_pixel_lighting, "", false);
+  out.Write("};\n\n");
+
+  if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
+  {
     // We need to always use output blocks for Vulkan, but geometry shaders are also optional.
-    if (host_config.backend_geometry_shaders || ApiType == APIType::Vulkan)
+    if (use_interface_blocks)
     {
       out.Write("VARYING_LOCATION(0) out VertexData {\n");
       GenerateVSOutputMembers(out, ApiType, numTexgen, per_pixel_lighting,
-                              GetInterpolationQualifier(msaa, ssaa, true, false));
+                              GetInterpolationQualifier(msaa, ssaa, true, false), false);
       out.Write("} vs;\n");
     }
     else
@@ -86,23 +126,38 @@ ShaderCode GenVertexShader(APIType ApiType, const ShaderHostConfig& host_config,
       out.Write("%s out float4 colors_0;\n", GetInterpolationQualifier(msaa, ssaa));
       out.Write("%s out float4 colors_1;\n", GetInterpolationQualifier(msaa, ssaa));
     }
-
-    out.Write("void main()\n{\n");
   }
-  else  // D3D
-  {
-    out.Write("VS_OUTPUT main(\n");
 
-    // inputs
-    out.Write("  float3 rawnorm0 : NORMAL0,\n");
-    out.Write("  float3 rawnorm1 : NORMAL1,\n");
-    out.Write("  float3 rawnorm2 : NORMAL2,\n");
-    out.Write("  float4 rawcolor0 : COLOR0,\n");
-    out.Write("  float4 rawcolor1 : COLOR1,\n");
+  // Write main function signature.
+  switch (ApiType)
+  {
+  case APIType::D3D:
+    out.Write("VS_OUTPUT main(in VS_INPUT vin)\n{\n");
+    break;
+  case APIType::OpenGL:
+  case APIType::Vulkan:
+    out.Write("void main()\n{\n");
+    break;
+  case APIType::Metal:
+    out.Write("vertex VS_OUTPUT vmain(VS_INPUT vin [[stage_in]],\n"
+              "                       constant VSBlock& vu [[buffer(1)]])\n{\n");
+    break;
+  default:
+    break;
+  }
+
+  // When using interface blocks, we have to copy the inputs to local variables.
+  // This is because GLSL does not support interface blocks for VS inputs.
+  if (use_input_interface_block)
+  {
+    out.Write("  #define rawpos vin.rawpos\n");
+    out.Write("  #define posmtx vin.posmtx\n");
+    for (int i = 0; i < 3; i++)
+      out.Write("  #define rawnorm%d vin.rawnorm%d\n", i, i);
+    for (int i = 0; i < 2; i++)
+      out.Write("  #define rawcolor%d vin.rawcolor%d\n", i, i);
     for (int i = 0; i < 8; ++i)
-      out.Write("  float3 rawtex%d : TEXCOORD%d,\n", i, i);
-    out.Write("  uint posmtx : BLENDINDICES,\n");
-    out.Write("  float4 rawpos : POSITION) {\n");
+      out.Write("  #define rawtex%d vin.rawtex%d\n", i, i);
   }
 
   out.Write("VS_OUTPUT o;\n"
@@ -119,7 +174,7 @@ ShaderCode GenVertexShader(APIType ApiType, const ShaderHostConfig& host_config,
             "float3 N1;\n"
             "float3 N2;\n"
             "\n"
-            "if ((components & %uu) != 0u) {// VB_HAS_POSMTXIDX\n",
+            "if ((vu.components & %uu) != 0u) {// VB_HAS_POSMTXIDX\n",
             VB_HAS_POSMTXIDX);
   out.Write("  // Vertex format has a per-vertex matrix\n"
             "  int posidx = int(posmtx.r);\n"
@@ -147,18 +202,18 @@ ShaderCode GenVertexShader(APIType ApiType, const ShaderHostConfig& host_config,
             "\n"
             "// Only the first normal gets normalized (TODO: why?)\n"
             "float3 _norm0 = float3(0.0, 0.0, 0.0);\n"
-            "if ((components & %uu) != 0u) // VB_HAS_NRM0\n",
+            "if ((vu.components & %uu) != 0u) // VB_HAS_NRM0\n",
             VB_HAS_NRM0);
   out.Write(
       "  _norm0 = normalize(float3(dot(N0, rawnorm0), dot(N1, rawnorm0), dot(N2, rawnorm0)));\n"
       "\n"
       "float3 _norm1 = float3(0.0, 0.0, 0.0);\n"
-      "if ((components & %uu) != 0u) // VB_HAS_NRM1\n",
+      "if ((vu.components & %uu) != 0u) // VB_HAS_NRM1\n",
       VB_HAS_NRM1);
   out.Write("  _norm1 = float3(dot(N0, rawnorm1), dot(N1, rawnorm1), dot(N2, rawnorm1));\n"
             "\n"
             "float3 _norm2 = float3(0.0, 0.0, 0.0);\n"
-            "if ((components & %uu) != 0u) // VB_HAS_NRM2\n",
+            "if ((vu.components & %uu) != 0u) // VB_HAS_NRM2\n",
             VB_HAS_NRM2);
   out.Write("  _norm2 = float3(dot(N0, rawnorm2), dot(N1, rawnorm2), dot(N2, rawnorm2));\n"
             "\n");
@@ -171,14 +226,14 @@ ShaderCode GenVertexShader(APIType ApiType, const ShaderHostConfig& host_config,
   if (numTexgen > 0)
     GenVertexShaderTexGens(ApiType, numTexgen, out);
 
-  out.Write("if (xfmem_numColorChans == 0u) {\n");
-  out.Write("  if ((components & %uu) != 0u)\n", VB_HAS_COL0);
+  out.Write("if (vu.xfmem_numColorChans == 0u) {\n");
+  out.Write("  if ((vu.components & %uu) != 0u)\n", VB_HAS_COL0);
   out.Write("    o.colors_0 = rawcolor0;\n");
   out.Write("  else\n");
   out.Write("    o.colors_1 = float4(1.0, 1.0, 1.0, 1.0);\n");
   out.Write("}\n");
-  out.Write("if (xfmem_numColorChans < 2u) {\n");
-  out.Write("  if ((components & %uu) != 0u)\n", VB_HAS_COL1);
+  out.Write("if (vu.xfmem_numColorChans < 2u) {\n");
+  out.Write("  if ((vu.components & %uu) != 0u)\n", VB_HAS_COL1);
   out.Write("    o.colors_0 = rawcolor1;\n");
   out.Write("  else\n");
   out.Write("    o.colors_1 = float4(1.0, 1.0, 1.0, 1.0);\n");
@@ -191,9 +246,9 @@ ShaderCode GenVertexShader(APIType ApiType, const ShaderHostConfig& host_config,
   {
     out.Write("o.Normal = _norm0;\n");
     out.Write("o.WorldPos = pos.xyz;\n");
-    out.Write("if ((components & %uu) != 0u) // VB_HAS_COL0\n", VB_HAS_COL0);
+    out.Write("if ((vu.components & %uu) != 0u) // VB_HAS_COL0\n", VB_HAS_COL0);
     out.Write("  o.colors_0 = rawcolor0;\n");
-    out.Write("if ((components & %uu) != 0u) // VB_HAS_COL1\n", VB_HAS_COL1);
+    out.Write("if ((vu.components & %uu) != 0u) // VB_HAS_COL1\n", VB_HAS_COL1);
     out.Write("  o.colors_1 = rawcolor1;\n");
   }
 
@@ -267,7 +322,7 @@ ShaderCode GenVertexShader(APIType ApiType, const ShaderHostConfig& host_config,
 
   if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
   {
-    if (host_config.backend_geometry_shaders || ApiType == APIType::Vulkan)
+    if (use_interface_blocks)
     {
       AssignVSOutputMembers(out, "vs", "o", numTexgen, per_pixel_lighting);
     }
@@ -324,33 +379,33 @@ void GenVertexShaderTexGens(APIType ApiType, u32 numTexgen, ShaderCode& out)
 
   out.Write("  // Texcoord transforms\n");
   out.Write("  float4 coord = float4(0.0, 0.0, 1.0, 1.0);\n"
-            "  uint texMtxInfo = xfmem_texMtxInfo(texgen);\n");
+            "  uint texMtxInfo = vu.xfmem_texMtxInfo(texgen);\n");
   out.Write("  switch (%s) {\n", BitfieldExtract("texMtxInfo", TexMtxInfo().sourcerow).c_str());
   out.Write("  case %uu: // XF_SRCGEOM_INROW\n", XF_SRCGEOM_INROW);
   out.Write("    coord.xyz = rawpos.xyz;\n");
   out.Write("    break;\n\n");
   out.Write("  case %uu: // XF_SRCNORMAL_INROW\n", XF_SRCNORMAL_INROW);
   out.Write(
-      "    coord.xyz = ((components & %uu /* VB_HAS_NRM0 */) != 0u) ? rawnorm0.xyz : coord.xyz;",
+      "    coord.xyz = ((vu.components & %uu /* VB_HAS_NRM0 */) != 0u) ? rawnorm0.xyz : coord.xyz;",
       VB_HAS_NRM0);
   out.Write("    break;\n\n");
   out.Write("  case %uu: // XF_SRCBINORMAL_T_INROW\n", XF_SRCBINORMAL_T_INROW);
   out.Write(
-      "    coord.xyz = ((components & %uu /* VB_HAS_NRM1 */) != 0u) ? rawnorm1.xyz : coord.xyz;",
+      "    coord.xyz = ((vu.components & %uu /* VB_HAS_NRM1 */) != 0u) ? rawnorm1.xyz : coord.xyz;",
       VB_HAS_NRM1);
   out.Write("    break;\n\n");
   out.Write("  case %uu: // XF_SRCBINORMAL_B_INROW\n", XF_SRCBINORMAL_B_INROW);
   out.Write(
-      "    coord.xyz = ((components & %uu /* VB_HAS_NRM2 */) != 0u) ? rawnorm2.xyz : coord.xyz;",
+      "    coord.xyz = ((vu.components & %uu /* VB_HAS_NRM2 */) != 0u) ? rawnorm2.xyz : coord.xyz;",
       VB_HAS_NRM2);
   out.Write("    break;\n\n");
   for (u32 i = 0; i < 8; i++)
   {
     out.Write("  case %uu: // XF_SRCTEX%u_INROW\n", XF_SRCTEX0_INROW + i, i);
-    out.Write(
-        "    coord = ((components & %uu /* VB_HAS_UV%u */) != 0u) ? float4(rawtex%u.x, rawtex%u.y, "
-        "1.0, 1.0) : coord;\n",
-        VB_HAS_UV0 << i, i, i, i);
+    out.Write("    coord = ((vu.components & %uu /* VB_HAS_UV%u */) != 0u) ? float4(rawtex%u.x, "
+              "rawtex%u.y, "
+              "1.0, 1.0) : coord;\n",
+              VB_HAS_UV0 << i, i, i, i);
     out.Write("    break;\n\n");
   }
   out.Write("  }\n");
@@ -379,7 +434,7 @@ void GenVertexShaderTexGens(APIType ApiType, u32 numTexgen, ShaderCode& out)
     out.Write("      case %uu: output_tex.xyz = o.tex%u; break;\n", i, i);
   out.Write("      default: output_tex.xyz = float3(0.0, 0.0, 0.0); break;\n"
             "      }\n");
-  out.Write("      if ((components & %uu) != 0u) { // VB_HAS_NRM1 | VB_HAS_NRM2\n",
+  out.Write("      if ((vu.components & %uu) != 0u) { // VB_HAS_NRM1 | VB_HAS_NRM2\n",
             VB_HAS_NRM1 | VB_HAS_NRM2);  // Should this be VB_HAS_NRM1 | VB_HAS_NRM2
   out.Write("        float3 ldir = normalize(" I_LIGHTS "[light].pos.xyz - pos.xyz);\n"
             "        output_tex.xyz += float3(dot(ldir, _norm1), dot(ldir, _norm2), 0.0);\n"
@@ -394,7 +449,7 @@ void GenVertexShaderTexGens(APIType ApiType, u32 numTexgen, ShaderCode& out)
             "    break;\n\n");
   out.Write("  default:  // Also XF_TEXGEN_REGULAR\n"
             "    {\n");
-  out.Write("      if ((components & (%uu /* VB_HAS_TEXMTXIDX0 */ << texgen)) != 0u) {\n",
+  out.Write("      if ((vu.components & (%uu /* VB_HAS_TEXMTXIDX0 */ << texgen)) != 0u) {\n",
             VB_HAS_TEXMTXIDX0);
   out.Write("        // This is messy, due to dynamic indexing of the input texture coordinates.\n"
             "        // Hopefully the compiler will unroll this whole loop anyway and the switch.\n"
@@ -431,8 +486,8 @@ void GenVertexShaderTexGens(APIType ApiType, u32 numTexgen, ShaderCode& out)
             "  }\n"
             "\n");
 
-  out.Write("  if (xfmem_dualTexInfo != 0u) {\n");
-  out.Write("    uint postMtxInfo = xfmem_postMtxInfo(texgen);");
+  out.Write("  if (vu.xfmem_dualTexInfo != 0u) {\n");
+  out.Write("    uint postMtxInfo = vu.xfmem_postMtxInfo(texgen);");
   out.Write("    uint base_index = %s;\n",
             BitfieldExtract("postMtxInfo", PostMtxInfo().index).c_str());
   out.Write("    float4 P0 = " I_POSTTRANSFORMMATRICES "[base_index & 0x3fu];\n"
@@ -477,4 +532,4 @@ void EnumerateVertexShaderUids(const std::function<void(const VertexShaderUid&)>
     callback(uid);
   }
 }
-}
+}  // namespace UberShader

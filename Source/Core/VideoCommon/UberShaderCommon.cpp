@@ -96,17 +96,17 @@ void WriteVertexLighting(ShaderCode& out, APIType api_type, const char* world_po
   out.Write("// Lighting\n");
   out.Write("%sfor (uint chan = 0u; chan < %zuu; chan++) {\n",
             api_type == APIType::D3D ? "[loop] " : "", NUM_XF_COLOR_CHANNELS);
-  out.Write("  uint colorreg = xfmem_color(chan);\n"
-            "  uint alphareg = xfmem_alpha(chan);\n"
+  out.Write("  uint colorreg = vu.xfmem_color(chan);\n"
+            "  uint alphareg = vu.xfmem_alpha(chan);\n"
             "  int4 mat = " I_MATERIALS "[chan + 2u]; \n"
             "  int4 lacc = int4(255, 255, 255, 255);\n"
             "\n");
 
   out.Write("  if (%s != 0u) {\n", BitfieldExtract("colorreg", LitChannel().matsource).c_str());
-  out.Write("    if ((components & (%uu << chan)) != 0u) // VB_HAS_COL0\n", VB_HAS_COL0);
+  out.Write("    if ((vu.components & (%uu << chan)) != 0u) // VB_HAS_COL0\n", VB_HAS_COL0);
   out.Write("      mat.xyz = int3(round(((chan == 0u) ? %s.xyz : %s.xyz) * 255.0));\n",
             in_color_0_var, in_color_1_var);
-  out.Write("    else if ((components & %uu) != 0u) // VB_HAS_COLO0\n", VB_HAS_COL0);
+  out.Write("    else if ((vu.components & %uu) != 0u) // VB_HAS_COLO0\n", VB_HAS_COL0);
   out.Write("      mat.xyz = int3(round(%s.xyz * 255.0));\n", in_color_0_var);
   out.Write("    else\n"
             "      mat.xyz = int3(255, 255, 255);\n"
@@ -114,10 +114,10 @@ void WriteVertexLighting(ShaderCode& out, APIType api_type, const char* world_po
             "\n");
 
   out.Write("  if (%s != 0u) {\n", BitfieldExtract("alphareg", LitChannel().matsource).c_str());
-  out.Write("    if ((components & (%uu << chan)) != 0u) // VB_HAS_COL0\n", VB_HAS_COL0);
+  out.Write("    if ((vu.components & (%uu << chan)) != 0u) // VB_HAS_COL0\n", VB_HAS_COL0);
   out.Write("      mat.w = int(round(((chan == 0u) ? %s.w : %s.w) * 255.0));\n", in_color_0_var,
             in_color_1_var);
-  out.Write("    else if ((components & %uu) != 0u) // VB_HAS_COLO0\n", VB_HAS_COL0);
+  out.Write("    else if ((vu.components & %uu) != 0u) // VB_HAS_COLO0\n", VB_HAS_COL0);
   out.Write("      mat.w = int(round(%s.w * 255.0));\n", in_color_0_var);
   out.Write("    else\n"
             "      mat.w = 255;\n"
@@ -129,10 +129,10 @@ void WriteVertexLighting(ShaderCode& out, APIType api_type, const char* world_po
   out.Write("  if (%s != 0u) {\n",
             BitfieldExtract("colorreg", LitChannel().enablelighting).c_str());
   out.Write("    if (%s != 0u) {\n", BitfieldExtract("colorreg", LitChannel().ambsource).c_str());
-  out.Write("      if ((components & (%uu << chan)) != 0u) // VB_HAS_COL0\n", VB_HAS_COL0);
+  out.Write("      if ((vu.components & (%uu << chan)) != 0u) // VB_HAS_COL0\n", VB_HAS_COL0);
   out.Write("        lacc.xyz = int3(round(((chan == 0u) ? %s.xyz : %s.xyz) * 255.0));\n",
             in_color_0_var, in_color_1_var);
-  out.Write("      else if ((components & %uu) != 0u) // VB_HAS_COLO0\n", VB_HAS_COL0);
+  out.Write("      else if ((vu.components & %uu) != 0u) // VB_HAS_COLO0\n", VB_HAS_COL0);
   out.Write("        lacc.xyz = int3(round(%s.xyz * 255.0));\n", in_color_0_var);
   out.Write("      else\n"
             "        lacc.xyz = int3(255, 255, 255);\n"
@@ -159,10 +159,10 @@ void WriteVertexLighting(ShaderCode& out, APIType api_type, const char* world_po
   out.Write("  if (%s != 0u) {\n",
             BitfieldExtract("alphareg", LitChannel().enablelighting).c_str());
   out.Write("    if (%s != 0u) {\n", BitfieldExtract("alphareg", LitChannel().ambsource).c_str());
-  out.Write("      if ((components & (%uu << chan)) != 0u) // VB_HAS_COL0\n", VB_HAS_COL0);
+  out.Write("      if ((vu.components & (%uu << chan)) != 0u) // VB_HAS_COL0\n", VB_HAS_COL0);
   out.Write("        lacc.w = int(round(((chan == 0u) ? %s.w : %s.w) * 255.0));\n", in_color_0_var,
             in_color_1_var);
-  out.Write("      else if ((components & %uu) != 0u) // VB_HAS_COLO0\n", VB_HAS_COL0);
+  out.Write("      else if ((vu.components & %uu) != 0u) // VB_HAS_COLO0\n", VB_HAS_COL0);
   out.Write("        lacc.w = int(round(%s.w * 255.0));\n", in_color_0_var);
   out.Write("      else\n"
             "        lacc.w = 255;\n"

@@ -96,7 +96,7 @@ ShaderCode GenerateGeometryShaderCode(APIType ApiType, const ShaderHostConfig& h
             "};\n");
 
   out.Write("struct VS_OUTPUT {\n");
-  GenerateVSOutputMembers<ShaderCode>(out, ApiType, uid_data->numTexGens, pixel_lighting, "");
+  GenerateVSOutputMembers<ShaderCode>(out, ApiType, uid_data->numTexGens, pixel_lighting, "", true);
   out.Write("};\n");
 
   if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
@@ -106,12 +106,12 @@ ShaderCode GenerateGeometryShaderCode(APIType ApiType, const ShaderHostConfig& h
 
     out.Write("VARYING_LOCATION(0) in VertexData {\n");
     GenerateVSOutputMembers<ShaderCode>(out, ApiType, uid_data->numTexGens, pixel_lighting,
-                                        GetInterpolationQualifier(msaa, ssaa, true, true));
+                                        GetInterpolationQualifier(msaa, ssaa, true, true), true);
     out.Write("} vs[%d];\n", vertex_in);
 
     out.Write("VARYING_LOCATION(0) out VertexData {\n");
     GenerateVSOutputMembers<ShaderCode>(out, ApiType, uid_data->numTexGens, pixel_lighting,
-                                        GetInterpolationQualifier(msaa, ssaa, true, false));
+                                        GetInterpolationQualifier(msaa, ssaa, true, false), false);
 
     if (stereo)
       out.Write("\tflat int layer;\n");
