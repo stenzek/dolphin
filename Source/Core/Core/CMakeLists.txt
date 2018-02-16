@@ -302,6 +302,9 @@ endif()
 if(NOT APPLE)
   set(LIBS ${LIBS} videovulkan)
 endif()
+if(ENABLE_METAL)
+  set(LIBS ${LIBS} videometal)
+endif()
 
 set(LIBS ${LIBS} ${MBEDTLS_LIBRARIES})
 
