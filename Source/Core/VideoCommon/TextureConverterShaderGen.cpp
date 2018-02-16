@@ -65,6 +65,22 @@ ShaderCode GenerateShader(APIType api_type, const UidData* uid_data)
               "          in float3 uv0 : TEXCOORD0) {\n"
               "  float4 texcol = tex0.Sample(samp0, uv0);\n");
   }
+  else if (api_type == APIType::Metal)
+  {
+    out.Write("struct VS_OUTPUT {\n"
+              "  float4 pos;\n"
+              "  float4 col0;\n"
+              "  float3 tex0;\n"
+              "};\n"
+              "fragment float4 pmain(VS_OUTPUT pin [[stage_in]],\n");
+    if (uid_data->is_depth_copy)
+      out.Write("                      depth2d_array<float> tex0 [[texture(0)]],\n");
+    else
+      out.Write("                      texture2d_array<float> tex0 [[texture(0)]],\n");
+    out.Write("                      sampler samp0 [[sampler(0)]]) {\n"
+              "  float4 texcol = tex0.sample(samp0, pin.tex0.xy, int(pin.tex0.z));\n"
+              "  float4 ocol0 = float4(0.0, 0.0, 0.0, 1.0);\n");
+  }
 
   if (uid_data->is_depth_copy)
   {
@@ -233,6 +249,9 @@ ShaderCode GenerateShader(APIType api_type, const UidData* uid_data)
       break;
     }
   }
+
+  if (api_type == APIType::Metal)
+    out.Write("  return ocol0;\n");
 
   out.Write("}\n");
 
