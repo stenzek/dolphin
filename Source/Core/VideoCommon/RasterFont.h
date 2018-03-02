@@ -41,9 +41,8 @@ private:
   };
 
   static bool IsPrintableCharacter(char ch);
-  static void GenerateCharacterVertices(char ch, float current_x, float current_y, u32 color,
-                                        float delta_x, float delta_y, Vertex* vertex_ptr);
-
+  void GenerateCharacterVertices(char ch, float current_x, float current_y, u32 color,
+                                 float delta_x, float delta_y);
   void GenerateVertices(const std::string& str, float x, float y, u32 color, u32 viewport_width,
                         u32 viewport_height, bool shadow);
 

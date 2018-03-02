@@ -134,6 +134,8 @@ void RasterFont::RenderText(const std::string& str, float x, float y, u32 color,
   if (shadow)
     GenerateVertices(str, x, y, color, viewport_width, viewport_height, true);
   GenerateVertices(str, x, y, color, viewport_width, viewport_height, false);
+  if (m_vertices.empty())
+    return;
 
   // Upload and draw.
   g_renderer->SetTexture(0, m_texture.get());
@@ -303,51 +305,52 @@ void RasterFont::CreateVertexFormat()
 }
 
 void RasterFont::GenerateCharacterVertices(char ch, float current_x, float current_y, u32 color,
-                                           float delta_x, float delta_y, Vertex* vertex_ptr)
+                                           float delta_x, float delta_y)
 {
   constexpr float inv_character_count = 1.0f / static_cast<float>(CHARACTER_COUNT);
 
-  vertex_ptr->x = current_x;
-  vertex_ptr->y = current_y;
-  vertex_ptr->u = static_cast<float>(ch - CHARACTER_OFFSET) * inv_character_count;
-  vertex_ptr->v = 0.0f;
-  vertex_ptr->color = color;
-  vertex_ptr++;
+  Vertex vertex;
+  vertex.x = current_x;
+  vertex.y = current_y;
+  vertex.u = static_cast<float>(ch - CHARACTER_OFFSET) * inv_character_count;
+  vertex.v = 0.0f;
+  vertex.color = color;
+  m_vertices.push_back(vertex);
 
-  vertex_ptr->x = current_x + delta_x;
-  vertex_ptr->y = current_y;
-  vertex_ptr->u = static_cast<float>(ch - CHARACTER_OFFSET + 1) * inv_character_count;
-  vertex_ptr->v = 0.0f;
-  vertex_ptr->color = color;
-  vertex_ptr++;
+  vertex.x = current_x + delta_x;
+  vertex.y = current_y;
+  vertex.u = static_cast<float>(ch - CHARACTER_OFFSET + 1) * inv_character_count;
+  vertex.v = 0.0f;
+  vertex.color = color;
+  m_vertices.push_back(vertex);
 
-  vertex_ptr->x = current_x + delta_x;
-  vertex_ptr->y = current_y + delta_y;
-  vertex_ptr->u = static_cast<float>(ch - CHARACTER_OFFSET + 1) * inv_character_count;
-  vertex_ptr->v = 1.0f;
-  vertex_ptr->color = color;
-  vertex_ptr++;
+  vertex.x = current_x + delta_x;
+  vertex.y = current_y + delta_y;
+  vertex.u = static_cast<float>(ch - CHARACTER_OFFSET + 1) * inv_character_count;
+  vertex.v = 1.0f;
+  vertex.color = color;
+  m_vertices.push_back(vertex);
 
-  vertex_ptr->x = current_x;
-  vertex_ptr->y = current_y;
-  vertex_ptr->u = static_cast<float>(ch - CHARACTER_OFFSET) * inv_character_count;
-  vertex_ptr->v = 0.0f;
-  vertex_ptr->color = color;
-  vertex_ptr++;
+  vertex.x = current_x;
+  vertex.y = current_y;
+  vertex.u = static_cast<float>(ch - CHARACTER_OFFSET) * inv_character_count;
+  vertex.v = 0.0f;
+  vertex.color = color;
+  m_vertices.push_back(vertex);
 
-  vertex_ptr->x = current_x + delta_x;
-  vertex_ptr->y = current_y + delta_y;
-  vertex_ptr->u = static_cast<float>(ch - CHARACTER_OFFSET + 1) * inv_character_count;
-  vertex_ptr->v = 1.0f;
-  vertex_ptr->color = color;
-  vertex_ptr++;
+  vertex.x = current_x + delta_x;
+  vertex.y = current_y + delta_y;
+  vertex.u = static_cast<float>(ch - CHARACTER_OFFSET + 1) * inv_character_count;
+  vertex.v = 1.0f;
+  vertex.color = color;
+  m_vertices.push_back(vertex);
 
-  vertex_ptr->x = current_x;
-  vertex_ptr->y = current_y + delta_y;
-  vertex_ptr->u = static_cast<float>(ch - CHARACTER_OFFSET) * inv_character_count;
-  vertex_ptr->v = 1.0f;
-  vertex_ptr->color = color;
-  vertex_ptr++;
+  vertex.x = current_x;
+  vertex.y = current_y + delta_y;
+  vertex.u = static_cast<float>(ch - CHARACTER_OFFSET) * inv_character_count;
+  vertex.v = 1.0f;
+  vertex.color = color;
+  m_vertices.push_back(vertex);
 }
 
 void RasterFont::GenerateVertices(const std::string& str, float x, float y, u32 color,
@@ -384,10 +387,8 @@ void RasterFont::GenerateVertices(const std::string& str, float x, float y, u32 
     if (!IsPrintableCharacter(ch))
       continue;
 
-    m_vertices.emplace_back();
     GenerateCharacterVertices(ch, current_x + shadow_offset_x, current_y + shadow_offset_y,
-                              shadow_color, delta_x, delta_y, &m_vertices.back());
-
+                              shadow_color, delta_x, delta_y);
     current_x += delta_x + border_x;
   }
 }
