@@ -42,6 +42,29 @@ void main()
   otex0 = itex0;
 }
 
+#elif API_METAL
+struct VS_INPUT
+{
+  float4 pos [[attribute(0)]];
+  float4 col0 [[attribute(5)]];
+  float3 tex0 [[attribute(8)]];
+};
+struct VS_OUTPUT
+{
+  float4 pos [[position]];
+  float4 col0;
+  float3 tex0;
+};
+
+vertex VS_OUTPUT vmain(VS_INPUT in [[stage_in]])
+{
+  VS_OUTPUT out;
+  out.pos = in.pos;
+  out.col0 = in.col0;
+  out.tex0 = in.tex0;
+  return out;
+}
+
 #endif
 )";
 
@@ -78,6 +101,24 @@ void main()
 #endif
   ocol0 = float4(1.0, 1.0, 1.0, 1.0);
   otex0 = float3(rawpos, 0.0);
+}
+
+#elif API_METAL
+struct VS_OUTPUT
+{
+ float4 pos [[position]];
+ float4 col0;
+ float3 uv0;
+};
+
+vertex VS_OUTPUT vmain(uint vid [[vertex_id]])
+{
+  VS_OUTPUT out;
+  float2 rawpos = float2(float(vid & 1u), clamp(float(vid & 2u), 0.0f, 1.0f));
+  out.pos = float4(rawpos * float2(2.0, -2.0) + float2(-1.0, 1.0), 0.0f, 1.0f);
+  out.col0 = float4(1.0f, 1.0f, 1.0f, 1.0f);
+  out.uv0 = float3(rawpos, 0.0f);
+  return out;
 }
 
 #endif
@@ -170,6 +211,19 @@ void main()
   ocol0 = col0;
 }
 
+#elif API_METAL
+struct VS_OUTPUT
+{
+  float4 pos [[position]];
+  float4 col0;
+  float3 tex0;
+};
+
+fragment float4 pmain(VS_OUTPUT in [[stage_in]])
+{
+  return in.col0;
+}
+
 #endif
 )";
 
@@ -199,6 +253,21 @@ SAMPLER_BINDING(0) uniform sampler2DArray samp0;
 void main()
 {
   ocol0 = texture(samp0, tex0);
+}
+
+#elif API_METAL
+struct VS_OUTPUT
+{
+  float4 pos [[position]];
+  float4 col0;
+  float3 tex0;
+};
+
+fragment float4 pmain(VS_OUTPUT pin [[stage_in]],
+                      texture2d_array<float> tex0 [[texture(0)]],
+                      sampler samp0 [[sampler(0)]])
+{
+  return tex0.sample(samp0, pin.tex0.xy, int(pin.tex0.z));
 }
 
 #endif
