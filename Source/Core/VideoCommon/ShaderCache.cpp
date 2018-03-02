@@ -1047,8 +1047,7 @@ ShaderCache::CreateEFBToRAMPipeline(const EFBCopyParams& uid) const
 
   AbstractPipelineConfig config = {};
   config.usage = AbstractPipelineUsage::Utility;
-  config.vertex_format = m_utility_vertex_format.get();
-  config.vertex_shader = m_passthrough_vertex_shader.get();
+  config.vertex_shader = m_screen_quad_vertex_shader.get();
   config.pixel_shader = shader.get();
   config.rasterization_state.cullmode = GenMode::CULL_BACK;
   config.rasterization_state.primitive = PrimitiveType::TriangleStrip;

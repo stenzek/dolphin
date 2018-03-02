@@ -167,7 +167,7 @@ FRAGMENT_OUTPUT_LOCATION(0) out float4 ocol0;
 
 void main()
 {
-  return col0;
+  ocol0 = col0;
 }
 
 #endif
@@ -198,7 +198,7 @@ SAMPLER_BINDING(0) uniform sampler2DArray samp0;
 
 void main()
 {
-  return texture(samp0, tex0);
+  ocol0 = texture(samp0, tex0);
 }
 
 #endif
