@@ -192,7 +192,31 @@ bool RasterFont::CompileShaders()
          << "          in float4 rawcolor0 : COLOR,\n"
          << "          out float2 frag_uv : TEXCOORD,\n"
          << "          out float4 frag_color : COLOR,\n"
-         << "          out float4 out_pos : SV_Position)\n";
+         << "          out float4 out_pos : SV_Position) {\n"
+         << "  frag_uv = rawtex0;\n"
+         << "  frag_color = rawcolor0;\n"
+         << "  out_pos = float4(rawpos, 0.0, 1.0);\n"
+         << "}\n";
+    }
+    else if (api_type == APIType::Metal)
+    {
+      ss << "struct VertexInput {\n"
+         << "  float2 pos [[attribute(" << SHADER_POSITION_ATTRIB << ")]];\n"
+         << "  float2 tex0 [[attribute(" << SHADER_TEXTURE0_ATTRIB << ")]];\n"
+         << "  float4 color0 [[attribute(" << SHADER_COLOR0_ATTRIB << ")]];\n"
+         << "};\n"
+         << "struct VertexOutput {\n"
+         << "  float2 tex0;\n"
+         << "  float4 color0;\n"
+         << "  float4 pos [[position]];\n"
+         << "};\n"
+         << "vertex VertexOutput vmain(VertexInput in [[stage_in]]) {\n"
+         << "  VertexOutput out;\n"
+         << "  out.tex0 = in.tex0;\n"
+         << "  out.color0 = in.color0;\n"
+         << "  out.pos = float4(in.pos, 0.0, 1.0);\n"
+         << "  return out;\n"
+         << "}\n";
     }
     else
     {
@@ -201,25 +225,14 @@ bool RasterFont::CompileShaders()
          << "ATTRIBUTE_LOCATION(" << SHADER_COLOR0_ATTRIB << ") in float4 rawcolor0;\n"
          << "VARYING_LOCATION(0) out float2 frag_uv;\n"
          << "VARYING_LOCATION(1) out float4 frag_color;\n"
-         << "void main()\n";
-    }
-
-    ss << "{\n"
-       << "  frag_uv = rawtex0;\n"
-       << "  frag_color = rawcolor0;\n";
-
-    if (api_type == APIType::D3D)
-    {
-      ss << "  out_pos = float4(rawpos, 0.0, 1.0);\n";
-    }
-    else
-    {
-      ss << "  gl_Position = float4(rawpos, 0.0, 1.0);\n";
+         << "void main() {\n"
+         << "  frag_uv = rawtex0;\n"
+         << "  frag_color = rawcolor0;\n"
+         << "  gl_Position = float4(rawpos, 0.0, 1.0);\n";
       if (api_type == APIType::Vulkan)
         ss << "  gl_Position.y = -gl_Position.y;\n";
+      ss << "}\n";
     }
-
-    ss << "}\n";
 
     std::string source = ss.str();
     m_vertex_shader =
@@ -235,7 +248,22 @@ bool RasterFont::CompileShaders()
          << "SamplerState samp0 : register(s0);\n"
          << "void main(in float2 frag_uv : TEXCOORD,\n"
          << "          in float4 frag_color : COLOR,\n"
-         << "          out float4 ocol0 : SV_Target)\n";
+         << "          out float4 ocol0 : SV_Target) {\n"
+         << "  ocol0 = tex0.Sample(samp0, float3(frag_uv, 0.0)) * frag_color;\n"
+         << "}\n";
+    }
+    else if (api_type == APIType::Metal)
+    {
+      ss << "struct PixelInput {\n"
+         << "  float2 tex0;\n"
+         << "  float4 color0;\n"
+         << "  float4 pos [[position]];\n"
+         << "};\n"
+         << "fragment float4 pmain(texture2d_array<float> tex0 [[texture(0)]],\n"
+         << "                      sampler samp0 [[sampler(0)]],\n"
+            "                      PixelInput in [[stage_in]]) {\n"
+         << "  return tex0.sample(samp0, in.tex0, 0u) * in.color0;\n"
+         << "}\n";
     }
     else
     {
@@ -243,17 +271,10 @@ bool RasterFont::CompileShaders()
          << "VARYING_LOCATION(0) in float2 frag_uv; \n"
          << "VARYING_LOCATION(1) in float4 frag_color;\n"
          << "FRAGMENT_OUTPUT_LOCATION(0) out float4 ocol0;\n"
-         << "void main()\n";
+         << "void main() {\n"
+         << "  ocol0 = texture(samp0, float3(frag_uv, 0.0)) * frag_color;\n"
+         << "}\n";
     }
-
-    ss << "{\n";
-
-    if (api_type == APIType::D3D)
-      ss << "  ocol0 = tex0.Sample(samp0, float3(frag_uv, 0.0)) * frag_color;\n";
-    else
-      ss << "  ocol0 = texture(samp0, float3(frag_uv, 0.0)) * frag_color;\n";
-
-    ss << "}\n";
 
     std::string source = ss.str();
     m_pixel_shader =
@@ -393,4 +414,4 @@ void RasterFont::GenerateVertices(const std::string& str, float x, float y, u32 
   }
 }
 
-}  // namespace RasterFont
+}  // namespace VideoCommon
