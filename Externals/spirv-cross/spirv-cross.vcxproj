@@ -1,0 +1,68 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="GLSL.std.450.h" />
+    <ClInclude Include="spirv.hpp" />
+    <ClInclude Include="spirv_cfg.hpp" />
+    <ClInclude Include="spirv_common.hpp" />
+    <ClInclude Include="spirv_cpp.hpp" />
+    <ClInclude Include="spirv_cross.hpp" />
+    <ClInclude Include="spirv_cross_parsed_ir.hpp" />
+    <ClInclude Include="spirv_cross_util.hpp" />
+    <ClInclude Include="spirv_glsl.hpp" />
+    <ClInclude Include="spirv_hlsl.hpp" />
+    <ClInclude Include="spirv_msl.hpp" />
+    <ClInclude Include="spirv_parser.hpp" />
+    <ClInclude Include="spirv_reflect.hpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="spirv_cfg.cpp" />
+    <ClCompile Include="spirv_cpp.cpp" />
+    <ClCompile Include="spirv_cross.cpp" />
+    <ClCompile Include="spirv_cross_parsed_ir.cpp" />
+    <ClCompile Include="spirv_cross_util.cpp" />
+    <ClCompile Include="spirv_glsl.cpp" />
+    <ClCompile Include="spirv_hlsl.cpp" />
+    <ClCompile Include="spirv_msl.cpp" />
+    <ClCompile Include="spirv_parser.cpp" />
+    <ClCompile Include="spirv_reflect.cpp" />
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{17B4CD1E-4C30-42EB-B5B9-71EFE5909D2D}</ProjectGuid>
+    <WindowsTargetPlatformVersion>10.0.17134.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <PlatformToolset>v141</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)'=='Debug'" Label="Configuration">
+    <UseDebugLibraries>true</UseDebugLibraries>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)'=='Release'" Label="Configuration">
+    <UseDebugLibraries>false</UseDebugLibraries>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\..\Source\VSProps\Base.props" />
+    <Import Project="..\..\Source\VSProps\ClDisableAllWarnings.props" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

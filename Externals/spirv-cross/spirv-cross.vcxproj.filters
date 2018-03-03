@@ -1,0 +1,30 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClInclude Include="spirv_cfg.hpp" />
+    <ClInclude Include="spirv_common.hpp" />
+    <ClInclude Include="spirv_cpp.hpp" />
+    <ClInclude Include="spirv_cross.hpp" />
+    <ClInclude Include="spirv_cross_parsed_ir.hpp" />
+    <ClInclude Include="spirv_cross_util.hpp" />
+    <ClInclude Include="spirv_glsl.hpp" />
+    <ClInclude Include="spirv_hlsl.hpp" />
+    <ClInclude Include="spirv_msl.hpp" />
+    <ClInclude Include="spirv_parser.hpp" />
+    <ClInclude Include="spirv_reflect.hpp" />
+    <ClInclude Include="GLSL.std.450.h" />
+    <ClInclude Include="spirv.hpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="spirv_cpp.cpp" />
+    <ClCompile Include="spirv_cross.cpp" />
+    <ClCompile Include="spirv_cross_parsed_ir.cpp" />
+    <ClCompile Include="spirv_cross_util.cpp" />
+    <ClCompile Include="spirv_glsl.cpp" />
+    <ClCompile Include="spirv_hlsl.cpp" />
+    <ClCompile Include="spirv_msl.cpp" />
+    <ClCompile Include="spirv_parser.cpp" />
+    <ClCompile Include="spirv_reflect.cpp" />
+    <ClCompile Include="spirv_cfg.cpp" />
+  </ItemGroup>
+</Project>
