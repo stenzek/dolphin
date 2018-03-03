@@ -28,5 +28,6 @@ endif()
 add_library(spirv-cross STATIC ${SRCS})
 target_compile_definitions(spirv-cross PRIVATE SPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS)
 target_include_directories(spirv-cross PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR})
-target_include_directories(spirv-cross PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_compile_definitions(spirv-cross PUBLIC SPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS)
+target_include_directories(spirv-cross PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR})
 
