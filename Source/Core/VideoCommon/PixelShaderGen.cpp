@@ -370,9 +370,15 @@ void WritePixelShaderCommonHeader(ShaderCode& out, APIType ApiType, u32 num_texg
             "int3 iround(float3 x) { return int3(round(x)); }\n"
             "int4 iround(float4 x) { return int4(round(x)); }\n\n");
 
-  if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan || ApiType == APIType::Metal)
+  if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
   {
     out.Write("SAMPLER_BINDING(0) uniform sampler2DArray samp[8];\n");
+  }
+  else if (ApiType == APIType::Metal)
+  {
+    // The MSL generator in SPIRV-Cross currently does not emit arrays of textures.
+    for (int i = 0; i < 8; i++)
+      out.Write("SAMPLER_BINDING(%d) uniform sampler2DArray samp%d;\n", i, i);
   }
   else  // D3D
   {
@@ -1235,6 +1241,11 @@ static void SampleTexture(ShaderCode& out, const char* texcoords, const char* te
     out.Write("iround(255.0 * Tex[%d].Sample(samp[%d], float3(%s.xy * " I_TEXDIMS
               "[%d].xy, %s))).%s;\n",
               texmap, texmap, texcoords, texmap, stereo ? "layer" : "0.0", texswap);
+  }
+  else if (ApiType == APIType::Metal)
+  {
+    out.Write("iround(255.0 * texture(samp%d, float3(%s.xy * " I_TEXDIMS "[%d].xy, %s))).%s;\n",
+              texmap, texcoords, texmap, stereo ? "layer" : "0.0", texswap);
   }
   else
   {

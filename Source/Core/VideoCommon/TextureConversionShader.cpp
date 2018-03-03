@@ -74,7 +74,7 @@ static void WriteSwizzler(char*& p, EFBCopyFormat format, APIType ApiType)
     WRITE(p, "UBO_BINDING(std140, 1) uniform PSBlock {\n"
              "  int4 position;\n"
              "  float y_scale;\n"
-             "}\n");
+             "};\n");
   }
   else
   {

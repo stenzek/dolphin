@@ -133,7 +133,7 @@ ShaderCode GenPixelShader(APIType ApiType, const ShaderHostConfig& host_config,
   // Uniform index -> texture coordinates
   if (numTexgen > 0)
   {
-    if (ApiType != APIType::D3D)
+    if (ApiType != APIType::D3D && ApiType != APIType::Metal)
     {
       out.Write("float3 selectTexCoord(uint index) {\n");
     }
@@ -227,8 +227,10 @@ ShaderCode GenPixelShader(APIType ApiType, const ShaderHostConfig& host_config,
               "  switch(sampler_num) {\n");
     for (int i = 0; i < 8; i++)
     {
-      if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan || ApiType == APIType::Metal)
+      if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
         out.Write("  case %du: return iround(texture(samp[%d], uv) * 255.0);\n", i, i);
+      else if (ApiType == APIType::Metal)
+        out.Write("  case %du: return iround(texture(samp%d, uv) * 255.0);\n", i, i);
       else if (ApiType == APIType::D3D)
         out.Write("  case %du: return iround(Tex[%d].Sample(samp[%d], uv) * 255.0);\n", i, i, i);
     }
@@ -396,7 +398,7 @@ ShaderCode GenPixelShader(APIType ApiType, const ShaderHostConfig& host_config,
   // The switch statements in these functions appear to get transformed into an if..else chain
   // on NVIDIA's OpenGL/Vulkan drivers, resulting in lower performance than the D3D counterparts.
   // Transforming the switch into a binary tree of ifs can increase performance by up to 20%.
-  if (ApiType == APIType::D3D)
+  if (ApiType == APIType::D3D || ApiType == APIType::Metal)
   {
     out.Write("// Helper function for Alpha Test\n"
               "bool alphaCompare(int a, int b, uint compare) {\n"
@@ -655,7 +657,7 @@ ShaderCode GenPixelShader(APIType ApiType, const ShaderHostConfig& host_config,
   // them to the select function in D3D.
   if (numTexgen > 0)
   {
-    if (ApiType != APIType::D3D)
+    if (ApiType != APIType::D3D && ApiType != APIType::Metal)
     {
       out.Write("#define getTexCoord(index) selectTexCoord((index))\n\n");
     }
