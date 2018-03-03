@@ -370,7 +370,7 @@ void WritePixelShaderCommonHeader(ShaderCode& out, APIType ApiType, u32 num_texg
             "int3 iround(float3 x) { return int3(round(x)); }\n"
             "int4 iround(float4 x) { return int4(round(x)); }\n\n");
 
-  if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
+  if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan || ApiType == APIType::Metal)
   {
     out.Write("SAMPLER_BINDING(0) uniform sampler2DArray samp[8];\n");
   }
@@ -383,7 +383,7 @@ void WritePixelShaderCommonHeader(ShaderCode& out, APIType ApiType, u32 num_texg
   }
   out.Write("\n");
 
-  if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
+  if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan || ApiType == APIType::Metal)
     out.Write("UBO_BINDING(std140, 1) uniform PSBlock {\n");
   else
     out.Write("cbuffer PSBlock : register(b0) {\n");
@@ -432,7 +432,7 @@ void WritePixelShaderCommonHeader(ShaderCode& out, APIType ApiType, u32 num_texg
   {
     out.Write("%s", s_lighting_struct);
 
-    if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
+    if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan || ApiType == APIType::Metal)
       out.Write("UBO_BINDING(std140, 2) uniform VSBlock {\n");
     else
       out.Write("cbuffer VSBlock : register(b1) {\n");
@@ -443,7 +443,7 @@ void WritePixelShaderCommonHeader(ShaderCode& out, APIType ApiType, u32 num_texg
 
   if (bounding_box)
   {
-    if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
+    if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan || ApiType == APIType::Metal)
     {
       out.Write("SSBO_BINDING(0) buffer BBox {\n"
                 "\tint4 bbox_data;\n"
@@ -528,7 +528,7 @@ ShaderCode GeneratePixelShaderCode(APIType ApiType, const ShaderHostConfig& host
     // ARB_image_load_store extension yet.
 
     // D3D11 also has a way to force the driver to enable early-z, so we're fine here.
-    if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
+    if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan || ApiType == APIType::Metal)
     {
       // This is a #define which signals whatever early-z method the driver supports.
       out.Write("FORCE_EARLY_Z; \n");
@@ -547,7 +547,7 @@ ShaderCode GeneratePixelShaderCode(APIType ApiType, const ShaderHostConfig& host
   const bool use_shader_blend =
       !use_dual_source && (uid_data->useDstAlpha && host_config.backend_shader_framebuffer_fetch);
 
-  if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
+  if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan || ApiType == APIType::Metal)
   {
     if (use_dual_source)
     {
@@ -586,7 +586,8 @@ ShaderCode GeneratePixelShaderCode(APIType ApiType, const ShaderHostConfig& host
       out.Write("#define depth gl_FragDepth\n");
 
     // We need to always use output blocks for Vulkan, but geometry shaders are also optional.
-    if (host_config.backend_geometry_shaders || ApiType == APIType::Vulkan)
+    if (host_config.backend_geometry_shaders || ApiType == APIType::Vulkan ||
+        ApiType == APIType::Metal)
     {
       out.Write("VARYING_LOCATION(0) in VertexData {\n");
       GenerateVSOutputMembers(out, ApiType, uid_data->genMode_numtexgens, per_pixel_lighting,
@@ -852,7 +853,9 @@ ShaderCode GeneratePixelShaderCode(APIType ApiType, const ShaderHostConfig& host
   if (uid_data->bounding_box)
   {
     const char* atomic_op =
-        (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan) ? "atomic" : "Interlocked";
+        (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan || ApiType == APIType::Metal) ?
+            "atomic" :
+            "Interlocked";
     out.Write("\tif(bbox_data[0] > int(rawpos.x)) %sMin(bbox_data[0], int(rawpos.x));\n"
               "\tif(bbox_data[1] < int(rawpos.x)) %sMax(bbox_data[1], int(rawpos.x));\n"
               "\tif(bbox_data[2] > int(rawpos.y)) %sMin(bbox_data[2], int(rawpos.y));\n"

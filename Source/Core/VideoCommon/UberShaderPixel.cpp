@@ -63,7 +63,7 @@ ShaderCode GenPixelShader(APIType ApiType, const ShaderHostConfig& host_config,
     WriteLightingFunction(out);
 
   // Shader inputs/outputs in GLSL (HLSL is in main).
-  if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
+  if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan || ApiType == APIType::Metal)
   {
     if (use_dual_source)
     {
@@ -101,7 +101,8 @@ ShaderCode GenPixelShader(APIType ApiType, const ShaderHostConfig& host_config,
     if (per_pixel_depth)
       out.Write("#define depth gl_FragDepth\n");
 
-    if (host_config.backend_geometry_shaders || ApiType == APIType::Vulkan)
+    if (host_config.backend_geometry_shaders || ApiType == APIType::Vulkan ||
+        ApiType == APIType::Metal)
     {
       out.Write("VARYING_LOCATION(0) in VertexData {\n");
       GenerateVSOutputMembers(out, ApiType, numTexgen, per_pixel_lighting,
@@ -210,7 +211,7 @@ ShaderCode GenPixelShader(APIType ApiType, const ShaderHostConfig& host_config,
     // Doesn't look like directx supports this. Oh well the code path is here just incase it
     // supports this in the future.
     out.Write("int4 sampleTexture(uint sampler_num, float3 uv) {\n");
-    if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
+    if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan || ApiType == APIType::Metal)
       out.Write("  return iround(texture(samp[sampler_num], uv) * 255.0);\n");
     else if (ApiType == APIType::D3D)
       out.Write("  return iround(Tex[sampler_num].Sample(samp[sampler_num], uv) * 255.0);\n");
@@ -226,7 +227,7 @@ ShaderCode GenPixelShader(APIType ApiType, const ShaderHostConfig& host_config,
               "  switch(sampler_num) {\n");
     for (int i = 0; i < 8; i++)
     {
-      if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
+      if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan || ApiType == APIType::Metal)
         out.Write("  case %du: return iround(texture(samp[%d], uv) * 255.0);\n", i, i);
       else if (ApiType == APIType::D3D)
         out.Write("  case %du: return iround(Tex[%d].Sample(samp[%d], uv) * 255.0);\n", i, i, i);
@@ -667,7 +668,7 @@ ShaderCode GenPixelShader(APIType ApiType, const ShaderHostConfig& host_config,
     }
   }
 
-  if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
+  if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan || ApiType == APIType::Metal)
   {
     if (early_depth && host_config.backend_early_z)
       out.Write("FORCE_EARLY_Z;\n");
@@ -1240,7 +1241,9 @@ ShaderCode GenPixelShader(APIType ApiType, const ShaderHostConfig& host_config,
   if (bounding_box)
   {
     const char* atomic_op =
-        (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan) ? "atomic" : "Interlocked";
+        (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan || ApiType == APIType::Metal) ?
+            "atomic" :
+            "Interlocked";
     out.Write("  if (bpmem_bounding_box) {\n");
     out.Write("    if(bbox_data[0] > int(rawpos.x)) %sMin(bbox_data[0], int(rawpos.x));\n",
               atomic_op);
