@@ -878,6 +878,10 @@ void ShaderCache::PrecompileUberShaders()
   // Create a dummy vertex format with no attributes.
   // All attributes will be enabled in GetUberVertexFormat.
   PortableVertexDeclaration dummy_vertex_decl = {};
+  dummy_vertex_decl.position.components = 4;
+  dummy_vertex_decl.position.type = VAR_FLOAT;
+  dummy_vertex_decl.position.enable = true;
+  dummy_vertex_decl.stride = sizeof(float) * 4;
   NativeVertexFormat* dummy_vertex_format =
       VertexLoaderManager::GetUberVertexFormat(dummy_vertex_decl);
   auto QueueDummyPipeline = [&](const UberShader::VertexShaderUid& vs_uid,
