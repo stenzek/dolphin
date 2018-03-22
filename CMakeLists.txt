@@ -550,6 +550,7 @@ add_subdirectory(Externals/Bochs_disasm)
 include_directories(Externals/Bochs_disasm)
 
 add_subdirectory(Externals/glslang)
+add_subdirectory(Externals/spirv-tools EXCLUDE_FROM_ALL)
 
 add_subdirectory(Externals/pugixml)
 

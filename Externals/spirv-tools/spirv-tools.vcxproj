@@ -1,0 +1,314 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>$(ProjectDir)external\spirv-headers\include;$(ProjectDir)include;$(ProjectDir)source;$(ProjectDir)generated;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ObjectFileName>$(IntDir)/%(RelativeDir)/</ObjectFileName>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>$(ProjectDir)external\spirv-headers\include;$(ProjectDir)include;$(ProjectDir)source;$(ProjectDir)generated;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ObjectFileName>$(IntDir)/%(RelativeDir)/</ObjectFileName>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="source\assembly_grammar.cpp" />
+    <ClCompile Include="source\binary.cpp" />
+    <ClCompile Include="source\comp\markv_codec.cpp" />
+    <ClCompile Include="source\diagnostic.cpp" />
+    <ClCompile Include="source\disassemble.cpp" />
+    <ClCompile Include="source\enum_string_mapping.cpp" />
+    <ClCompile Include="source\extensions.cpp" />
+    <ClCompile Include="source\ext_inst.cpp" />
+    <ClCompile Include="source\id_descriptor.cpp" />
+    <ClCompile Include="source\libspirv.cpp" />
+    <ClCompile Include="source\link\linker.cpp" />
+    <ClCompile Include="source\message.cpp" />
+    <ClCompile Include="source\name_mapper.cpp" />
+    <ClCompile Include="source\opcode.cpp" />
+    <ClCompile Include="source\operand.cpp" />
+    <ClCompile Include="source\opt\aggressive_dead_code_elim_pass.cpp" />
+    <ClCompile Include="source\opt\basic_block.cpp" />
+    <ClCompile Include="source\opt\block_merge_pass.cpp" />
+    <ClCompile Include="source\opt\build_module.cpp" />
+    <ClCompile Include="source\opt\ccp_pass.cpp" />
+    <ClCompile Include="source\opt\cfg.cpp" />
+    <ClCompile Include="source\opt\cfg_cleanup_pass.cpp" />
+    <ClCompile Include="source\opt\common_uniform_elim_pass.cpp" />
+    <ClCompile Include="source\opt\compact_ids_pass.cpp" />
+    <ClCompile Include="source\opt\composite.cpp" />
+    <ClCompile Include="source\opt\constants.cpp" />
+    <ClCompile Include="source\opt\const_folding_rules.cpp" />
+    <ClCompile Include="source\opt\dead_branch_elim_pass.cpp" />
+    <ClCompile Include="source\opt\dead_insert_elim_pass.cpp" />
+    <ClCompile Include="source\opt\dead_variable_elimination.cpp" />
+    <ClCompile Include="source\opt\decoration_manager.cpp" />
+    <ClCompile Include="source\opt\def_use_manager.cpp" />
+    <ClCompile Include="source\opt\dominator_analysis.cpp" />
+    <ClCompile Include="source\opt\dominator_tree.cpp" />
+    <ClCompile Include="source\opt\eliminate_dead_constant_pass.cpp" />
+    <ClCompile Include="source\opt\eliminate_dead_functions_pass.cpp" />
+    <ClCompile Include="source\opt\feature_manager.cpp" />
+    <ClCompile Include="source\opt\flatten_decoration_pass.cpp" />
+    <ClCompile Include="source\opt\fold.cpp" />
+    <ClCompile Include="source\opt\folding_rules.cpp" />
+    <ClCompile Include="source\opt\fold_spec_constant_op_and_composite_pass.cpp" />
+    <ClCompile Include="source\opt\freeze_spec_constant_value_pass.cpp" />
+    <ClCompile Include="source\opt\function.cpp" />
+    <ClCompile Include="source\opt\if_conversion.cpp" />
+    <ClCompile Include="source\opt\inline_exhaustive_pass.cpp" />
+    <ClCompile Include="source\opt\inline_opaque_pass.cpp" />
+    <ClCompile Include="source\opt\inline_pass.cpp" />
+    <ClCompile Include="source\opt\insert_extract_elim.cpp" />
+    <ClCompile Include="source\opt\instruction.cpp" />
+    <ClCompile Include="source\opt\instruction_list.cpp" />
+    <ClCompile Include="source\opt\ir_context.cpp" />
+    <ClCompile Include="source\opt\ir_loader.cpp" />
+    <ClCompile Include="source\opt\licm_pass.cpp" />
+    <ClCompile Include="source\opt\local_access_chain_convert_pass.cpp" />
+    <ClCompile Include="source\opt\local_redundancy_elimination.cpp" />
+    <ClCompile Include="source\opt\local_single_block_elim_pass.cpp" />
+    <ClCompile Include="source\opt\local_single_store_elim_pass.cpp" />
+    <ClCompile Include="source\opt\local_ssa_elim_pass.cpp" />
+    <ClCompile Include="source\opt\loop_descriptor.cpp" />
+    <ClCompile Include="source\opt\loop_peeling.cpp" />
+    <ClCompile Include="source\opt\loop_unroller.cpp" />
+    <ClCompile Include="source\opt\loop_unswitch_pass.cpp" />
+    <ClCompile Include="source\opt\loop_utils.cpp" />
+    <ClCompile Include="source\opt\mem_pass.cpp" />
+    <ClCompile Include="source\opt\merge_return_pass.cpp" />
+    <ClCompile Include="source\opt\module.cpp" />
+    <ClCompile Include="source\opt\optimizer.cpp" />
+    <ClCompile Include="source\opt\pass.cpp" />
+    <ClCompile Include="source\opt\pass_manager.cpp" />
+    <ClCompile Include="source\opt\private_to_local_pass.cpp" />
+    <ClCompile Include="source\opt\propagator.cpp" />
+    <ClCompile Include="source\opt\redundancy_elimination.cpp" />
+    <ClCompile Include="source\opt\remove_duplicates_pass.cpp" />
+    <ClCompile Include="source\opt\replace_invalid_opc.cpp" />
+    <ClCompile Include="source\opt\scalar_replacement_pass.cpp" />
+    <ClCompile Include="source\opt\set_spec_constant_default_value_pass.cpp" />
+    <ClCompile Include="source\opt\simplification_pass.cpp" />
+    <ClCompile Include="source\opt\ssa_rewrite_pass.cpp" />
+    <ClCompile Include="source\opt\strength_reduction_pass.cpp" />
+    <ClCompile Include="source\opt\strip_debug_info_pass.cpp" />
+    <ClCompile Include="source\opt\strip_reflect_info_pass.cpp" />
+    <ClCompile Include="source\opt\types.cpp" />
+    <ClCompile Include="source\opt\type_manager.cpp" />
+    <ClCompile Include="source\opt\unify_const_pass.cpp" />
+    <ClCompile Include="source\opt\value_number_table.cpp" />
+    <ClCompile Include="source\opt\workaround1209.cpp" />
+    <ClCompile Include="source\parsed_operand.cpp" />
+    <ClCompile Include="source\print.cpp" />
+    <ClCompile Include="source\software_version.cpp" />
+    <ClCompile Include="source\spirv_endian.cpp" />
+    <ClCompile Include="source\spirv_stats.cpp" />
+    <ClCompile Include="source\spirv_target_env.cpp" />
+    <ClCompile Include="source\spirv_validator_options.cpp" />
+    <ClCompile Include="source\table.cpp" />
+    <ClCompile Include="source\text.cpp" />
+    <ClCompile Include="source\text_handler.cpp" />
+    <ClCompile Include="source\util\bit_stream.cpp" />
+    <ClCompile Include="source\util\parse_number.cpp" />
+    <ClCompile Include="source\util\string_utils.cpp" />
+    <ClCompile Include="source\validate.cpp" />
+    <ClCompile Include="source\validate_adjacency.cpp" />
+    <ClCompile Include="source\validate_arithmetics.cpp" />
+    <ClCompile Include="source\validate_atomics.cpp" />
+    <ClCompile Include="source\validate_barriers.cpp" />
+    <ClCompile Include="source\validate_bitwise.cpp" />
+    <ClCompile Include="source\validate_capability.cpp" />
+    <ClCompile Include="source\validate_cfg.cpp" />
+    <ClCompile Include="source\validate_composites.cpp" />
+    <ClCompile Include="source\validate_conversion.cpp" />
+    <ClCompile Include="source\validate_datarules.cpp" />
+    <ClCompile Include="source\validate_decorations.cpp" />
+    <ClCompile Include="source\validate_derivatives.cpp" />
+    <ClCompile Include="source\validate_ext_inst.cpp" />
+    <ClCompile Include="source\validate_id.cpp" />
+    <ClCompile Include="source\validate_image.cpp" />
+    <ClCompile Include="source\validate_instruction.cpp" />
+    <ClCompile Include="source\validate_layout.cpp" />
+    <ClCompile Include="source\validate_literals.cpp" />
+    <ClCompile Include="source\validate_logicals.cpp" />
+    <ClCompile Include="source\validate_primitives.cpp" />
+    <ClCompile Include="source\validate_type_unique.cpp" />
+    <ClCompile Include="source\val\basic_block.cpp" />
+    <ClCompile Include="source\val\construct.cpp" />
+    <ClCompile Include="source\val\function.cpp" />
+    <ClCompile Include="source\val\instruction.cpp" />
+    <ClCompile Include="source\val\validation_state.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="include\spirv-tools\libspirv.h" />
+    <ClInclude Include="include\spirv-tools\libspirv.hpp" />
+    <ClInclude Include="include\spirv-tools\linker.hpp" />
+    <ClInclude Include="include\spirv-tools\optimizer.hpp" />
+    <ClInclude Include="source\assembly_grammar.h" />
+    <ClInclude Include="source\binary.h" />
+    <ClInclude Include="source\cfa.h" />
+    <ClInclude Include="source\comp\markv.h" />
+    <ClInclude Include="source\comp\markv_model.h" />
+    <ClInclude Include="source\diagnostic.h" />
+    <ClInclude Include="source\disassemble.h" />
+    <ClInclude Include="source\enum_set.h" />
+    <ClInclude Include="source\enum_string_mapping.h" />
+    <ClInclude Include="source\extensions.h" />
+    <ClInclude Include="source\ext_inst.h" />
+    <ClInclude Include="source\id_descriptor.h" />
+    <ClInclude Include="source\instruction.h" />
+    <ClInclude Include="source\latest_version_glsl_std_450_header.h" />
+    <ClInclude Include="source\latest_version_opencl_std_header.h" />
+    <ClInclude Include="source\latest_version_spirv_header.h" />
+    <ClInclude Include="source\macro.h" />
+    <ClInclude Include="source\message.h" />
+    <ClInclude Include="source\name_mapper.h" />
+    <ClInclude Include="source\opcode.h" />
+    <ClInclude Include="source\operand.h" />
+    <ClInclude Include="source\opt\aggressive_dead_code_elim_pass.h" />
+    <ClInclude Include="source\opt\basic_block.h" />
+    <ClInclude Include="source\opt\block_merge_pass.h" />
+    <ClInclude Include="source\opt\build_module.h" />
+    <ClInclude Include="source\opt\ccp_pass.h" />
+    <ClInclude Include="source\opt\cfg.h" />
+    <ClInclude Include="source\opt\cfg_cleanup_pass.h" />
+    <ClInclude Include="source\opt\common_uniform_elim_pass.h" />
+    <ClInclude Include="source\opt\compact_ids_pass.h" />
+    <ClInclude Include="source\opt\composite.h" />
+    <ClInclude Include="source\opt\constants.h" />
+    <ClInclude Include="source\opt\const_folding_rules.h" />
+    <ClInclude Include="source\opt\dead_branch_elim_pass.h" />
+    <ClInclude Include="source\opt\dead_insert_elim_pass.h" />
+    <ClInclude Include="source\opt\dead_variable_elimination.h" />
+    <ClInclude Include="source\opt\decoration_manager.h" />
+    <ClInclude Include="source\opt\def_use_manager.h" />
+    <ClInclude Include="source\opt\dominator_analysis.h" />
+    <ClInclude Include="source\opt\dominator_tree.h" />
+    <ClInclude Include="source\opt\eliminate_dead_constant_pass.h" />
+    <ClInclude Include="source\opt\eliminate_dead_functions_pass.h" />
+    <ClInclude Include="source\opt\feature_manager.h" />
+    <ClInclude Include="source\opt\flatten_decoration_pass.h" />
+    <ClInclude Include="source\opt\fold.h" />
+    <ClInclude Include="source\opt\folding_rules.h" />
+    <ClInclude Include="source\opt\fold_spec_constant_op_and_composite_pass.h" />
+    <ClInclude Include="source\opt\freeze_spec_constant_value_pass.h" />
+    <ClInclude Include="source\opt\function.h" />
+    <ClInclude Include="source\opt\if_conversion.h" />
+    <ClInclude Include="source\opt\inline_exhaustive_pass.h" />
+    <ClInclude Include="source\opt\inline_opaque_pass.h" />
+    <ClInclude Include="source\opt\inline_pass.h" />
+    <ClInclude Include="source\opt\insert_extract_elim.h" />
+    <ClInclude Include="source\opt\instruction.h" />
+    <ClInclude Include="source\opt\instruction_list.h" />
+    <ClInclude Include="source\opt\ir_builder.h" />
+    <ClInclude Include="source\opt\ir_context.h" />
+    <ClInclude Include="source\opt\ir_loader.h" />
+    <ClInclude Include="source\opt\iterator.h" />
+    <ClInclude Include="source\opt\licm_pass.h" />
+    <ClInclude Include="source\opt\local_access_chain_convert_pass.h" />
+    <ClInclude Include="source\opt\local_redundancy_elimination.h" />
+    <ClInclude Include="source\opt\local_single_block_elim_pass.h" />
+    <ClInclude Include="source\opt\local_single_store_elim_pass.h" />
+    <ClInclude Include="source\opt\local_ssa_elim_pass.h" />
+    <ClInclude Include="source\opt\log.h" />
+    <ClInclude Include="source\opt\loop_descriptor.h" />
+    <ClInclude Include="source\opt\loop_peeling.h" />
+    <ClInclude Include="source\opt\loop_unroller.h" />
+    <ClInclude Include="source\opt\loop_unswitch_pass.h" />
+    <ClInclude Include="source\opt\loop_utils.h" />
+    <ClInclude Include="source\opt\make_unique.h" />
+    <ClInclude Include="source\opt\mem_pass.h" />
+    <ClInclude Include="source\opt\merge_return_pass.h" />
+    <ClInclude Include="source\opt\module.h" />
+    <ClInclude Include="source\opt\null_pass.h" />
+    <ClInclude Include="source\opt\pass.h" />
+    <ClInclude Include="source\opt\passes.h" />
+    <ClInclude Include="source\opt\pass_manager.h" />
+    <ClInclude Include="source\opt\private_to_local_pass.h" />
+    <ClInclude Include="source\opt\propagator.h" />
+    <ClInclude Include="source\opt\redundancy_elimination.h" />
+    <ClInclude Include="source\opt\reflect.h" />
+    <ClInclude Include="source\opt\remove_duplicates_pass.h" />
+    <ClInclude Include="source\opt\replace_invalid_opc.h" />
+    <ClInclude Include="source\opt\scalar_replacement_pass.h" />
+    <ClInclude Include="source\opt\set_spec_constant_default_value_pass.h" />
+    <ClInclude Include="source\opt\simplification_pass.h" />
+    <ClInclude Include="source\opt\ssa_rewrite_pass.h" />
+    <ClInclude Include="source\opt\strength_reduction_pass.h" />
+    <ClInclude Include="source\opt\strip_debug_info_pass.h" />
+    <ClInclude Include="source\opt\strip_reflect_info_pass.h" />
+    <ClInclude Include="source\opt\tree_iterator.h" />
+    <ClInclude Include="source\opt\types.h" />
+    <ClInclude Include="source\opt\type_manager.h" />
+    <ClInclude Include="source\opt\unify_const_pass.h" />
+    <ClInclude Include="source\opt\value_number_table.h" />
+    <ClInclude Include="source\opt\workaround1209.h" />
+    <ClInclude Include="source\parsed_operand.h" />
+    <ClInclude Include="source\print.h" />
+    <ClInclude Include="source\spirv_constant.h" />
+    <ClInclude Include="source\spirv_definition.h" />
+    <ClInclude Include="source\spirv_endian.h" />
+    <ClInclude Include="source\spirv_stats.h" />
+    <ClInclude Include="source\spirv_target_env.h" />
+    <ClInclude Include="source\spirv_validator_options.h" />
+    <ClInclude Include="source\table.h" />
+    <ClInclude Include="source\text.h" />
+    <ClInclude Include="source\text_handler.h" />
+    <ClInclude Include="source\util\bitutils.h" />
+    <ClInclude Include="source\util\bit_stream.h" />
+    <ClInclude Include="source\util\hex_float.h" />
+    <ClInclude Include="source\util\huffman_codec.h" />
+    <ClInclude Include="source\util\ilist.h" />
+    <ClInclude Include="source\util\ilist_node.h" />
+    <ClInclude Include="source\util\move_to_front.h" />
+    <ClInclude Include="source\util\parse_number.h" />
+    <ClInclude Include="source\util\string_utils.h" />
+    <ClInclude Include="source\util\timer.h" />
+    <ClInclude Include="source\validate.h" />
+    <ClInclude Include="source\val\basic_block.h" />
+    <ClInclude Include="source\val\construct.h" />
+    <ClInclude Include="source\val\decoration.h" />
+    <ClInclude Include="source\val\function.h" />
+    <ClInclude Include="source\val\instruction.h" />
+    <ClInclude Include="source\val\validation_state.h" />
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{D8270219-97BA-48FB-9AC3-17F7404C8DED}</ProjectGuid>
+    <WindowsTargetPlatformVersion>10.0.15063.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <PlatformToolset>v141</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)'=='Debug'" Label="Configuration">
+    <UseDebugLibraries>true</UseDebugLibraries>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)'=='Release'" Label="Configuration">
+    <UseDebugLibraries>false</UseDebugLibraries>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\..\Source\VSProps\Base.props" />
+    <Import Project="..\..\Source\VSProps\ClDisableAllWarnings.props" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

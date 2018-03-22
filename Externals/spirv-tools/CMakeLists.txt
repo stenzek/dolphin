@@ -1,0 +1,150 @@
+set(SRCS
+  source/assembly_grammar.cpp
+  source/binary.cpp
+  source/comp/markv_codec.cpp
+  source/diagnostic.cpp
+  source/disassemble.cpp
+  source/enum_string_mapping.cpp
+  source/ext_inst.cpp
+  source/extensions.cpp
+  source/id_descriptor.cpp
+  source/libspirv.cpp
+  source/link/linker.cpp
+  source/message.cpp
+  source/name_mapper.cpp
+  source/opcode.cpp
+  source/operand.cpp
+  source/opt/aggressive_dead_code_elim_pass.cpp
+  source/opt/basic_block.cpp
+  source/opt/block_merge_pass.cpp
+  source/opt/build_module.cpp
+  source/opt/ccp_pass.cpp
+  source/opt/cfg.cpp
+  source/opt/cfg_cleanup_pass.cpp
+  source/opt/common_uniform_elim_pass.cpp
+  source/opt/compact_ids_pass.cpp
+  source/opt/composite.cpp
+  source/opt/const_folding_rules.cpp
+  source/opt/constants.cpp
+  source/opt/dead_branch_elim_pass.cpp
+  source/opt/dead_insert_elim_pass.cpp
+  source/opt/dead_variable_elimination.cpp
+  source/opt/decoration_manager.cpp
+  source/opt/def_use_manager.cpp
+  source/opt/dominator_analysis.cpp
+  source/opt/dominator_tree.cpp
+  source/opt/eliminate_dead_constant_pass.cpp
+  source/opt/eliminate_dead_functions_pass.cpp
+  source/opt/feature_manager.cpp
+  source/opt/flatten_decoration_pass.cpp
+  source/opt/fold.cpp
+  source/opt/fold_spec_constant_op_and_composite_pass.cpp
+  source/opt/folding_rules.cpp
+  source/opt/freeze_spec_constant_value_pass.cpp
+  source/opt/function.cpp
+  source/opt/if_conversion.cpp
+  source/opt/inline_exhaustive_pass.cpp
+  source/opt/inline_opaque_pass.cpp
+  source/opt/inline_pass.cpp
+  source/opt/insert_extract_elim.cpp
+  source/opt/instruction.cpp
+  source/opt/instruction_list.cpp
+  source/opt/ir_context.cpp
+  source/opt/ir_loader.cpp
+  source/opt/licm_pass.cpp
+  source/opt/local_access_chain_convert_pass.cpp
+  source/opt/local_redundancy_elimination.cpp
+  source/opt/local_single_block_elim_pass.cpp
+  source/opt/local_single_store_elim_pass.cpp
+  source/opt/local_ssa_elim_pass.cpp
+  source/opt/loop_descriptor.cpp
+  source/opt/loop_peeling.cpp
+  source/opt/loop_unroller.cpp
+  source/opt/loop_unswitch_pass.cpp
+  source/opt/loop_utils.cpp
+  source/opt/mem_pass.cpp
+  source/opt/merge_return_pass.cpp
+  source/opt/module.cpp
+  source/opt/optimizer.cpp
+  source/opt/pass.cpp
+  source/opt/pass_manager.cpp
+  source/opt/private_to_local_pass.cpp
+  source/opt/propagator.cpp
+  source/opt/redundancy_elimination.cpp
+  source/opt/remove_duplicates_pass.cpp
+  source/opt/replace_invalid_opc.cpp
+  source/opt/scalar_replacement_pass.cpp
+  source/opt/set_spec_constant_default_value_pass.cpp
+  source/opt/simplification_pass.cpp
+  source/opt/ssa_rewrite_pass.cpp
+  source/opt/strength_reduction_pass.cpp
+  source/opt/strip_debug_info_pass.cpp
+  source/opt/strip_reflect_info_pass.cpp
+  source/opt/type_manager.cpp
+  source/opt/types.cpp
+  source/opt/unify_const_pass.cpp
+  source/opt/value_number_table.cpp
+  source/opt/workaround1209.cpp
+  source/parsed_operand.cpp
+  source/print.cpp
+  source/software_version.cpp
+  source/spirv_endian.cpp
+  source/spirv_stats.cpp
+  source/spirv_target_env.cpp
+  source/spirv_validator_options.cpp
+  source/table.cpp
+  source/text.cpp
+  source/text_handler.cpp
+  source/util/bit_stream.cpp
+  source/util/parse_number.cpp
+  source/util/string_utils.cpp
+  source/util/timer.cpp
+  source/val/basic_block.cpp
+  source/val/construct.cpp
+  source/val/function.cpp
+  source/val/instruction.cpp
+  source/val/validation_state.cpp
+  source/validate.cpp
+  source/validate_adjacency.cpp
+  source/validate_arithmetics.cpp
+  source/validate_atomics.cpp
+  source/validate_barriers.cpp
+  source/validate_bitwise.cpp
+  source/validate_capability.cpp
+  source/validate_cfg.cpp
+  source/validate_composites.cpp
+  source/validate_conversion.cpp
+  source/validate_datarules.cpp
+  source/validate_decorations.cpp
+  source/validate_derivatives.cpp
+  source/validate_ext_inst.cpp
+  source/validate_id.cpp
+  source/validate_image.cpp
+  source/validate_instruction.cpp
+  source/validate_layout.cpp
+  source/validate_literals.cpp
+  source/validate_logicals.cpp
+  source/validate_primitives.cpp
+  source/validate_type_unique.cpp
+)
+
+if(NOT MSVC)
+# glslang requires C++11 at a minimum to compile.
+add_compile_options(-std=c++11)
+
+# Silence some warnings that occur frequently to reduce noise in build logs.
+add_compile_options(-Wno-shadow)
+add_compile_options(-Wno-reorder)
+add_compile_options(-Wno-sign-compare)
+add_compile_options(-Wno-parentheses)
+add_compile_options(-Wno-unused-variable)
+if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+	add_compile_options(-Wno-unused-but-set-variable)
+elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+	add_compile_options(-Wno-missing-variable-declarations)
+endif()
+endif()
+
+add_library(spirv-tools STATIC ${SRCS})
+target_include_directories(spirv-tools PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/external/spirv-headers/include ${CMAKE_CURRENT_SOURCE_DIR}/source ${CMAKE_CURRENT_SOURCE_DIR}/generated)
+target_include_directories(spirv-tools PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/external/spirv-headers/include ${CMAKE_CURRENT_SOURCE_DIR}/source ${CMAKE_CURRENT_SOURCE_DIR}/generated)
