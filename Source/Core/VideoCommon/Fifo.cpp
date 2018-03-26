@@ -321,9 +321,6 @@ void RunGpuLoop()
         else
         {
           CommandProcessor::SCPFifoStruct& fifo = CommandProcessor::fifo;
-
-          AsyncRequests::GetInstance()->PullEvents();
-
           CommandProcessor::SetCPStatusFromGPU();
 
           // check if we are able to run this buffer
@@ -366,12 +363,6 @@ void RunGpuLoop()
                   old - (int)cyclesExecuted < param.iSyncGpuMaxDistance)
                 s_sync_wakeup_event.Set();
             }
-
-            // This call is pretty important in DualCore mode and must be called in the FIFO Loop.
-            // If we don't, s_swapRequested or s_efbAccessRequested won't be set to false
-            // leading the CPU thread to wait in Video_BeginField or Video_AccessEFB thus slowing
-            // things down.
-            AsyncRequests::GetInstance()->PullEvents();
           }
 
           // fast skip remaining GPU time if fifo is empty
@@ -385,6 +376,11 @@ void RunGpuLoop()
           // The fifo is empty and it's unlikely we will get any more work in the near future.
           // Make sure VertexManager finishes drawing any primitives it has stored in it's buffer.
           g_vertex_manager->Flush();
+
+          // Call PullEvents after flushing all vertices and the fifo is empty.
+          // This ensures that we achieve the same level of determinism as single core in
+          // dual code mode, at the cost of blocking the CPU thread for slightly longer.
+          AsyncRequests::GetInstance()->PullEvents();
         }
       },
       100);
