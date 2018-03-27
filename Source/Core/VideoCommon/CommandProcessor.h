@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <atomic>
 #include "Common/CommonTypes.h"
 
 class PointerWrap;
@@ -19,25 +20,32 @@ struct SCPFifoStruct
   // fifo registers
   volatile u32 CPBase;
   volatile u32 CPEnd;
-  u32 CPHiWatermark;
-  u32 CPLoWatermark;
-  volatile u32 CPReadWriteDistance;
+  volatile u32 CPHiWatermark;
+  volatile u32 CPLoWatermark;
   volatile u32 CPWritePointer;
   volatile u32 CPReadPointer;
+  volatile u32 CPReadWriteDistance;
   volatile u32 CPBreakpoint;
-  volatile u32 SafeCPReadPointer;
 
-  volatile u32 bFF_GPLinkEnable;
-  volatile u32 bFF_GPReadEnable;
-  volatile u32 bFF_BPEnable;
-  volatile u32 bFF_BPInt;
-  volatile u32 bFF_Breakpoint;
+  // Control registers
+  volatile bool bFF_GPLinkEnable;
+  volatile bool bFF_GPReadEnable;
+  volatile bool bFF_BPEnable;
 
-  volatile u32 bFF_LoWatermarkInt;
-  volatile u32 bFF_HiWatermarkInt;
+  // Interrupt enables/disables
+  volatile bool bFF_BPInt;
+  volatile bool bFF_LoWatermarkInt;
+  volatile bool bFF_HiWatermarkInt;
 
-  volatile u32 bFF_LoWatermark;
-  volatile u32 bFF_HiWatermark;
+  // Interrupts triggered
+  volatile bool bFF_Breakpoint;
+  volatile bool bFF_LoWatermark;
+  volatile bool bFF_HiWatermark;
+
+  // Internal states
+  volatile bool bCPU_Breakpoint;
+  volatile bool bCPU_LoWatermark;
+  volatile bool bCPU_HiWatermark;
 
   void DoState(PointerWrap& p);
 };
@@ -158,8 +166,7 @@ void RegisterMMIO(MMIO::Mapping* mmio, u32 base);
 void SetCPStatusFromGPU();
 void SetCPStatusFromCPU();
 void GatherPipeBursted();
-void UpdateInterrupts(u64 userdata);
-void UpdateInterruptsFromVideoBackend(u64 userdata);
+void UpdateInterrupts();
 
 bool IsInterruptWaiting();
 

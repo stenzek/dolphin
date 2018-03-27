@@ -380,7 +380,7 @@ void Idle()
     // When the FIFO is processing data we must not advance because in this way
     // the VI will be desynchronized. So, We are waiting until the FIFO finish and
     // while we process only the events required by the FIFO.
-    Fifo::FlushGpu();
+    Fifo::SyncGPU(Fifo::SyncGPUReason::Idle);
   }
 
   s_idled_cycles += DowncountToCycles(PowerPC::ppcState.downcount);
@@ -442,4 +442,4 @@ void SetFakeTBStartTicks(u64 val)
   g.fake_TB_start_ticks = val;
 }
 
-}  // namespace
+}  // namespace CoreTiming

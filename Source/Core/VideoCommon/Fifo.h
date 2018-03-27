@@ -29,15 +29,17 @@ enum class SyncGPUReason
   BBox,
   Swap,
   AuxSpace,
+  Idle,
+  CPRegisterAccess,
 };
 // In deterministic GPU thread mode this waits for the GPU to be done with pending work.
-void SyncGPU(SyncGPUReason reason, bool may_move_read_ptr = true);
+void SyncGPU(SyncGPUReason reason);
 
 void PushFifoAuxBuffer(const void* ptr, size_t size);
 void* PopFifoAuxBuffer(size_t size);
 
-void FlushGpu();
-void RunGpu();
+bool CanRunGpu();
+void WakeGpuThread();
 void GpuMaySleep();
 void RunGpuLoop();
 void ExitGpuLoop();
