@@ -4,8 +4,10 @@
 
 #include <atomic>
 #include <cstdarg>
+#include <cstdlib>
 
 #include "Common/CommonFuncs.h"
+#include "Common/FileUtil.h"
 #include "Common/Logging/Log.h"
 #include "Common/StringUtil.h"
 
@@ -110,15 +112,27 @@ bool LoadVulkanLibrary()
     return true;
   }
 
+#if defined(__APPLE__)
+  // Check if a path to a specific Vulkan library has been specified.
+  char* libvulkan_env = getenv("LIBVULKAN_PATH");
+  if (libvulkan_env)
+    vulkan_module = dlopen(libvulkan_env, RTLD_NOW);
+  if (!vulkan_module)
+  {
+    // Use the libvulkan.dylib from the application bundle.
+    std::string path = File::GetBundleDirectory() + "/Contents/Frameworks/libvulkan.dylib";
+    vulkan_module = dlopen(path.c_str(), RTLD_NOW);
+  }
+#else
   // Names of libraries to search. Desktop should use libvulkan.so.1 or libvulkan.so.
   static const char* search_lib_names[] = {"libvulkan.so.1", "libvulkan.so"};
-
   for (size_t i = 0; i < ArraySize(search_lib_names); i++)
   {
     vulkan_module = dlopen(search_lib_names[i], RTLD_NOW);
     if (vulkan_module)
       break;
   }
+#endif
 
   if (!vulkan_module)
   {

@@ -18,6 +18,8 @@
 
 #if defined(VK_USE_PLATFORM_XLIB_KHR)
 #include <X11/Xlib.h>
+#elif defined(VK_USE_PLATFORM_MACOS_MVK)
+#include <objc/message.h>
 #endif
 
 namespace Vulkan
@@ -102,6 +104,46 @@ VkSurfaceKHR SwapChain::CreateVulkanSurface(VkInstance instance, const WindowSys
 
     return surface;
   }
+#endif
+
+#if defined(VK_USE_PLATFORM_MACOS_MVK)
+  // This is kinda messy, but it avoids having to write Objective C++ just to create a metal layer.
+  id view = reinterpret_cast<id>(hwnd);
+  Class clsCAMetalLayer = objc_getClass("CAMetalLayer");
+  if (!clsCAMetalLayer)
+  {
+    ERROR_LOG(VIDEO, "Failed to get CAMetalLayer class.");
+    return VK_NULL_HANDLE;
+  }
+
+  // [CAMetalLayer layer]
+  id layer = reinterpret_cast<id (*)(Class, SEL)>(objc_msgSend)(objc_getClass("CAMetalLayer"),
+                                                                sel_getUid("layer"));
+  if (!layer)
+  {
+    ERROR_LOG(VIDEO, "Failed to create Metal layer.");
+    return VK_NULL_HANDLE;
+  }
+
+  // [view setWantsLayer:YES]
+  reinterpret_cast<void (*)(id, SEL, BOOL)>(objc_msgSend)(view, sel_getUid("setWantsLayer:"), YES);
+
+  // [view setLayer:layer]
+  reinterpret_cast<void (*)(id, SEL, id)>(objc_msgSend)(view, sel_getUid("setLayer:"), layer);
+
+  // Now the easy part, actually creating the surface.
+  VkMacOSSurfaceCreateInfoMVK surface_create_info = {
+      VK_STRUCTURE_TYPE_MACOS_SURFACE_CREATE_INFO_MVK, nullptr, 0, hwnd};
+
+  VkSurfaceKHR surface;
+  VkResult res = vkCreateMacOSSurfaceMVK(instance, &surface_create_info, nullptr, &surface);
+  if (res != VK_SUCCESS)
+  {
+    LOG_VULKAN_ERROR(res, "vkCreateMacOSSurfaceMVK failed: ");
+    return VK_NULL_HANDLE;
+  }
+
+  return surface;
 #endif
 
   return VK_NULL_HANDLE;

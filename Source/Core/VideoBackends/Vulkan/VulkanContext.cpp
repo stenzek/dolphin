@@ -198,6 +198,13 @@ bool VulkanContext::SelectInstanceExtensions(ExtensionList* extension_list, Wind
     return false;
   }
 #endif
+#if defined(VK_USE_PLATFORM_MACOS_MVK)
+  if (wstype == WindowSystemType::MacOS &&
+      !SupportsExtension(VK_MVK_MACOS_SURFACE_EXTENSION_NAME, true))
+  {
+    return false;
+  }
+#endif
 
   // VK_EXT_debug_report
   if (enable_debug_report && !SupportsExtension(VK_EXT_DEBUG_REPORT_EXTENSION_NAME, false))

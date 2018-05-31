@@ -18,6 +18,10 @@
 #define VK_USE_PLATFORM_ANDROID_KHR
 #endif
 
+#if defined(__APPLE__)
+#define VK_USE_PLATFORM_MACOS_MVK
+#endif
+
 #include "vulkan/vulkan.h"
 
 // We abuse the preprocessor here to only need to specify function names once.
