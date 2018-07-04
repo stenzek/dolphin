@@ -227,6 +227,7 @@ void RegisterMMIO(MMIO::Mapping* mmio, u32 base)
   }
 
   mmio->Register(base | STATUS_REGISTER, MMIO::ComplexRead<u16>([](u32) {
+                   Fifo::SyncGPUForRegisterAccess();
                    SetCpStatusRegister();
                    return m_CPStatusReg.Hex;
                  }),
@@ -264,18 +265,21 @@ void RegisterMMIO(MMIO::Mapping* mmio, u32 base)
                  MMIO::DirectWrite<u16>(MMIO::Utils::LowPart(&fifo.CPReadWriteDistance),
                                         WMASK_LO_ALIGN_32BIT));
   mmio->Register(base | FIFO_RW_DISTANCE_HI,
-                 IsOnThread() ?
-                     MMIO::ComplexRead<u16>([](u32) {
-                       if (fifo.CPWritePointer >= fifo.SafeCPReadPointer)
-                         return ReadHigh(fifo.CPWritePointer - fifo.SafeCPReadPointer);
-                       else
-                         return ReadHigh(fifo.CPEnd - fifo.SafeCPReadPointer + fifo.CPWritePointer -
-                                         fifo.CPBase + 32);
-                     }) :
-                     MMIO::DirectRead<u16>(MMIO::Utils::HighPart(&fifo.CPReadWriteDistance)),
+                 IsOnThread() ? MMIO::ComplexRead<u16>([](u32) {
+                   Fifo::SyncGPUForRegisterAccess();
+                   if (fifo.CPWritePointer >= fifo.SafeCPReadPointer)
+                     return ReadHigh(fifo.CPWritePointer - fifo.SafeCPReadPointer);
+                   else
+                     return ReadHigh(fifo.CPEnd - fifo.SafeCPReadPointer + fifo.CPWritePointer -
+                                     fifo.CPBase + 32);
+                 }) :
+                                MMIO::ComplexRead<u16>([](u32) {
+                                  Fifo::SyncGPUForRegisterAccess();
+                                  return ReadHigh(fifo.CPReadWriteDistance);
+                                }),
                  MMIO::ComplexWrite<u16>([WMASK_HI_RESTRICT](u32, u16 val) {
+                   Fifo::SyncGPUForRegisterAccess();
                    WriteHigh(fifo.CPReadWriteDistance, val & WMASK_HI_RESTRICT);
-                   Fifo::SyncGPU(Fifo::SyncGPUReason::Other);
                    if (fifo.CPReadWriteDistance == 0)
                    {
                      GPFifo::ResetGatherPipe();
@@ -291,17 +295,25 @@ void RegisterMMIO(MMIO::Mapping* mmio, u32 base)
       base | FIFO_READ_POINTER_LO,
       IsOnThread() ? MMIO::DirectRead<u16>(MMIO::Utils::LowPart(&fifo.SafeCPReadPointer)) :
                      MMIO::DirectRead<u16>(MMIO::Utils::LowPart(&fifo.CPReadPointer)),
-      MMIO::DirectWrite<u16>(MMIO::Utils::LowPart(&fifo.CPReadPointer), WMASK_LO_ALIGN_32BIT));
-  mmio->Register(
-      base | FIFO_READ_POINTER_HI,
-      IsOnThread() ? MMIO::DirectRead<u16>(MMIO::Utils::HighPart(&fifo.SafeCPReadPointer)) :
-                     MMIO::DirectRead<u16>(MMIO::Utils::HighPart(&fifo.CPReadPointer)),
-      IsOnThread() ?
-          MMIO::ComplexWrite<u16>([WMASK_HI_RESTRICT](u32, u16 val) {
-            WriteHigh(fifo.CPReadPointer, val & WMASK_HI_RESTRICT);
-            fifo.SafeCPReadPointer = fifo.CPReadPointer;
-          }) :
-          MMIO::DirectWrite<u16>(MMIO::Utils::HighPart(&fifo.CPReadPointer), WMASK_HI_RESTRICT));
+                 MMIO::DirectWrite<u16>(MMIO::Utils::LowPart(&fifo.CPReadPointer), 0xFFE0));
+  mmio->Register(base | FIFO_READ_POINTER_HI,
+                 IsOnThread() ? MMIO::ComplexRead<u16>([](u32) {
+                   Fifo::SyncGPUForRegisterAccess();
+                   return ReadHigh(fifo.SafeCPReadPointer);
+                 }) :
+                                MMIO::ComplexRead<u16>([](u32) {
+                                  Fifo::SyncGPUForRegisterAccess();
+                                  return ReadHigh(fifo.CPReadPointer);
+                                }),
+                 IsOnThread() ? MMIO::ComplexWrite<u16>([](u32, u16 val) {
+                   Fifo::SyncGPUForRegisterAccess();
+                   WriteHigh(fifo.CPReadPointer, val);
+                   fifo.SafeCPReadPointer = fifo.CPReadPointer;
+                 }) :
+                                MMIO::ComplexWrite<u16>([WMASK_HI_RESTRICT](u32, u16 val) {
+                                  Fifo::SyncGPUForRegisterAccess();
+                                  WriteHigh(fifo.CPReadPointer, val & WMASK_HI_RESTRICT);
+                                }));
 }
 
 void GatherPipeBursted()
