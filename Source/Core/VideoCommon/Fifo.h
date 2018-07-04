@@ -33,8 +33,13 @@ enum class SyncGPUReason
 // In deterministic GPU thread mode this waits for the GPU to be done with pending work.
 void SyncGPU(SyncGPUReason reason, bool may_move_read_ptr = true);
 
+// In single core mode, this runs the GPU for a single slice.
+// In dual core mode, this synchronizes with the GPU thread.
+void SyncGPUForRegisterAccess(bool is_write);
+
 void PushFifoAuxBuffer(const void* ptr, size_t size);
 void* PopFifoAuxBuffer(size_t size);
+u32 GetVideoBufferSize();
 
 void FlushGpu();
 void RunGpu();

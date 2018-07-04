@@ -27,17 +27,16 @@ struct SCPFifoStruct
   volatile u32 CPBreakpoint;
   volatile u32 SafeCPReadPointer;
 
-  volatile u32 bFF_GPLinkEnable;
-  volatile u32 bFF_GPReadEnable;
-  volatile u32 bFF_BPEnable;
-  volatile u32 bFF_BPInt;
-  volatile u32 bFF_Breakpoint;
+  volatile u32 GPLinkEnable;
+  volatile u32 ReadEnable;
+  volatile u32 BreakpointEnable;
+  volatile u32 BreakpointInterruptEnable;
+  volatile u32 UnderflowInterruptEnable;
+  volatile u32 OverflowInterruptEnable;
 
-  volatile u32 bFF_LoWatermarkInt;
-  volatile u32 bFF_HiWatermarkInt;
-
-  volatile u32 bFF_LoWatermark;
-  volatile u32 bFF_HiWatermark;
+  volatile u32 BreakpointFlag;
+  volatile u32 UnderflowFlag;
+  volatile u32 OverflowFlag;
 
   void DoState(PointerWrap& p);
 };
@@ -104,8 +103,8 @@ union UCPStatusReg
 {
   struct
   {
-    u16 OverflowHiWatermark : 1;
-    u16 UnderflowLoWatermark : 1;
+    u16 Overflow : 1;
+    u16 Underflow : 1;
     u16 ReadIdle : 1;
     u16 CommandIdle : 1;
     u16 Breakpoint : 1;
@@ -121,10 +120,10 @@ union UCPCtrlReg
 {
   struct
   {
-    u16 GPReadEnable : 1;
+    u16 ReadEnable : 1;
     u16 BPEnable : 1;
-    u16 FifoOverflowIntEnable : 1;
-    u16 FifoUnderflowIntEnable : 1;
+    u16 OverflowIntEnable : 1;
+    u16 UnderflowIntEnable : 1;
     u16 GPLinkEnable : 1;
     u16 BPInt : 1;
     u16 : 10;
@@ -154,6 +153,10 @@ void Init();
 void DoState(PointerWrap& p);
 
 void RegisterMMIO(MMIO::Mapping* mmio, u32 base);
+
+// Checking whether we can run, due to breakpoints and R/W distance.
+bool AtBreakpoint();
+bool CanReadFromFifo();
 
 void SetCPStatusFromGPU();
 void SetCPStatusFromCPU();

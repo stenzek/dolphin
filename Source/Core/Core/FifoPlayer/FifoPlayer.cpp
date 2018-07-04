@@ -570,5 +570,5 @@ bool FifoPlayer::IsHighWatermarkSet()
 {
   CommandProcessor::UCPStatusReg status =
       PowerPC::Read_U16(0xCC000000 | CommandProcessor::STATUS_REGISTER);
-  return status.OverflowHiWatermark;
+  return status.Overflow;
 }

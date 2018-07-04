@@ -140,7 +140,7 @@ void Shutdown()
 void ExitGpuLoop()
 {
   // This should break the wait loop in CPU thread
-  CommandProcessor::fifo.bFF_GPReadEnable = false;
+  CommandProcessor::fifo.ReadEnable = false;
   FlushGpu();
 
   // Terminate GPU thread loop
@@ -219,6 +219,11 @@ void* PopFifoAuxBuffer(size_t size)
   void* ret = s_fifo_aux_read_ptr;
   s_fifo_aux_read_ptr += size;
   return ret;
+}
+
+u32 GetVideoBufferSize()
+{
+  return static_cast<u32>(s_video_buffer_write_ptr - s_video_buffer_read_ptr);
 }
 
 // Description: RunGpuLoop() sends data through this function.
@@ -327,7 +332,7 @@ void RunGpuLoop()
           CommandProcessor::SetCPStatusFromGPU();
 
           // check if we are able to run this buffer
-          while (!CommandProcessor::IsInterruptWaiting() && fifo.bFF_GPReadEnable &&
+          while (!CommandProcessor::IsInterruptWaiting() && fifo.ReadEnable &&
                  fifo.CPReadWriteDistance && !AtBreakpoint())
           {
             if (param.bSyncGPU && s_sync_ticks.load() < param.iSyncGpuMinDistance)
@@ -411,7 +416,7 @@ void GpuMaySleep()
 bool AtBreakpoint()
 {
   CommandProcessor::SCPFifoStruct& fifo = CommandProcessor::fifo;
-  return fifo.bFF_BPEnable && (fifo.CPReadPointer == fifo.CPBreakpoint);
+  return fifo.BreakpointEnable && (fifo.CPReadPointer == fifo.CPBreakpoint);
 }
 
 void RunGpu()
@@ -441,8 +446,7 @@ static int RunGpuOnCpu(int ticks)
   CommandProcessor::SCPFifoStruct& fifo = CommandProcessor::fifo;
   bool reset_simd_state = false;
   int available_ticks = int(ticks * SConfig::GetInstance().fSyncGpuOverclock) + s_sync_ticks.load();
-  while (fifo.bFF_GPReadEnable && fifo.CPReadWriteDistance && !AtBreakpoint() &&
-         available_ticks >= 0)
+  while (fifo.ReadEnable && fifo.CPReadWriteDistance && !AtBreakpoint() && available_ticks >= 0)
   {
     if (s_use_deterministic_gpu_thread)
     {
@@ -480,7 +484,7 @@ static int RunGpuOnCpu(int ticks)
   }
 
   // Discard all available ticks as there is nothing to do any more.
-  s_sync_ticks.store(std::min(available_ticks, 0));
+  s_sync_ticks.store(available_ticks);
 
   // If the GPU is idle, drop the handler.
   if (available_ticks >= 0)
@@ -577,6 +581,39 @@ static void SyncGPUCallback(u64 ticks, s64 cyclesLate)
   s_syncing_suspended = next < 0;
   if (!s_syncing_suspended)
     CoreTiming::ScheduleEvent(next, s_event_sync_gpu, next);
+}
+
+void SyncGPUForRegisterAccess(bool is_write)
+{
+  // On read, use up any free ticks we have.
+  // This prevents the GPU from appearing stalled to the CPU.
+  int next = -1;
+  if (!SConfig::GetInstance().bCPUThread || s_use_deterministic_gpu_thread)
+    next = RunGpuOnCpu(0);
+  else if (SConfig::GetInstance().bSyncGPU)
+    next = WaitForGpuThread(0);
+
+  // Update syncing event state.
+  if (next < 0)
+  {
+    if (!s_syncing_suspended)
+    {
+      CoreTiming::RemoveEvent(s_event_sync_gpu);
+      s_syncing_suspended = true;
+    }
+  }
+  else
+  {
+    if (s_syncing_suspended)
+    {
+      CoreTiming::ScheduleEvent(next, s_event_sync_gpu, next);
+      s_syncing_suspended = false;
+    }
+  }
+
+  // On write, ensure the GPU thread is finished before performing the write.
+  if (is_write)
+    FlushGpu();
 }
 
 // Initialize GPU - CPU thread syncing, this gives us a deterministic way to start the GPU thread.
