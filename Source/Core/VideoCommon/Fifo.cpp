@@ -61,7 +61,6 @@ static std::mutex s_video_buffer_lock;
 
 static std::atomic<int> s_sync_ticks;
 static bool s_syncing_suspended;
-static Common::Event s_sync_wakeup_event;
 
 static void FlushGpu();
 static bool RunGpu(bool needs_simd_reset);
@@ -230,8 +229,10 @@ void ResetVideoBuffer()
 
 bool RunGpu(bool needs_simd_reset)
 {
+  const auto& param = SConfig::GetInstance();
+
   int ticks_available;
-  if (!SConfig::GetInstance().bCPUThread || SConfig::GetInstance().bSyncGPU)
+  if (!param.bCPUThread || param.bSyncGPU)
   {
     ticks_available = s_sync_ticks.load();
     if (ticks_available <= 0)
@@ -417,7 +418,7 @@ static int WaitForGpuThread(int ticks)
 
   // Wait for GPU
   if (now >= param.iSyncGpuMaxDistance)
-    s_sync_wakeup_event.Wait();
+    s_gpu_mainloop.Wait();
 
   return GPU_TIME_SLOT_SIZE;
 }
