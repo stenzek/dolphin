@@ -318,6 +318,9 @@ void GatherPipeBursted()
              "FIFOs linked but out of sync");
 }
 
+// TODO: Unify this with Fifo.cpp
+static constexpr u32 FIFO_SIZE = 2 * 1024 * 1024;
+
 static bool AtBreakpoint()
 {
   return fifo.bFF_BPEnable && (fifo.CPReadPointer == fifo.CPBreakpoint);
@@ -335,9 +338,9 @@ void Run()
     return;
   do
   {
-#if 0
     // Work out the copy size. We can copy up until the next interrupt, or breakpoint.
-    u32 copy_size = std::min(fifo.CPReadWriteDistance, fifo.CPEnd - fifo.CPReadPointer);
+    u32 copy_size =
+        std::min(std::min(fifo.CPReadWriteDistance, fifo.CPEnd - fifo.CPReadPointer), FIFO_SIZE);
     if (fifo.CPReadWriteDistance < fifo.CPHiWatermark)
       copy_size = std::min(copy_size, fifo.CPHiWatermark - fifo.CPReadWriteDistance);
     if (fifo.CPReadWriteDistance > fifo.CPLoWatermark)
@@ -349,10 +352,6 @@ void Run()
 
     // Ensure copy_size is aligned to 32 bytes. It should be...
     copy_size = (copy_size + 31u) & ~31u;
-#else
-    const u32 copy_size = GATHER_PIPE_SIZE;
-#endif
-
     Fifo::ReadDataFromFifo(fifo.CPReadPointer, copy_size);
 
     // libogc says "Due to the mechanics of flushing the write-gather pipe, the FIFO memory area
