@@ -18,6 +18,7 @@ void DoState(PointerWrap& f);
 void PauseAndLock(bool doLock, bool unpauseOnUnlock);
 void UpdateWantDeterminism(bool want);
 bool UseDeterministicGPUThread();
+void ReadDataFromFifo(u32 readPtr, size_t len);
 
 // Used for diagnostics.
 enum class SyncGPUReason
@@ -29,20 +30,20 @@ enum class SyncGPUReason
   BBox,
   Swap,
   AuxSpace,
+  Idle,
+  CPRegisterAccess,
 };
-// In deterministic GPU thread mode this waits for the GPU to be done with pending work.
-void SyncGPU(SyncGPUReason reason, bool may_move_read_ptr = true);
+
+void SyncGPU(SyncGPUReason reason);
 
 void PushFifoAuxBuffer(const void* ptr, size_t size);
 void* PopFifoAuxBuffer(size_t size);
 
-void FlushGpu();
-void RunGpu();
+void WakeGpu();
 void GpuMaySleep();
 void RunGpuLoop();
 void ExitGpuLoop();
 void EmulatorState(bool running);
-bool AtBreakpoint();
 void ResetVideoBuffer();
 
 }  // namespace Fifo
