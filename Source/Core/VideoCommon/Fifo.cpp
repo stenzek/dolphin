@@ -45,7 +45,7 @@ static CoreTiming::EventType* s_event_sync_gpu;
 static u8* s_video_buffer;
 static u8* s_video_buffer_read_ptr;   // Owned by video thread
 static u8* s_video_buffer_write_ptr;  // Owned by video thread
-static std::atomic<ptrdiff_t> s_video_buffer_size{};
+static std::atomic<u32> s_video_buffer_size{};
 static std::mutex s_video_buffer_lock;
 // The read_ptr is always owned by the GPU thread.  In normal mode, so is the
 // write_ptr, despite it being atomic.  In deterministic GPU thread mode,
@@ -68,13 +68,9 @@ static bool RunGpu(bool needs_simd_reset);
 void DoState(PointerWrap& p)
 {
   p.DoArray(s_video_buffer, FIFO_SIZE);
-  u8* write_ptr = s_video_buffer_write_ptr;
   p.DoPointer(s_video_buffer_write_ptr, s_video_buffer);
-  s_video_buffer_write_ptr = write_ptr;
-  u8* read_ptr = s_video_buffer_read_ptr;
   p.DoPointer(s_video_buffer_read_ptr, s_video_buffer);
-  s_video_buffer_read_ptr = read_ptr;
-  s_video_buffer_size.store(s_video_buffer_write_ptr - s_video_buffer_read_ptr);
+  p.Do(s_video_buffer_size);
   p.Do(s_sync_ticks);
 }
 
@@ -215,7 +211,7 @@ void ReadDataFromFifo(u32 readPtr, size_t len)
   // Copy new video instructions to s_video_buffer for future use in rendering the new picture
   Memory::CopyFromEmu(s_video_buffer_write_ptr, readPtr, len);
   s_video_buffer_write_ptr += len;
-  s_video_buffer_size.fetch_add(len);
+  s_video_buffer_size.fetch_add(static_cast<u32>(len));
 }
 
 void ResetVideoBuffer()
