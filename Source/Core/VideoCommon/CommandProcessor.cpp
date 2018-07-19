@@ -210,15 +210,13 @@ void RegisterMMIO(MMIO::Mapping* mmio, u32 base)
                    UCPCtrlReg tmp(val);
                    m_CPCtrlReg.Hex = tmp.Hex;
                    SetCpControlRegister();
-                   UpdateInterrupts();
+                   Run();
                  }));
 
   mmio->Register(base | CLEAR_REGISTER, MMIO::DirectRead<u16>(&m_CPClearReg.Hex),
                  MMIO::ComplexWrite<u16>([](u32, u16 val) {
-                   Run();
                    UCPClearReg tmp(val);
                    m_CPClearReg.Hex = tmp.Hex;
-                   UpdateInterrupts();
                    SetCpClearRegister();
                  }));
 
@@ -240,15 +238,12 @@ void RegisterMMIO(MMIO::Mapping* mmio, u32 base)
                  MMIO::ComplexWrite<u16>([](u32, u16 val) {
                    Run();
                    WriteHigh(fifo.CPReadWriteDistance, val);
+
+                   // TODO: Is this correct?
                    if (fifo.CPReadWriteDistance == 0)
-                   {
                      GPFifo::ResetGatherPipe();
-                     Fifo::ResetVideoBuffer();
-                   }
-                   else
-                   {
-                     Fifo::ResetVideoBuffer();
-                   }
+
+                   Run();
                  }));
   mmio->Register(base | FIFO_READ_POINTER_LO, MMIO::ComplexRead<u16>([](u32) {
                    Run();
@@ -272,19 +267,7 @@ void GatherPipeBursted()
 {
   // if we aren't linked, we don't care about gather pipe data
   if (!m_CPCtrlReg.GPLinkEnable)
-  {
-    if (SConfig::GetInstance().bCPUThread && !Fifo::UseDeterministicGPUThread())
-    {
-      // In multibuffer mode is not allowed write in the same FIFO attached to the GPU.
-      // Fix Pokemon XD in DC mode.
-      if ((ProcessorInterface::Fifo_CPUEnd == fifo.CPEnd) &&
-          (ProcessorInterface::Fifo_CPUBase == fifo.CPBase) && fifo.CPReadWriteDistance > 0)
-      {
-        Fifo::SyncGPU(Fifo::SyncGPUReason::Other);
-      }
-    }
     return;
-  }
 
   // update the fifo pointer
   if (fifo.CPWritePointer == fifo.CPEnd)
