@@ -121,7 +121,6 @@ void Shutdown()
 void ExitGpuLoop()
 {
   // This should break the wait loop in CPU thread
-  CommandProcessor::fifo.bFF_GPReadEnable = false;
   s_gpu_mainloop.Wakeup();
   s_gpu_mainloop.Wait();
 
@@ -286,14 +285,23 @@ void RunGpuLoop()
 
   s_gpu_mainloop.Run(
       [] {
+        // Skip mutex lock if there is no commands queued.
+        bool did_any_work = false;
+        if (s_video_buffer_size.load() > 0)
         {
           std::lock_guard<std::mutex> guard(s_video_buffer_lock);
-          RunGpu(false);
+          did_any_work = RunGpu(false);
         }
+
+        // We likely won't have any work for a while, so ensure the pipeline is flushed.
+        if (did_any_work)
+          g_vertex_manager->Flush();
+        else
+          GpuMaySleep();
 
         AsyncRequests::GetInstance()->PullEvents();
       },
-      100);
+      0);
 
   AsyncRequests::GetInstance()->SetEnable(false);
   AsyncRequests::GetInstance()->SetPassthrough(true);

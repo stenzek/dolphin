@@ -303,7 +303,11 @@ void GatherPipeBursted()
 
   // Only run once we are half the buffer behind.
   // This should be faster, as we're processing larger batches at once.
-  if (fifo.CPReadWriteDistance >= (fifo.CPEnd - fifo.CPBase) / 2)
+  // For dual core mode, using a larger buffer here makes things slower, since there is
+  // more of a delay to synchronize with the GPU thread. So wake it more often.
+  const u32 run_threshold =
+      SConfig::GetInstance().bCPUThread ? 512 : (fifo.CPEnd - fifo.CPBase) / 2;
+  if (fifo.CPReadWriteDistance >= run_threshold)
     Run();
 
   ASSERT_MSG(COMMANDPROCESSOR, fifo.CPReadWriteDistance <= fifo.CPEnd - fifo.CPBase,
