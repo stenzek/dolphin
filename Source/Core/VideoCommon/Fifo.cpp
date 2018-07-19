@@ -240,9 +240,8 @@ bool RunGpu(bool needs_simd_reset)
     ticks_available = std::numeric_limits<int>::max();
   }
 
-  // WARN_LOG(VIDEO, "Running %d ticks", ticks_available);
-
   bool did_any_work = false;
+  bool simd_state_changed = false;
   while (s_video_buffer_write_ptr > s_video_buffer_read_ptr && ticks_available > 0)
   {
     if (needs_simd_reset)
@@ -250,6 +249,7 @@ bool RunGpu(bool needs_simd_reset)
       FPURoundMode::SaveSIMDState();
       FPURoundMode::LoadDefaultSIMDState();
       needs_simd_reset = false;
+      simd_state_changed = true;
     }
 
     u32 cyclesExecuted = 0;
@@ -270,6 +270,9 @@ bool RunGpu(bool needs_simd_reset)
   // This way we don't leave a bunch of pending cycles.
   if (ticks_available > 0)
     s_sync_ticks.fetch_sub(ticks_available);
+
+  if (simd_state_changed)
+    FPURoundMode::LoadSIMDState();
 
   return did_any_work;
 }
@@ -308,8 +311,7 @@ void FlushGpu()
   }
 
   // Single core mode - run pending cycles for the GPU on the CPU thread.
-  if (RunGpu(true))
-    FPURoundMode::LoadSIMDState();
+  RunGpu(true);
 }
 
 void GpuMaySleep()
@@ -379,8 +381,7 @@ bool UseDeterministicGPUThread()
 static int RunGpuOnCpu(int ticks)
 {
   s_sync_ticks.fetch_add(static_cast<int>(ticks * SConfig::GetInstance().fSyncGpuOverclock));
-  if (RunGpu(true))
-    FPURoundMode::LoadSIMDState();
+  RunGpu(true);
 
   if (s_video_buffer_size.load() == 0)
     return -1;
