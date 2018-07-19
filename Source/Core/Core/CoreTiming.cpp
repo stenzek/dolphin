@@ -22,7 +22,7 @@
 #include "Core/Core.h"
 #include "Core/PowerPC/PowerPC.h"
 
-#include "VideoCommon/Fifo.h"
+#include "VideoCommon/CommandProcessor.h"
 #include "VideoCommon/VideoBackendBase.h"
 
 namespace CoreTiming
@@ -380,7 +380,7 @@ void Idle()
     // When the FIFO is processing data we must not advance because in this way
     // the VI will be desynchronized. So, We are waiting until the FIFO finish and
     // while we process only the events required by the FIFO.
-    Fifo::SyncGPU(Fifo::SyncGPUReason::Idle);
+    CommandProcessor::Flush(true);
   }
 
   s_idled_cycles += DowncountToCycles(PowerPC::ppcState.downcount);

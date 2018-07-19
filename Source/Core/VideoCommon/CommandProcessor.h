@@ -162,6 +162,10 @@ void GatherPipeBursted();
 void UpdateInterrupts();
 void Run();
 
+// Flushes any pending bytes in the FIFO to the GPU.
+// If idle is set, the remaining ticks will be ignored, and all commands will be completed.
+void Flush(bool idle);
+
 void SetCpClearRegister();
 void SetCpControlRegister();
 void SetCpStatusRegister();

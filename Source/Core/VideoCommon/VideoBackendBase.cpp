@@ -79,7 +79,7 @@ void VideoBackendBase::Video_BeginField(u32 xfb_addr, u32 fb_width, u32 fb_strid
 {
   if (m_initialized && g_renderer && !g_ActiveConfig.bImmediateXFB)
   {
-    Fifo::SyncGPU(Fifo::SyncGPUReason::Swap);
+    CommandProcessor::Flush(false);
 
     AsyncRequests::Event e;
     e.time = ticks;
@@ -134,7 +134,7 @@ u32 VideoBackendBase::Video_GetQueryResult(PerfQueryType type)
     return 0;
   }
 
-  Fifo::SyncGPU(Fifo::SyncGPUReason::PerfQuery);
+  CommandProcessor::Flush(false);
 
   AsyncRequests::Event e;
   e.time = 0;
@@ -173,7 +173,7 @@ u16 VideoBackendBase::Video_GetBoundingBox(int index)
     return 0;
   }
 
-  Fifo::SyncGPU(Fifo::SyncGPUReason::BBox);
+  CommandProcessor::Flush(false);
 
   AsyncRequests::Event e;
   u16 result;

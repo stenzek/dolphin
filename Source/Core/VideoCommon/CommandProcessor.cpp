@@ -357,6 +357,13 @@ void Run()
   Fifo::WakeGpu();
 }
 
+void Flush(bool idle)
+{
+  Run();
+  if (idle)
+    Fifo::WaitForGpu(true);
+}
+
 void UpdateInterrupts()
 {
   // breakpoint

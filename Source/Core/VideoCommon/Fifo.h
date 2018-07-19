@@ -20,22 +20,6 @@ void UpdateWantDeterminism(bool want);
 bool UseDeterministicGPUThread();
 void ReadDataFromFifo(u32 readPtr, size_t len);
 
-// Used for diagnostics.
-enum class SyncGPUReason
-{
-  Other,
-  Wraparound,
-  EFBPoke,
-  PerfQuery,
-  BBox,
-  Swap,
-  AuxSpace,
-  Idle,
-  CPRegisterAccess,
-};
-
-void SyncGPU(SyncGPUReason reason);
-
 void PushFifoAuxBuffer(const void* ptr, size_t size);
 void* PopFifoAuxBuffer(size_t size);
 
@@ -45,5 +29,6 @@ void RunGpuLoop();
 void ExitGpuLoop();
 void EmulatorState(bool running);
 void ResetVideoBuffer();
+void WaitForGpu(bool idle);
 
 }  // namespace Fifo

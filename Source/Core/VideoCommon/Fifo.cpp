@@ -62,7 +62,6 @@ static std::mutex s_video_buffer_lock;
 static std::atomic<int> s_sync_ticks;
 static bool s_syncing_suspended;
 
-static void FlushGpu();
 static bool RunGpu(bool needs_simd_reset);
 
 void DoState(PointerWrap& p)
@@ -78,7 +77,6 @@ void PauseAndLock(bool doLock, bool unpauseOnUnlock)
 {
   if (doLock)
   {
-    SyncGPU(SyncGPUReason::Other);
     EmulatorState(false);
 
     const SConfig& param = SConfig::GetInstance();
@@ -136,25 +134,6 @@ void EmulatorState(bool running)
     s_gpu_mainloop.Wakeup();
   else
     s_gpu_mainloop.AllowSleep();
-}
-
-void SyncGPU(SyncGPUReason reason)
-{
-  CommandProcessor::Run();
-
-  if (reason == SyncGPUReason::Wraparound)
-  {
-    // add some ticks for wraparound
-    s_sync_ticks.fetch_add(GPU_TIME_SLOT_SIZE);
-  }
-  else if (reason == SyncGPUReason::Idle || reason == SyncGPUReason::CPRegisterAccess)
-  {
-    // For idle skip, or register reads, we want to ensure the GPU is completely finished.
-    // The distance is always greater than the cycles, so this'll do.
-    s_sync_ticks.fetch_add(s_video_buffer_size.load());
-  }
-
-  FlushGpu();
 }
 
 void PushFifoAuxBuffer(const void* ptr, size_t size)
@@ -215,7 +194,7 @@ void ReadDataFromFifo(u32 readPtr, size_t len)
 
 void ResetVideoBuffer()
 {
-  FlushGpu();
+  WaitForGpu(true);
 
   std::lock_guard<std::mutex> guard(s_video_buffer_lock);
   s_video_buffer_read_ptr = s_video_buffer;
@@ -307,10 +286,18 @@ void RunGpuLoop()
   AsyncRequests::GetInstance()->SetPassthrough(true);
 }
 
-void FlushGpu()
+void WaitForGpu(bool idle)
 {
-  if (s_video_buffer_size.load() == 0)
+  u32 buffer_size = s_video_buffer_size.load();
+  if (buffer_size == 0)
     return;
+
+  if (idle)
+  {
+    // For idle skip, we want to ensure the GPU is completely finished.
+    // The distance is always greater than the cycles, so this'll do.
+    s_sync_ticks.fetch_add(buffer_size);
+  }
 
   if (SConfig::GetInstance().bCPUThread)
   {
