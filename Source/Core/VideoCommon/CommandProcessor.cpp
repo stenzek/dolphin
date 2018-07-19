@@ -320,30 +320,34 @@ static bool CanRun()
 
 void Run()
 {
+  // TODO: Hi watermark interrupts without breakpoints are currently broken. The interrupt will be
+  // set, but then immediately cleared.
   UpdateInterrupts();
   if (!CanRun())
     return;
   do
   {
-    // Work out the copy size. We can copy up until the next interrupt, or breakpoint.
-    u32 copy_size =
-        std::min(std::min(fifo.CPReadWriteDistance, fifo.CPEnd - fifo.CPReadPointer), FIFO_SIZE);
-    if (fifo.CPReadWriteDistance < fifo.CPHiWatermark)
-      copy_size = std::min(copy_size, fifo.CPHiWatermark - fifo.CPReadWriteDistance);
-    if (fifo.CPReadWriteDistance > fifo.CPLoWatermark)
-      copy_size = std::min(copy_size, fifo.CPReadWriteDistance - fifo.CPLoWatermark);
-    if (fifo.bFF_BPEnable && fifo.CPReadPointer < fifo.CPBreakpoint)
-      copy_size = std::min(copy_size, fifo.CPBreakpoint - fifo.CPReadPointer);
-    if (fifo.CPReadPointer == fifo.CPEnd)
+    // Work out the copy size. We can copy up until the next breakpoint, or the FIFO wraps around.
+    u32 copy_size;
+    if (fifo.CPReadPointer != fifo.CPEnd)
+    {
+      copy_size = std::min(fifo.CPReadWriteDistance, fifo.CPEnd - fifo.CPReadPointer);
+      if (fifo.bFF_BPEnable && fifo.CPReadPointer < fifo.CPBreakpoint)
+        copy_size = std::min(copy_size, fifo.CPBreakpoint - fifo.CPReadPointer);
+      copy_size = std::min(copy_size, FIFO_SIZE);
+    }
+    else
+    {
+      // libogc says "Due to the mechanics of flushing the write-gather pipe, the FIFO memory area
+      // should be at least 32 bytes larger than the maximum expected amount of data stored". Hence
+      // why we do this check after the read. Also see GPFifo.cpp.
       copy_size = GATHER_PIPE_SIZE;
+    }
 
     // Ensure copy_size is aligned to 32 bytes. It should be...
-    copy_size = (copy_size + 31u) & ~31u;
+    ASSERT((copy_size % 32) == 0);
     Fifo::ReadDataFromFifo(fifo.CPReadPointer, copy_size);
 
-    // libogc says "Due to the mechanics of flushing the write-gather pipe, the FIFO memory area
-    // should be at least 32 bytes larger than the maximum expected amount of data stored". Hence
-    // why we do this check after the read. Also see GPFifo.cpp.
     if (fifo.CPReadPointer == fifo.CPEnd)
       fifo.CPReadPointer = fifo.CPBase;
     else
