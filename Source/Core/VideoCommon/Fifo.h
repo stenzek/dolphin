@@ -154,35 +154,22 @@ union UCPClearReg
 };
 
 void Init();
+void PauseAndLock(bool doLock, bool unpauseOnUnlock);
+void EmulatorState(bool running);
 void Shutdown();
 void Prepare();  // Must be called from the CPU thread.
 void DoState(PointerWrap& f);
 
 void RegisterMMIO(MMIO::Mapping* mmio, u32 base);
-
 void GatherPipeBursted();
-void UpdateInterrupts();
-void Run();
 
 // Flushes any pending bytes in the FIFO to the GPU.
 // If idle is set, the remaining ticks will be ignored, and all commands will be completed.
 void Flush(bool idle);
 
-void PauseAndLock(bool doLock, bool unpauseOnUnlock);
-void ReadDataFromFifo(u32 readPtr, size_t len);
-
-void SetCpClearRegister();
-void SetCpControlRegister();
-void SetCpStatusRegister();
-
-void HandleUnknownOpcode(u8 cmd_byte, void* buffer);
-
-void WakeGpu();
-void GpuMaySleep();
 void RunGpuLoop();
 void ExitGpuLoop();
-void EmulatorState(bool running);
-void ResetVideoBuffer();
-void WaitForGpu(bool idle);
+void WakeGpuThread();
 
+void HandleUnknownOpcode(u8 cmd_byte, void* buffer);
 }  // namespace Fifo

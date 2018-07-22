@@ -64,7 +64,6 @@ IPC_HLE_PERIOD: For the Wii Remote this is the call schedule:
 #include "Core/IOS/IOS.h"
 #include "Core/PatchEngine.h"
 #include "Core/PowerPC/PowerPC.h"
-#include "VideoCommon/Fifo.h"
 
 namespace SystemTimers
 {
@@ -197,9 +196,6 @@ static void PatchEngineCallback(u64 userdata, s64 cycles_late)
 
 static void ThrottleCallback(u64 last_time, s64 cyclesLate)
 {
-  // Allow the GPU thread to sleep. Setting this flag here limits the wakeups to 1 kHz.
-  Fifo::GpuMaySleep();
-
   u32 time = Common::Timer::GetTimeMs();
 
   int diff = (u32)last_time - time;
