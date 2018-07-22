@@ -16,12 +16,7 @@ void Shutdown();
 void Prepare();  // Must be called from the CPU thread.
 void DoState(PointerWrap& f);
 void PauseAndLock(bool doLock, bool unpauseOnUnlock);
-void UpdateWantDeterminism(bool want);
-bool UseDeterministicGPUThread();
 void ReadDataFromFifo(u32 readPtr, size_t len);
-
-void PushFifoAuxBuffer(const void* ptr, size_t size);
-void* PopFifoAuxBuffer(size_t size);
 
 void WakeGpu();
 void GpuMaySleep();

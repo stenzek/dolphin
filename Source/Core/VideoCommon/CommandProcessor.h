@@ -170,6 +170,6 @@ void SetCpClearRegister();
 void SetCpControlRegister();
 void SetCpStatusRegister();
 
-void HandleUnknownOpcode(u8 cmd_byte, void* buffer, bool preprocess);
+void HandleUnknownOpcode(u8 cmd_byte, void* buffer);
 
 }  // namespace CommandProcessor

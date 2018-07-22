@@ -38,13 +38,7 @@ static bool s_bFifoErrorSeen = false;
 
 static u32 InterpretDisplayList(u32 address, u32 size)
 {
-  u8* startAddress;
-
-  if (Fifo::UseDeterministicGPUThread())
-    startAddress = (u8*)Fifo::PopFifoAuxBuffer(size);
-  else
-    startAddress = Memory::GetPointer(address);
-
+  u8* startAddress = Memory::GetPointer(address);
   u32 cycles = 0;
 
   // Avoid the crash if Memory::GetPointer failed ..
@@ -63,24 +57,11 @@ static u32 InterpretDisplayList(u32 address, u32 size)
   return cycles;
 }
 
-static void InterpretDisplayListPreprocess(u32 address, u32 size)
-{
-  u8* startAddress = Memory::GetPointer(address);
-
-  Fifo::PushFifoAuxBuffer(startAddress, size);
-
-  if (startAddress != nullptr)
-  {
-    Run<true>(DataReader(startAddress, startAddress + size), nullptr, true);
-  }
-}
-
 void Init()
 {
   s_bFifoErrorSeen = false;
 }
 
-template <bool is_preprocess>
 u8* Run(DataReader src, u32* cycles, bool in_display_list)
 {
   u32 totalCycles = 0;
@@ -112,9 +93,8 @@ u8* Run(DataReader src, u32* cycles, bool in_display_list)
       totalCycles += 12;
       u8 sub_cmd = src.Read<u8>();
       u32 value = src.Read<u32>();
-      LoadCPReg(sub_cmd, value, is_preprocess);
-      if (!is_preprocess)
-        INCSTAT(stats.thisFrame.numCPLoads);
+      LoadCPReg(sub_cmd, value);
+      INCSTAT(stats.thisFrame.numCPLoads);
     }
     break;
 
@@ -127,13 +107,11 @@ u8* Run(DataReader src, u32* cycles, bool in_display_list)
       if (src.size() < transfer_size * sizeof(u32))
         goto end;
       totalCycles += 18 + 6 * transfer_size;
-      if (!is_preprocess)
-      {
-        u32 xf_address = Cmd2 & 0xFFFF;
-        LoadXFReg(transfer_size, xf_address, src);
 
-        INCSTAT(stats.thisFrame.numXFLoads);
-      }
+      u32 xf_address = Cmd2 & 0xFFFF;
+      LoadXFReg(transfer_size, xf_address, src);
+      INCSTAT(stats.thisFrame.numXFLoads);
+
       src.Skip<u32>(transfer_size);
     }
     break;
@@ -154,10 +132,7 @@ u8* Run(DataReader src, u32* cycles, bool in_display_list)
       if (src.size() < 4)
         goto end;
       totalCycles += 6;
-      if (is_preprocess)
-        PreprocessIndexedXF(src.Read<u32>(), refarray);
-      else
-        LoadIndexedXF(src.Read<u32>(), refarray);
+      LoadIndexedXF(src.Read<u32>(), refarray);
       break;
 
     case GX_CMD_CALL_DL:
@@ -174,10 +149,7 @@ u8* Run(DataReader src, u32* cycles, bool in_display_list)
       }
       else
       {
-        if (is_preprocess)
-          InterpretDisplayListPreprocess(address, count);
-        else
-          totalCycles += 6 + InterpretDisplayList(address, count);
+        totalCycles += 6 + InterpretDisplayList(address, count);
       }
     }
     break;
@@ -201,15 +173,8 @@ u8* Run(DataReader src, u32* cycles, bool in_display_list)
           goto end;
         totalCycles += 12;
         u32 bp_cmd = src.Read<u32>();
-        if (is_preprocess)
-        {
-          LoadBPRegPreprocess(bp_cmd);
-        }
-        else
-        {
-          LoadBPReg(bp_cmd);
-          INCSTAT(stats.thisFrame.numBPLoads);
-        }
+        LoadBPReg(bp_cmd);
+        INCSTAT(stats.thisFrame.numBPLoads);
       }
       break;
 
@@ -223,7 +188,7 @@ u8* Run(DataReader src, u32* cycles, bool in_display_list)
         u16 num_vertices = src.Read<u16>();
         int bytes = VertexLoaderManager::RunVertices(
             cmd_byte & GX_VAT_MASK,  // Vertex loader index (0 - 7)
-            (cmd_byte & GX_PRIMITIVE_MASK) >> GX_PRIMITIVE_SHIFT, num_vertices, src, is_preprocess);
+            (cmd_byte & GX_PRIMITIVE_MASK) >> GX_PRIMITIVE_SHIFT, num_vertices, src);
 
         if (bytes < 0)
           goto end;
@@ -236,9 +201,8 @@ u8* Run(DataReader src, u32* cycles, bool in_display_list)
       else
       {
         if (!s_bFifoErrorSeen)
-          CommandProcessor::HandleUnknownOpcode(cmd_byte, opcodeStart, is_preprocess);
-        ERROR_LOG(VIDEO, "FIFO: Unknown Opcode(0x%02x @ %p, preprocessing = %s)", cmd_byte,
-                  opcodeStart, is_preprocess ? "yes" : "no");
+          CommandProcessor::HandleUnknownOpcode(cmd_byte, opcodeStart);
+        ERROR_LOG(VIDEO, "FIFO: Unknown Opcode(0x%02x @ %p)", cmd_byte, opcodeStart);
         s_bFifoErrorSeen = true;
         totalCycles += 1;
       }
@@ -246,10 +210,9 @@ u8* Run(DataReader src, u32* cycles, bool in_display_list)
     }
 
     // Display lists get added directly into the FIFO stream
-    if (!is_preprocess && g_bRecordFifoData && cmd_byte != GX_CMD_CALL_DL)
+    if (g_bRecordFifoData && cmd_byte != GX_CMD_CALL_DL)
     {
-      u8* opcodeEnd;
-      opcodeEnd = src.GetPointer();
+      u8* opcodeEnd = src.GetPointer();
       FifoRecorder::GetInstance().WriteGPCommand(opcodeStart, u32(opcodeEnd - opcodeStart));
     }
   }
@@ -261,8 +224,5 @@ end:
   }
   return opcodeStart;
 }
-
-template u8* Run<true>(DataReader src, u32* cycles, bool in_display_list);
-template u8* Run<false>(DataReader src, u32* cycles, bool in_display_list);
 
 }  // namespace OpcodeDecoder

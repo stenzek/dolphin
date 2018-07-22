@@ -28,16 +28,6 @@
 
 #include "UICommon/GameFile.h"
 
-constexpr int DETERMINISM_NOT_SET_INDEX = 0;
-constexpr int DETERMINISM_AUTO_INDEX = 1;
-constexpr int DETERMINISM_NONE_INDEX = 2;
-constexpr int DETERMINISM_FAKE_COMPLETION_INDEX = 3;
-
-constexpr const char* DETERMINISM_NOT_SET_STRING = "";
-constexpr const char* DETERMINISM_AUTO_STRING = "auto";
-constexpr const char* DETERMINISM_NONE_STRING = "none";
-constexpr const char* DETERMINISM_FAKE_COMPLETION_STRING = "fake-completion";
-
 GameConfigWidget::GameConfigWidget(const UICommon::GameFile& game) : m_game(game)
 {
   m_game_id = m_game.GetGameID();
@@ -66,7 +56,6 @@ void GameConfigWidget::CreateWidgets()
   m_sync_gpu = new QCheckBox(tr("Synchronize GPU thread"));
   m_enable_fast_disc = new QCheckBox(tr("Speed up Disc Transfer Rate"));
   m_use_dsp_hle = new QCheckBox(tr("DSP HLE Emulation (fast)"));
-  m_deterministic_dual_core = new QComboBox;
 
   for (const auto& item : {tr("Not Set"), tr("auto"), tr("none"), tr("fake-completion")})
     m_deterministic_dual_core->addItem(item);
@@ -87,8 +76,6 @@ void GameConfigWidget::CreateWidgets()
   core_layout->addWidget(m_sync_gpu, 3, 0);
   core_layout->addWidget(m_enable_fast_disc, 4, 0);
   core_layout->addWidget(m_use_dsp_hle, 5, 0);
-  core_layout->addWidget(new QLabel(tr("Deterministic dual core:")), 6, 0);
-  core_layout->addWidget(m_deterministic_dual_core, 6, 1);
 
   // Stereoscopy
   auto* stereoscopy_box = new QGroupBox(tr("Stereoscopy"));
@@ -159,9 +146,6 @@ void GameConfigWidget::ConnectWidgets()
                          m_enable_fast_disc, m_use_dsp_hle, m_use_monoscopic_shadows})
     connect(box, &QCheckBox::stateChanged, this, &GameConfigWidget::SaveSettings);
 
-  connect(m_deterministic_dual_core,
-          static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged), this,
-          &GameConfigWidget::SaveSettings);
   connect(m_depth_slider, static_cast<void (QSlider::*)(int)>(&QSlider::valueChanged), this,
           &GameConfigWidget::SaveSettings);
   connect(m_convergence_spin, static_cast<void (QSpinBox::*)(int)>(&QSpinBox::valueChanged), this,
@@ -231,28 +215,6 @@ void GameConfigWidget::LoadSettings()
   LoadCheckBox(m_enable_fast_disc, "Core", "FastDiscSpeed");
   LoadCheckBox(m_use_dsp_hle, "Core", "DSPHLE");
 
-  std::string determinism_mode;
-
-  int determinism_index = DETERMINISM_NOT_SET_INDEX;
-
-  m_gameini_default.GetIfExists("Core", "GPUDeterminismMode", &determinism_mode);
-  m_gameini_local.GetIfExists("Core", "GPUDeterminismMode", &determinism_mode);
-
-  if (determinism_mode == DETERMINISM_AUTO_STRING)
-  {
-    determinism_index = DETERMINISM_AUTO_INDEX;
-  }
-  else if (determinism_mode == DETERMINISM_NONE_STRING)
-  {
-    determinism_index = DETERMINISM_NONE_INDEX;
-  }
-  else if (determinism_mode == DETERMINISM_FAKE_COMPLETION_STRING)
-  {
-    determinism_index = DETERMINISM_FAKE_COMPLETION_INDEX;
-  }
-
-  m_deterministic_dual_core->setCurrentIndex(determinism_index);
-
   // Stereoscopy
   int depth_percentage = 100;
 
@@ -280,37 +242,6 @@ void GameConfigWidget::SaveSettings()
   SaveCheckBox(m_sync_gpu, "Core", "SyncGPU");
   SaveCheckBox(m_enable_fast_disc, "Core", "FastDiscSpeed");
   SaveCheckBox(m_use_dsp_hle, "Core", "DSPHLE");
-
-  int determinism_num = m_deterministic_dual_core->currentIndex();
-
-  std::string determinism_mode = DETERMINISM_NOT_SET_STRING;
-
-  switch (determinism_num)
-  {
-  case DETERMINISM_AUTO_INDEX:
-    determinism_mode = DETERMINISM_AUTO_STRING;
-    break;
-  case DETERMINISM_NONE_INDEX:
-    determinism_mode = DETERMINISM_NONE_STRING;
-    break;
-  case DETERMINISM_FAKE_COMPLETION_INDEX:
-    determinism_mode = DETERMINISM_FAKE_COMPLETION_STRING;
-    break;
-  }
-
-  if (determinism_mode != DETERMINISM_NOT_SET_STRING)
-  {
-    std::string default_mode = DETERMINISM_NOT_SET_STRING;
-    if (!(m_gameini_default.GetIfExists("Core", "GPUDeterminismMode", &default_mode) &&
-          default_mode == determinism_mode))
-    {
-      m_gameini_local.GetOrCreateSection("Core")->Set("GPUDeterminismMode", determinism_mode);
-    }
-  }
-  else
-  {
-    m_gameini_local.DeleteKey("Core", "GPUDeterminismMode");
-  }
 
   // Stereoscopy
   int depth_percentage = m_depth_slider->value();

@@ -262,16 +262,9 @@ void LoadIndexedXF(u32 val, int refarray)
   // load stuff from array to address in xf mem
 
   u32* currData = (u32*)(&xfmem) + address;
-  u32* newData;
-  if (Fifo::UseDeterministicGPUThread())
-  {
-    newData = (u32*)Fifo::PopFifoAuxBuffer(size * sizeof(u32));
-  }
-  else
-  {
-    newData = (u32*)Memory::GetPointer(g_main_cp_state.array_bases[refarray] +
-                                       g_main_cp_state.array_strides[refarray] * index);
-  }
+  u32* newData = (u32*)Memory::GetPointer(g_main_cp_state.array_bases[refarray] +
+                                          g_main_cp_state.array_strides[refarray] * index);
+
   bool changed = false;
   for (int i = 0; i < size; ++i)
   {
@@ -287,16 +280,4 @@ void LoadIndexedXF(u32 val, int refarray)
     for (int i = 0; i < size; ++i)
       currData[i] = Common::swap32(newData[i]);
   }
-}
-
-void PreprocessIndexedXF(u32 val, int refarray)
-{
-  const u32 index = val >> 16;
-  const u32 size = ((val >> 12) & 0xF) + 1;
-
-  const u8* new_data = Memory::GetPointer(g_preprocess_cp_state.array_bases[refarray] +
-                                          g_preprocess_cp_state.array_strides[refarray] * index);
-
-  const size_t buf_size = size * sizeof(u32);
-  Fifo::PushFifoAuxBuffer(new_data, buf_size);
 }

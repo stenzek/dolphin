@@ -271,7 +271,6 @@ void VideoBackendBase::CheckInvalidState()
 void VideoBackendBase::InitializeShared()
 {
   memset(&g_main_cp_state, 0, sizeof(g_main_cp_state));
-  memset(&g_preprocess_cp_state, 0, sizeof(g_preprocess_cp_state));
   memset(texMem, 0, TMEM_SIZE);
 
   // Do our OSD callbacks

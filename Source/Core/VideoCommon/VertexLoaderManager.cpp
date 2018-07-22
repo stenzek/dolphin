@@ -49,8 +49,6 @@ void Init()
   MarkAllDirty();
   for (auto& map_entry : g_main_cp_state.vertex_loaders)
     map_entry = nullptr;
-  for (auto& map_entry : g_preprocess_cp_state.vertex_loaders)
-    map_entry = nullptr;
   SETSTAT(stats.numVertexLoaders, 0);
 }
 
@@ -123,7 +121,6 @@ std::string VertexLoadersToString()
 void MarkAllDirty()
 {
   g_main_cp_state.attr_dirty = BitSet32::AllTrue(8);
-  g_preprocess_cp_state.attr_dirty = BitSet32::AllTrue(8);
 }
 
 NativeVertexFormat* GetOrCreateMatchingFormat(const PortableVertexDeclaration& decl)
@@ -195,72 +192,59 @@ NativeVertexFormat* GetUberVertexFormat(const PortableVertexDeclaration& decl)
   return GetOrCreateMatchingFormat(new_decl);
 }
 
-static VertexLoaderBase* RefreshLoader(int vtx_attr_group, bool preprocess = false)
+static VertexLoaderBase* RefreshLoader(int vtx_attr_group)
 {
-  CPState* state = preprocess ? &g_preprocess_cp_state : &g_main_cp_state;
-  state->last_id = vtx_attr_group;
+  g_main_cp_state.last_id = vtx_attr_group;
 
   VertexLoaderBase* loader;
-  if (state->attr_dirty[vtx_attr_group])
+  if (g_main_cp_state.attr_dirty[vtx_attr_group])
   {
-    // We are not allowed to create a native vertex format on preprocessing as this is on the wrong
-    // thread
-    bool check_for_native_format = !preprocess;
-
-    VertexLoaderUID uid(state->vtx_desc, state->vtx_attr[vtx_attr_group]);
+    VertexLoaderUID uid(g_main_cp_state.vtx_desc, g_main_cp_state.vtx_attr[vtx_attr_group]);
     std::lock_guard<std::mutex> lk(s_vertex_loader_map_lock);
     VertexLoaderMap::iterator iter = s_vertex_loader_map.find(uid);
     if (iter != s_vertex_loader_map.end())
     {
       loader = iter->second.get();
-      check_for_native_format &= !loader->m_native_vertex_format;
     }
     else
     {
-      s_vertex_loader_map[uid] =
-          VertexLoaderBase::CreateVertexLoader(state->vtx_desc, state->vtx_attr[vtx_attr_group]);
+      s_vertex_loader_map[uid] = VertexLoaderBase::CreateVertexLoader(
+          g_main_cp_state.vtx_desc, g_main_cp_state.vtx_attr[vtx_attr_group]);
       loader = s_vertex_loader_map[uid].get();
       INCSTAT(stats.numVertexLoaders);
-    }
-    if (check_for_native_format)
-    {
+
       // search for a cached native vertex format
       const PortableVertexDeclaration& format = loader->m_native_vtx_decl;
       std::unique_ptr<NativeVertexFormat>& native = s_native_vertex_map[format];
       if (!native)
-      {
         native = g_vertex_manager->CreateNativeVertexFormat(format);
-      }
+
       loader->m_native_vertex_format = native.get();
     }
-    state->vertex_loaders[vtx_attr_group] = loader;
-    state->attr_dirty[vtx_attr_group] = false;
+    g_main_cp_state.vertex_loaders[vtx_attr_group] = loader;
+    g_main_cp_state.attr_dirty[vtx_attr_group] = false;
   }
   else
   {
-    loader = state->vertex_loaders[vtx_attr_group];
+    loader = g_main_cp_state.vertex_loaders[vtx_attr_group];
   }
 
   // Lookup pointers for any vertex arrays.
-  if (!preprocess)
-    UpdateVertexArrayPointers();
+  UpdateVertexArrayPointers();
 
   return loader;
 }
 
-int RunVertices(int vtx_attr_group, int primitive, int count, DataReader src, bool is_preprocess)
+int RunVertices(int vtx_attr_group, int primitive, int count, DataReader src)
 {
   if (!count)
     return 0;
 
-  VertexLoaderBase* loader = RefreshLoader(vtx_attr_group, is_preprocess);
+  VertexLoaderBase* loader = RefreshLoader(vtx_attr_group);
 
   int size = count * loader->m_VertexSize;
   if ((int)src.size() < size)
     return -1;
-
-  if (is_preprocess)
-    return size;
 
   // If the native vertex format changed, force a flush.
   if (loader->m_native_vertex_format != s_current_vtx_fmt ||
@@ -298,62 +282,58 @@ NativeVertexFormat* GetCurrentVertexFormat()
 
 }  // namespace
 
-void LoadCPReg(u32 sub_cmd, u32 value, bool is_preprocess)
+void LoadCPReg(u32 sub_cmd, u32 value)
 {
-  bool update_global_state = !is_preprocess;
-  CPState* state = is_preprocess ? &g_preprocess_cp_state : &g_main_cp_state;
   switch (sub_cmd & 0xF0)
   {
   case 0x30:
-    if (update_global_state)
-      VertexShaderManager::SetTexMatrixChangedA(value);
+    VertexShaderManager::SetTexMatrixChangedA(value);
     break;
 
   case 0x40:
-    if (update_global_state)
-      VertexShaderManager::SetTexMatrixChangedB(value);
+    VertexShaderManager::SetTexMatrixChangedB(value);
     break;
 
   case 0x50:
-    state->vtx_desc.Hex &= ~0x1FFFF;  // keep the Upper bits
-    state->vtx_desc.Hex |= value;
-    state->attr_dirty = BitSet32::AllTrue(8);
-    state->bases_dirty = true;
+    g_main_cp_state.vtx_desc.Hex &= ~0x1FFFF;  // keep the Upper bits
+    g_main_cp_state.vtx_desc.Hex |= value;
+    g_main_cp_state.attr_dirty = BitSet32::AllTrue(8);
+    g_main_cp_state.bases_dirty = true;
     break;
 
   case 0x60:
-    state->vtx_desc.Hex &= 0x1FFFF;  // keep the lower 17Bits
-    state->vtx_desc.Hex |= (u64)value << 17;
-    state->attr_dirty = BitSet32::AllTrue(8);
-    state->bases_dirty = true;
+    g_main_cp_state.vtx_desc.Hex &= 0x1FFFF;  // keep the lower 17Bits
+    g_main_cp_state.vtx_desc.Hex |= (u64)value << 17;
+    g_main_cp_state.attr_dirty = BitSet32::AllTrue(8);
+    g_main_cp_state.bases_dirty = true;
     break;
 
   case 0x70:
     ASSERT((sub_cmd & 0x0F) < 8);
-    state->vtx_attr[sub_cmd & 7].g0.Hex = value;
-    state->attr_dirty[sub_cmd & 7] = true;
+    g_main_cp_state.vtx_attr[sub_cmd & 7].g0.Hex = value;
+    g_main_cp_state.attr_dirty[sub_cmd & 7] = true;
     break;
 
   case 0x80:
     ASSERT((sub_cmd & 0x0F) < 8);
-    state->vtx_attr[sub_cmd & 7].g1.Hex = value;
-    state->attr_dirty[sub_cmd & 7] = true;
+    g_main_cp_state.vtx_attr[sub_cmd & 7].g1.Hex = value;
+    g_main_cp_state.attr_dirty[sub_cmd & 7] = true;
     break;
 
   case 0x90:
     ASSERT((sub_cmd & 0x0F) < 8);
-    state->vtx_attr[sub_cmd & 7].g2.Hex = value;
-    state->attr_dirty[sub_cmd & 7] = true;
+    g_main_cp_state.vtx_attr[sub_cmd & 7].g2.Hex = value;
+    g_main_cp_state.attr_dirty[sub_cmd & 7] = true;
     break;
 
   // Pointers to vertex arrays in GC RAM
   case 0xA0:
-    state->array_bases[sub_cmd & 0xF] = value;
-    state->bases_dirty = true;
+    g_main_cp_state.array_bases[sub_cmd & 0xF] = value;
+    g_main_cp_state.bases_dirty = true;
     break;
 
   case 0xB0:
-    state->array_strides[sub_cmd & 0xF] = value & 0xFF;
+    g_main_cp_state.array_strides[sub_cmd & 0xF] = value & 0xFF;
     break;
   }
 }

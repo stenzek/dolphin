@@ -94,7 +94,6 @@ private:
   bool m_OCEnable;
   std::string strBackend;
   std::string sBackend;
-  std::string m_strGPUDeterminismMode;
   std::array<int, MAX_BBMOTES> iWiimoteSource;
   std::array<SerialInterface::SIDevices, SerialInterface::MAX_SI_CHANNELS> Pads;
   std::array<ExpansionInterface::TEXIDevices, ExpansionInterface::MAX_EXI_CHANNELS> m_EXIDevice;
@@ -125,7 +124,6 @@ void ConfigCache::SaveConfig(const SConfig& config)
   m_EmulationSpeed = config.m_EmulationSpeed;
   strBackend = config.m_strVideoBackend;
   sBackend = config.sBackend;
-  m_strGPUDeterminismMode = config.m_strGPUDeterminismMode;
   m_OCFactor = config.m_OCFactor;
   m_OCEnable = config.m_OCEnable;
 
@@ -200,26 +198,12 @@ void ConfigCache::RestoreConfig(SConfig* config)
 
   config->m_strVideoBackend = strBackend;
   config->sBackend = sBackend;
-  config->m_strGPUDeterminismMode = m_strGPUDeterminismMode;
   config->m_OCFactor = m_OCFactor;
   config->m_OCEnable = m_OCEnable;
   VideoBackendBase::ActivateBackend(config->m_strVideoBackend);
 }
 
 static ConfigCache config_cache;
-
-static GPUDeterminismMode ParseGPUDeterminismMode(const std::string& mode)
-{
-  if (mode == "auto")
-    return GPUDeterminismMode::Auto;
-  if (mode == "none")
-    return GPUDeterminismMode::Disabled;
-  if (mode == "fake-completion")
-    return GPUDeterminismMode::FakeCompletion;
-
-  NOTICE_LOG(BOOT, "Unknown GPU determinism mode %s", mode.c_str());
-  return GPUDeterminismMode::Auto;
-}
 
 // Boot the ISO or file
 bool BootCore(std::unique_ptr<BootParameters> boot)
@@ -271,8 +255,6 @@ bool BootCore(std::unique_ptr<BootParameters> boot)
     dsp_section->Get("EnableJIT", &StartUp.m_DSPEnableJIT, StartUp.m_DSPEnableJIT);
     dsp_section->Get("Backend", &StartUp.sBackend, StartUp.sBackend);
     VideoBackendBase::ActivateBackend(StartUp.m_strVideoBackend);
-    core_section->Get("GPUDeterminismMode", &StartUp.m_strGPUDeterminismMode,
-                      StartUp.m_strGPUDeterminismMode);
     core_section->Get("Overclock", &StartUp.m_OCFactor, StartUp.m_OCFactor);
     core_section->Get("OverclockEnable", &StartUp.m_OCEnable, StartUp.m_OCEnable);
 
@@ -312,8 +294,6 @@ bool BootCore(std::unique_ptr<BootParameters> boot)
       }
     }
   }
-
-  StartUp.m_GPUDeterminismMode = ParseGPUDeterminismMode(StartUp.m_strGPUDeterminismMode);
 
   // Movie settings
   if (Movie::IsPlayingInput() && Movie::IsConfigSaved())

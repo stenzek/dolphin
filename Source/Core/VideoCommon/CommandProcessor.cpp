@@ -462,10 +462,10 @@ void SetCpClearRegister()
 {
 }
 
-void HandleUnknownOpcode(u8 cmd_byte, void* buffer, bool preprocess)
+void HandleUnknownOpcode(u8 cmd_byte, void* buffer)
 {
   // TODO(Omega): Maybe dump FIFO to file on this error
-  PanicAlertT("GFX FIFO: Unknown Opcode (0x%02x @ %p, %s).\n"
+  PanicAlertT("GFX FIFO: Unknown Opcode (0x%02x @ %p).\n"
               "This means one of the following:\n"
               "* The emulated GPU got desynced, disabling dual core can help\n"
               "* Command stream corrupted by some spurious memory bug\n"
@@ -473,7 +473,7 @@ void HandleUnknownOpcode(u8 cmd_byte, void* buffer, bool preprocess)
               "* Some other sort of bug\n\n"
               "Further errors will be sent to the Video Backend log and\n"
               "Dolphin will now likely crash or hang. Enjoy.",
-              cmd_byte, buffer, preprocess ? "preprocess=true" : "preprocess=false");
+              cmd_byte, buffer);
 
   {
     PanicAlert("Illegal command %02x\n"

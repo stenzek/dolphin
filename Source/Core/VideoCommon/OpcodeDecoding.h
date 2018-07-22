@@ -52,7 +52,6 @@ enum
 
 void Init();
 
-template <bool is_preprocess = false>
 u8* Run(DataReader src, u32* cycles, bool in_display_list);
 
 }  // namespace OpcodeDecoder

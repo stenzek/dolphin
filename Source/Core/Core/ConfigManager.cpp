@@ -250,7 +250,6 @@ void SConfig::SaveCoreSettings(IniFile& ini)
   core->Set("Overclock", m_OCFactor);
   core->Set("OverclockEnable", m_OCEnable);
   core->Set("GFXBackend", m_strVideoBackend);
-  core->Set("GPUDeterminismMode", m_strGPUDeterminismMode);
   core->Set("PerfMapDir", m_perfDir);
   core->Set("EnableCustomRTC", bEnableCustomRTC);
   core->Set("CustomRTCValue", m_customRTCValue);
@@ -537,7 +536,6 @@ void SConfig::LoadCoreSettings(IniFile& ini)
   core->Get("OverclockEnable", &m_OCEnable, false);
   core->Get("FrameSkip", &m_FrameSkip, 0);
   core->Get("GFXBackend", &m_strVideoBackend, "");
-  core->Get("GPUDeterminismMode", &m_strGPUDeterminismMode, "auto");
   core->Get("PerfMapDir", &m_perfDir, "");
   core->Get("EnableCustomRTC", &bEnableCustomRTC, false);
   // Default to seconds between 1.1.1970 and 1.1.2000

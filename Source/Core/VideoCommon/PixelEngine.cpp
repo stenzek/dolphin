@@ -286,9 +286,9 @@ static void RaiseEvent()
 
   s_event_raised = true;
 
-  CoreTiming::FromThread from = CoreTiming::FromThread::NON_CPU;
-  if (!SConfig::GetInstance().bCPUThread || Fifo::UseDeterministicGPUThread())
-    from = CoreTiming::FromThread::CPU;
+  CoreTiming::FromThread from = SConfig::GetInstance().bCPUThread ?
+                                    CoreTiming::FromThread::NON_CPU :
+                                    CoreTiming::FromThread::CPU;
   CoreTiming::ScheduleEvent(0, et_SetTokenFinishOnMainThread, 0, from);
 }
 

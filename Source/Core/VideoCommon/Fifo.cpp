@@ -136,40 +136,6 @@ void EmulatorState(bool running)
     s_gpu_mainloop.AllowSleep();
 }
 
-void PushFifoAuxBuffer(const void* ptr, size_t size)
-{
-#if 0
-  if (size > (size_t)(s_fifo_aux_data + FIFO_SIZE - s_fifo_aux_write_ptr))
-  {
-    SyncGPU(SyncGPUReason::AuxSpace, /* may_move_read_ptr */ false);
-    if (!s_gpu_mainloop.IsRunning())
-    {
-      // GPU is shutting down
-      return;
-    }
-    if (size > (size_t)(s_fifo_aux_data + FIFO_SIZE - s_fifo_aux_write_ptr))
-    {
-      // That will sync us up to the last 32 bytes, so this short region
-      // of FIFO would have to point to a 2MB display list or something.
-      PanicAlert("absurdly large aux buffer");
-      return;
-    }
-  }
-  memcpy(s_fifo_aux_write_ptr, ptr, size);
-  s_fifo_aux_write_ptr += size;
-#endif
-}
-
-void* PopFifoAuxBuffer(size_t size)
-{
-#if 0
-  void* ret = s_fifo_aux_read_ptr;
-  s_fifo_aux_read_ptr += size;
-  return ret;
-#endif
-  return 0;
-}
-
 // Description: RunGpuLoop() sends data through this function.
 void ReadDataFromFifo(u32 readPtr, size_t len)
 {
@@ -329,48 +295,6 @@ void WakeGpu()
       CoreTiming::ScheduleEvent(GPU_TIME_SLOT_SIZE, s_event_sync_gpu, GPU_TIME_SLOT_SIZE);
     }
   }
-}
-
-void UpdateWantDeterminism(bool want)
-{
-  // We are paused (or not running at all yet), so
-  // it should be safe to change this.
-  const SConfig& param = SConfig::GetInstance();
-  bool gpu_thread = false;
-  switch (param.m_GPUDeterminismMode)
-  {
-  case GPUDeterminismMode::Auto:
-    gpu_thread = want;
-    break;
-  case GPUDeterminismMode::Disabled:
-    gpu_thread = false;
-    break;
-  case GPUDeterminismMode::FakeCompletion:
-    gpu_thread = true;
-    break;
-  }
-
-  gpu_thread = gpu_thread && param.bCPUThread;
-
-#if 0
-  if (s_use_deterministic_gpu_thread != gpu_thread)
-  {
-    s_use_deterministic_gpu_thread = gpu_thread;
-    if (gpu_thread)
-    {
-      // These haven't been updated in non-deterministic mode.
-      s_video_buffer_seen_ptr = s_video_buffer_pp_read_ptr = s_video_buffer_read_ptr;
-      CopyPreprocessCPStateFromMain();
-      VertexLoaderManager::MarkAllDirty();
-    }
-  }
-#endif
-}
-
-bool UseDeterministicGPUThread()
-{
-  // return s_use_deterministic_gpu_thread;
-  return false;
 }
 
 static int RunGpuOnCpu(int ticks)
