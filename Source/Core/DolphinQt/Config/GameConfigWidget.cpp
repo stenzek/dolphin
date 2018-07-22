@@ -57,9 +57,6 @@ void GameConfigWidget::CreateWidgets()
   m_enable_fast_disc = new QCheckBox(tr("Speed up Disc Transfer Rate"));
   m_use_dsp_hle = new QCheckBox(tr("DSP HLE Emulation (fast)"));
 
-  for (const auto& item : {tr("Not Set"), tr("auto"), tr("none"), tr("fake-completion")})
-    m_deterministic_dual_core->addItem(item);
-
   m_enable_mmu->setToolTip(tr(
       "Enables the Memory Management Unit, needed for some games. (ON = Compatible, OFF = Fast)"));
 

@@ -31,7 +31,7 @@
 #include "Core/HW/WII_IPC.h"
 #include "Core/PowerPC/JitCommon/JitBase.h"
 #include "Core/PowerPC/PowerPC.h"
-#include "VideoCommon/CommandProcessor.h"
+#include "VideoCommon/Fifo.h"
 #include "VideoCommon/PixelEngine.h"
 
 namespace Memory
@@ -63,7 +63,7 @@ static std::unique_ptr<MMIO::Mapping> InitMMIO()
 {
   auto mmio = std::make_unique<MMIO::Mapping>();
 
-  CommandProcessor::RegisterMMIO(mmio.get(), 0x0C000000);
+  Fifo::RegisterMMIO(mmio.get(), 0x0C000000);
   PixelEngine::RegisterMMIO(mmio.get(), 0x0C001000);
   VideoInterface::RegisterMMIO(mmio.get(), 0x0C002000);
   ProcessorInterface::RegisterMMIO(mmio.get(), 0x0C003000);

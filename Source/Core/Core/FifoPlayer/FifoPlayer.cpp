@@ -25,7 +25,7 @@
 #include "Core/PowerPC/MMU.h"
 #include "Core/PowerPC/PowerPC.h"
 #include "VideoCommon/BPMemory.h"
-#include "VideoCommon/CommandProcessor.h"
+#include "VideoCommon/Fifo.h"
 
 // We need to include TextureDecoder.h for the texMem array.
 // TODO: Move texMem somewhere else so this isn't an issue.
@@ -386,31 +386,31 @@ void FifoPlayer::WriteFifo(const u8* data, u32 start, u32 end)
 
 void FifoPlayer::SetupFifo()
 {
-  WriteCP(CommandProcessor::CTRL_REGISTER, 0);   // disable read, BP, interrupts
-  WriteCP(CommandProcessor::CLEAR_REGISTER, 7);  // clear overflow, underflow, metrics
+  WriteCP(Fifo::CTRL_REGISTER, 0);   // disable read, BP, interrupts
+  WriteCP(Fifo::CLEAR_REGISTER, 7);  // clear overflow, underflow, metrics
 
   const FifoFrameInfo& frame = m_File->GetFrame(m_CurrentFrame);
 
   // Set fifo bounds
-  WriteCP(CommandProcessor::FIFO_BASE_LO, frame.fifoStart);
-  WriteCP(CommandProcessor::FIFO_BASE_HI, frame.fifoStart >> 16);
-  WriteCP(CommandProcessor::FIFO_END_LO, frame.fifoEnd);
-  WriteCP(CommandProcessor::FIFO_END_HI, frame.fifoEnd >> 16);
+  WriteCP(Fifo::FIFO_BASE_LO, frame.fifoStart);
+  WriteCP(Fifo::FIFO_BASE_HI, frame.fifoStart >> 16);
+  WriteCP(Fifo::FIFO_END_LO, frame.fifoEnd);
+  WriteCP(Fifo::FIFO_END_HI, frame.fifoEnd >> 16);
 
   // Set watermarks, high at 75%, low at 0%
   u32 hi_watermark = (frame.fifoEnd - frame.fifoStart) * 3 / 4;
-  WriteCP(CommandProcessor::FIFO_HI_WATERMARK_LO, hi_watermark);
-  WriteCP(CommandProcessor::FIFO_HI_WATERMARK_HI, hi_watermark >> 16);
-  WriteCP(CommandProcessor::FIFO_LO_WATERMARK_LO, 0);
-  WriteCP(CommandProcessor::FIFO_LO_WATERMARK_HI, 0);
+  WriteCP(Fifo::FIFO_HI_WATERMARK_LO, hi_watermark);
+  WriteCP(Fifo::FIFO_HI_WATERMARK_HI, hi_watermark >> 16);
+  WriteCP(Fifo::FIFO_LO_WATERMARK_LO, 0);
+  WriteCP(Fifo::FIFO_LO_WATERMARK_HI, 0);
 
   // Set R/W pointers to fifo start
-  WriteCP(CommandProcessor::FIFO_RW_DISTANCE_LO, 0);
-  WriteCP(CommandProcessor::FIFO_RW_DISTANCE_HI, 0);
-  WriteCP(CommandProcessor::FIFO_WRITE_POINTER_LO, frame.fifoStart);
-  WriteCP(CommandProcessor::FIFO_WRITE_POINTER_HI, frame.fifoStart >> 16);
-  WriteCP(CommandProcessor::FIFO_READ_POINTER_LO, frame.fifoStart);
-  WriteCP(CommandProcessor::FIFO_READ_POINTER_HI, frame.fifoStart >> 16);
+  WriteCP(Fifo::FIFO_RW_DISTANCE_LO, 0);
+  WriteCP(Fifo::FIFO_RW_DISTANCE_HI, 0);
+  WriteCP(Fifo::FIFO_WRITE_POINTER_LO, frame.fifoStart);
+  WriteCP(Fifo::FIFO_WRITE_POINTER_HI, frame.fifoStart >> 16);
+  WriteCP(Fifo::FIFO_READ_POINTER_LO, frame.fifoStart);
+  WriteCP(Fifo::FIFO_READ_POINTER_HI, frame.fifoStart >> 16);
 
   // Set fifo bounds
   WritePI(ProcessorInterface::PI_FIFO_BASE, frame.fifoStart);
@@ -421,7 +421,7 @@ void FifoPlayer::SetupFifo()
   FlushWGP();
   WritePI(ProcessorInterface::PI_FIFO_WPTR, frame.fifoStart);
 
-  WriteCP(CommandProcessor::CTRL_REGISTER, 17);  // enable read & GP link
+  WriteCP(Fifo::CTRL_REGISTER, 17);  // enable read & GP link
 }
 
 void FifoPlayer::LoadMemory()
@@ -561,14 +561,12 @@ bool FifoPlayer::ShouldLoadBP(u8 address)
 
 bool FifoPlayer::IsIdleSet()
 {
-  CommandProcessor::UCPStatusReg status =
-      PowerPC::Read_U16(0xCC000000 | CommandProcessor::STATUS_REGISTER);
+  Fifo::UCPStatusReg status = PowerPC::Read_U16(0xCC000000 | Fifo::STATUS_REGISTER);
   return status.CommandIdle;
 }
 
 bool FifoPlayer::IsHighWatermarkSet()
 {
-  CommandProcessor::UCPStatusReg status =
-      PowerPC::Read_U16(0xCC000000 | CommandProcessor::STATUS_REGISTER);
+  Fifo::UCPStatusReg status = PowerPC::Read_U16(0xCC000000 | Fifo::STATUS_REGISTER);
   return status.OverflowHiWatermark;
 }

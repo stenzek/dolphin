@@ -22,7 +22,6 @@
 #include "Core/HW/Memmap.h"
 #include "VideoCommon/BPMemory.h"
 #include "VideoCommon/CPMemory.h"
-#include "VideoCommon/CommandProcessor.h"
 #include "VideoCommon/DataReader.h"
 #include "VideoCommon/Fifo.h"
 #include "VideoCommon/Statistics.h"
@@ -201,7 +200,7 @@ u8* Run(DataReader src, u32* cycles, bool in_display_list)
       else
       {
         if (!s_bFifoErrorSeen)
-          CommandProcessor::HandleUnknownOpcode(cmd_byte, opcodeStart);
+          Fifo::HandleUnknownOpcode(cmd_byte, opcodeStart);
         ERROR_LOG(VIDEO, "FIFO: Unknown Opcode(0x%02x @ %p)", cmd_byte, opcodeStart);
         s_bFifoErrorSeen = true;
         totalCycles += 1;

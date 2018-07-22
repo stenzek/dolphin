@@ -8,7 +8,6 @@
 #include "VideoCommon/BPMemory.h"
 #include "VideoCommon/BoundingBox.h"
 #include "VideoCommon/CPMemory.h"
-#include "VideoCommon/CommandProcessor.h"
 #include "VideoCommon/Fifo.h"
 #include "VideoCommon/GeometryShaderManager.h"
 #include "VideoCommon/PixelEngine.h"
@@ -39,9 +38,6 @@ void VideoCommon_DoState(PointerWrap& p)
   // FIFO
   Fifo::DoState(p);
   p.DoMarker("Fifo");
-
-  CommandProcessor::DoState(p);
-  p.DoMarker("CommandProcessor");
 
   PixelEngine::DoState(p);
   p.DoMarker("PixelEngine");

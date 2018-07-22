@@ -48,9 +48,9 @@
 #include "VideoCommon/AbstractTexture.h"
 #include "VideoCommon/BPMemory.h"
 #include "VideoCommon/CPMemory.h"
-#include "VideoCommon/CommandProcessor.h"
 #include "VideoCommon/Debugger.h"
 #include "VideoCommon/FPSCounter.h"
+#include "VideoCommon/Fifo.h"
 #include "VideoCommon/FramebufferManagerBase.h"
 #include "VideoCommon/ImageWrite.h"
 #include "VideoCommon/OnScreenDisplay.h"
@@ -616,8 +616,7 @@ void Renderer::CheckFifoRecording()
       RecordVideoMemory();
     }
 
-    FifoRecorder::GetInstance().EndFrame(CommandProcessor::fifo.CPBase,
-                                         CommandProcessor::fifo.CPEnd);
+    FifoRecorder::GetInstance().EndFrame(Fifo::fifo.CPBase, Fifo::fifo.CPEnd);
   }
 }
 

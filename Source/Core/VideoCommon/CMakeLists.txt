@@ -9,7 +9,6 @@ add_library(videocommon
   BPMemory.cpp
   BPStructs.cpp
   CPMemory.cpp
-  CommandProcessor.cpp
   Debugger.cpp
   DriverDetails.cpp
   Fifo.cpp

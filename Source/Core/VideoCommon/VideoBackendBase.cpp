@@ -30,7 +30,6 @@
 #include "VideoCommon/AsyncRequests.h"
 #include "VideoCommon/BPStructs.h"
 #include "VideoCommon/CPMemory.h"
-#include "VideoCommon/CommandProcessor.h"
 #include "VideoCommon/Fifo.h"
 #include "VideoCommon/GeometryShaderManager.h"
 #include "VideoCommon/IndexGenerator.h"
@@ -79,7 +78,7 @@ void VideoBackendBase::Video_BeginField(u32 xfb_addr, u32 fb_width, u32 fb_strid
 {
   if (m_initialized && g_renderer && !g_ActiveConfig.bImmediateXFB)
   {
-    CommandProcessor::Flush(false);
+    Fifo::Flush(false);
 
     AsyncRequests::Event e;
     e.time = ticks;
@@ -134,7 +133,7 @@ u32 VideoBackendBase::Video_GetQueryResult(PerfQueryType type)
     return 0;
   }
 
-  CommandProcessor::Flush(false);
+  Fifo::Flush(false);
 
   AsyncRequests::Event e;
   e.time = 0;
@@ -173,7 +172,7 @@ u16 VideoBackendBase::Video_GetBoundingBox(int index)
     return 0;
   }
 
-  CommandProcessor::Flush(false);
+  Fifo::Flush(false);
 
   AsyncRequests::Event e;
   u16 result;
@@ -282,7 +281,6 @@ void VideoBackendBase::InitializeShared()
   m_invalid = false;
   frameCount = 0;
 
-  CommandProcessor::Init();
   Fifo::Init();
   OpcodeDecoder::Init();
   PixelEngine::Init();

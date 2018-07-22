@@ -46,7 +46,6 @@
     <ClCompile Include="BPFunctions.cpp" />
     <ClCompile Include="BPMemory.cpp" />
     <ClCompile Include="BPStructs.cpp" />
-    <ClCompile Include="CommandProcessor.cpp" />
     <ClCompile Include="CPMemory.cpp" />
     <ClCompile Include="Debugger.cpp" />
     <ClCompile Include="DriverDetails.cpp" />
@@ -111,7 +110,6 @@
     <ClInclude Include="BPFunctions.h" />
     <ClInclude Include="BPMemory.h" />
     <ClInclude Include="BPStructs.h" />
-    <ClInclude Include="CommandProcessor.h" />
     <ClInclude Include="CPMemory.h" />
     <ClInclude Include="DataReader.h" />
     <ClInclude Include="Debugger.h" />
