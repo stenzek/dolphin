@@ -88,12 +88,11 @@ static std::mutex s_video_buffer_lock;
 static std::atomic<s32> s_sync_ticks;
 static std::atomic_bool s_gpu_idle{true};
 static CoreTiming::EventType* s_event_sync_gpu;
-static bool s_syncing_suspended;
+static bool s_gpu_suspended;
 
 // Checking whether we can run, due to breakpoints and R/W distance.
 static bool AtBreakpoint();
 static bool CanReadFromFifo();
-// static bool GpuIsIdle();
 static bool IsSyncingSuspended();
 
 // Raises interrupts based on FIFO state.
@@ -112,7 +111,7 @@ static void SyncForRegisterAccess(bool is_write);
 static u32 CopyToVideoBuffer(u32 maximum_copy_size);
 
 // Updates the SyncGPU event state.
-static void UpdateSyncEvent();
+static void UpdateGPUSuspendState();
 
 // Updating registers with FIFO state.
 static void SetCpClearRegister();
@@ -168,7 +167,7 @@ void DoState(PointerWrap& p)
   {
     // By updating the suspend event here, this may not be completely deterministic when loading
     // save states, as some GPU cycles may get executed earlier in the load, vs when it was saved.
-    UpdateSyncEvent();
+    UpdateGPUSuspendState();
   }
 }
 
@@ -344,7 +343,7 @@ void RegisterMMIO(MMIO::Mapping* mmio, u32 base)
                    SetCpControlRegister();
                    FIFO_DEBUG_LOG("CPRWD: %u, read=%s", fifo.CPReadWriteDistance,
                                   fifo.bFF_GPReadEnable ? "yes" : "no");
-                   UpdateSyncEvent();
+                   UpdateGPUSuspendState();
                  }));
 
   mmio->Register(base | CLEAR_REGISTER, MMIO::DirectRead<u16>(&m_CPClearReg.Hex),
@@ -390,7 +389,7 @@ void RegisterMMIO(MMIO::Mapping* mmio, u32 base)
                  MMIO::ComplexWrite<u16>([](u32, u16 val) {
                    SyncForRegisterAccess(true);
                    WriteHigh(fifo.CPBreakpoint, val);
-                   UpdateSyncEvent();
+                   UpdateGPUSuspendState();
                  }));
 
   mmio->Register(base | FIFO_LO_WATERMARK_LO,
@@ -444,7 +443,7 @@ void RegisterMMIO(MMIO::Mapping* mmio, u32 base)
                      GPFifo::ResetGatherPipe();
 
                    FIFO_DEBUG_LOG("Write RW Distance HI %u", fifo.CPReadWriteDistance);
-                   UpdateSyncEvent();
+                   UpdateGPUSuspendState();
                  }));
   mmio->Register(base | FIFO_READ_POINTER_LO, MMIO::ComplexRead<u16>([](u32) {
                    SyncForRegisterAccess(false);
@@ -463,7 +462,7 @@ void RegisterMMIO(MMIO::Mapping* mmio, u32 base)
                    SyncForRegisterAccess(true);
                    WriteHigh(fifo.CPReadPointer, val);
                    FIFO_DEBUG_LOG("Write Read Pointer HI %08X", fifo.CPReadPointer);
-                   UpdateSyncEvent();
+                   UpdateGPUSuspendState();
                  }));
 
   // Write pointer is updated at GP burst time, so no need to synchronize.
@@ -522,7 +521,7 @@ void GatherPipeBursted()
     }
 
     // Even if we don't have sufficient work now, make sure the GPU is awake (syncing enabled).
-    UpdateSyncEvent();
+    UpdateGPUSuspendState();
   }
 
   if (fifo.CPReadWriteDistance >= (fifo.CPEnd - fifo.CPBase) && !CanReadFromFifo())
@@ -550,17 +549,10 @@ bool CanReadFromFifo()
   return fifo.bFF_GPReadEnable && fifo.CPReadWriteDistance >= GATHER_PIPE_SIZE && !AtBreakpoint();
 }
 
-// bool GpuIsIdle()
-// {
-//   // TODO: Not strictly true, since we can be idle while waiting for the remainder of a command.
-//   // However, this is only used for SC event scheduling, so it's fine for now.
-//   return !CanReadFromFifo() && s_video_buffer_size.load() == 0;
-// }
-
 bool IsSyncingSuspended()
 {
   const auto& param = SConfig::GetInstance();
-  return s_syncing_suspended && (!param.bCPUThread || param.bSyncGPU);
+  return s_gpu_suspended && (!param.bCPUThread || param.bSyncGPU);
 }
 
 void UpdateInterrupts()
@@ -716,7 +708,7 @@ void SyncForRegisterAccess(bool is_write)
   else
     RunGpuSingleCore(is_write);
 
-  UpdateSyncEvent();
+  UpdateGPUSuspendState();
 }
 
 // Description: RunGpuLoop() sends data through this function.
@@ -893,7 +885,7 @@ void Flush(bool idle)
   if (idle)
     s_sync_ticks.store(0);
 
-  UpdateSyncEvent();
+  UpdateGPUSuspendState();
 }
 
 void SetCpStatusRegister()
@@ -990,7 +982,7 @@ static void SyncGPUCallback(u64 ticks, s64 cyclesLate)
     RunGpuSingleCore();
 
     // Cancel the event if the GPU is now idle.
-    next = s_gpu_idle ? -1 : (/*-s_sync_ticks.load() + */ GPU_TIME_SLOT_SIZE);
+    next = s_gpu_idle ? -1 : (-s_sync_ticks.load() + GPU_TIME_SLOT_SIZE);
   }
   else if (SConfig::GetInstance().bSyncGPU)
   {
@@ -1002,8 +994,8 @@ static void SyncGPUCallback(u64 ticks, s64 cyclesLate)
     RunGpuDualCore();
   }
 
-  s_syncing_suspended = next < 0;
-  if (!s_syncing_suspended)
+  s_gpu_suspended = next < 0;
+  if (!s_gpu_suspended)
     CoreTiming::ScheduleEvent(next, s_event_sync_gpu, next);
   else
     FIFO_DEBUG_LOG("Syncing disabled");
@@ -1013,11 +1005,11 @@ static void SyncGPUCallback(u64 ticks, s64 cyclesLate)
 void Prepare()
 {
   s_event_sync_gpu = CoreTiming::RegisterEvent("SyncGPUCallback", SyncGPUCallback);
-  s_syncing_suspended = true;
-  UpdateSyncEvent();
+  s_gpu_suspended = true;
+  UpdateGPUSuspendState();
 }
 
-void UpdateSyncEvent()
+void UpdateGPUSuspendState()
 {
   bool syncing_suspended;
   if (!SConfig::GetInstance().bCPUThread)
@@ -1036,16 +1028,19 @@ void UpdateSyncEvent()
     syncing_suspended = !CanReadFromFifo();
   }
 
-  if (syncing_suspended != s_syncing_suspended)
+  if (syncing_suspended != s_gpu_suspended)
   {
     FIFO_DEBUG_LOG("syncing %s", syncing_suspended ? "disabled" : "enabled");
 
-    if (syncing_suspended)
-      CoreTiming::RemoveEvent(s_event_sync_gpu);
-    else
+    // Double the time time before the first GPU sync executes. This simulates in part the pipelined
+    // nature of the GX, where it takes several cycles from the FIFO memory read to hit the graphics
+    // pipeline.
+    if (!syncing_suspended)
       CoreTiming::ScheduleEvent(GPU_TIME_SLOT_SIZE * 2, s_event_sync_gpu, GPU_TIME_SLOT_SIZE * 2);
+    else
+      CoreTiming::RemoveEvent(s_event_sync_gpu);
 
-    s_syncing_suspended = syncing_suspended;
+    s_gpu_suspended = syncing_suspended;
   }
 }
 
