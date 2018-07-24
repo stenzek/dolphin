@@ -99,9 +99,6 @@ static bool IsSyncingSuspended();
 // Raises interrupts based on FIFO state.
 static void UpdateInterrupts();
 
-// "Wakes" the GPU, by scheduling the sync event.
-static void WakeGpu();
-
 // Reads from the FIFO and processes commands.
 static void RunGpuSingleCore(bool allow_run_ahead = false);
 static void RunGpuDualCore();
@@ -168,7 +165,11 @@ void DoState(PointerWrap& p)
   p.Do(s_gpu_idle);
 
   if (p.GetMode() == PointerWrap::MODE_READ && !s_gpu_idle)
+  {
+    // By updating the suspend event here, this may not be completely deterministic when loading
+    // save states, as some GPU cycles may get executed earlier in the load, vs when it was saved.
     UpdateSyncEvent();
+  }
 }
 
 static inline void WriteLow(volatile u32& _reg, u16 lowbits)
@@ -250,6 +251,11 @@ void Init()
   if (SConfig::GetInstance().bCPUThread)
     s_gpu_mainloop.Prepare();
   s_sync_ticks.store(0);
+
+  INFO_LOG(VIDEO, "FIFO initialized in %s mode",
+           SConfig::GetInstance().bCPUThread ?
+               (SConfig::GetInstance().bSyncGPU ? "Dual Core (SyncGPU)" : "Dual Core") :
+               "Single Core");
 }
 
 void Shutdown()
@@ -338,7 +344,7 @@ void RegisterMMIO(MMIO::Mapping* mmio, u32 base)
                    SetCpControlRegister();
                    FIFO_DEBUG_LOG("CPRWD: %u, read=%s", fifo.CPReadWriteDistance,
                                   fifo.bFF_GPReadEnable ? "yes" : "no");
-                   WakeGpu();
+                   UpdateSyncEvent();
                  }));
 
   mmio->Register(base | CLEAR_REGISTER, MMIO::DirectRead<u16>(&m_CPClearReg.Hex),
@@ -384,7 +390,7 @@ void RegisterMMIO(MMIO::Mapping* mmio, u32 base)
                  MMIO::ComplexWrite<u16>([](u32, u16 val) {
                    SyncForRegisterAccess(true);
                    WriteHigh(fifo.CPBreakpoint, val);
-                   WakeGpu();
+                   UpdateSyncEvent();
                  }));
 
   mmio->Register(base | FIFO_LO_WATERMARK_LO,
@@ -438,7 +444,7 @@ void RegisterMMIO(MMIO::Mapping* mmio, u32 base)
                      GPFifo::ResetGatherPipe();
 
                    FIFO_DEBUG_LOG("Write RW Distance HI %u", fifo.CPReadWriteDistance);
-                   WakeGpu();
+                   UpdateSyncEvent();
                  }));
   mmio->Register(base | FIFO_READ_POINTER_LO, MMIO::ComplexRead<u16>([](u32) {
                    SyncForRegisterAccess(false);
@@ -457,7 +463,7 @@ void RegisterMMIO(MMIO::Mapping* mmio, u32 base)
                    SyncForRegisterAccess(true);
                    WriteHigh(fifo.CPReadPointer, val);
                    FIFO_DEBUG_LOG("Write Read Pointer HI %08X", fifo.CPReadPointer);
-                   WakeGpu();
+                   UpdateSyncEvent();
                  }));
 
   // Write pointer is updated at GP burst time, so no need to synchronize.
@@ -496,14 +502,14 @@ void GatherPipeBursted()
   // Update interrupts. This way we trigger high watermark interrupts as soon as possible.
   UpdateInterrupts();
 
-  // The FIFO can be overflowed by the gatherpipe, if a large number of bytes is written in a single
-  // JIT block. In this case, "borrow" some cycles to execute the GPU now instead of later, reducing
-  // the amount of data in the FIFO. In dual core, we take this even further, kicking the GPU as
-  // soon as there is half a kilobyte of commands. of commands, before kicking the GPU. Kicking on
-  // every GP burst is too slow, and waiting too long introduces latency when we eventually do need
-  // to synchronize with the GPU thread.
   if (CanReadFromFifo())
   {
+    // The FIFO can be overflowed by the gatherpipe, if a large number of bytes is written in a
+    // single JIT block. In this case, "borrow" some cycles to execute the GPU now instead of later,
+    // reducing the amount of data in the FIFO. In dual core, we take this even further, kicking the
+    // GPU as soon as there is half a kilobyte of commands. of commands, before kicking the GPU.
+    // Kicking on every GP burst is too slow, and waiting too long introduces latency when we
+    // eventually do need to synchronize with the GPU thread.
     if (SConfig::GetInstance().bCPUThread)
     {
       if (fifo.CPReadWriteDistance >= FIFO_EXECUTE_THRESHOLD_SIZE)
@@ -511,9 +517,7 @@ void GatherPipeBursted()
     }
     else
     {
-      // const u32 threshold = std::max(u32(GATHER_PIPE_SIZE), (fifo.CPEnd - fifo.CPBase / 2));
-      const u32 threshold = fifo.CPEnd - fifo.CPBase;
-      if (fifo.CPReadWriteDistance >= threshold)
+      if (fifo.CPReadWriteDistance >= fifo.CPEnd - fifo.CPBase)
         RunGpuSingleCore(true);
     }
 
@@ -938,20 +942,6 @@ void GpuMaySleep()
     s_gpu_mainloop.AllowSleep();
 }
 
-void WakeGpu()
-{
-  // This function is called when a control register changes, or the FIFO threshold is exceeded.
-  if (SConfig::GetInstance().bCPUThread)
-  {
-    // For dual-core, we have to read from the FIFO on the CPU thread, and kick the GPU thread.
-    // Otherwise, if a game triggers work by poking the FIFO registers, it will never get read.
-    RunGpuDualCore();
-  }
-
-  // if the sync GPU callback is suspended, wake it up.
-  UpdateSyncEvent();
-}
-
 /* This function checks the emulated CPU - GPU distance and may wake up the GPU,
  * or block the CPU if required. It should be called by the CPU thread regularly.
  * @ticks The gone emulated CPU time.
@@ -961,6 +951,7 @@ static int WaitForGpuThread(int ticks)
 {
   const SConfig& param = SConfig::GetInstance();
 
+  // If we don't read from the FIFO here, we could stall forever if <512 bytes are written.
   RunGpuDualCore();
 
   int old = s_sync_ticks.fetch_add(ticks);
@@ -1005,6 +996,11 @@ static void SyncGPUCallback(u64 ticks, s64 cyclesLate)
   {
     next = WaitForGpuThread(ticks);
   }
+  else
+  {
+    // Pure dualcore. Just run the GPU (read from the FIFO).
+    RunGpuDualCore();
+  }
 
   s_syncing_suspended = next < 0;
   if (!s_syncing_suspended)
@@ -1023,19 +1019,21 @@ void Prepare()
 
 void UpdateSyncEvent()
 {
-  if (SConfig::GetInstance().bCPUThread && !SConfig::GetInstance().bSyncGPU)
-    return;
-
   bool syncing_suspended;
   if (!SConfig::GetInstance().bCPUThread)
   {
     // For single-core, we need the event if there is a non-empty FIFO, or a non-empty video buffer.
     syncing_suspended = !CanReadFromFifo() && s_gpu_idle;
   }
-  else
+  else if (SConfig::GetInstance().bSyncGPU)
   {
     // For SyncGPU, the GPU thread must be busy.
     syncing_suspended = !CanReadFromFifo() && s_gpu_mainloop.IsDone() && s_gpu_idle;
+  }
+  else
+  {
+    // Pure dualcore - we only need to sync (read from the FIFO) when there is data.
+    syncing_suspended = !CanReadFromFifo();
   }
 
   if (syncing_suspended != s_syncing_suspended)
