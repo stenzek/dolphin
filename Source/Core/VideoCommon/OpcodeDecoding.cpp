@@ -208,7 +208,8 @@ u8* Run(DataReader src, u32* cycles, bool in_display_list)
       break;
     }
 
-    // WARN_LOG(VIDEO, "cmd: %02X len %zu", cmd_byte, src.GetPointer() - opcodeStart);
+    // WARN_LOG(VIDEO, "cmd: %02X len %zu %02X %02X %02X %02X ", cmd_byte, src.GetPointer() -
+    // opcodeStart, opcodeStart[1], opcodeStart[2], opcodeStart[3], opcodeStart[4]);
 
     // Display lists get added directly into the FIFO stream
     if (g_bRecordFifoData && cmd_byte != GX_CMD_CALL_DL)

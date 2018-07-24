@@ -34,6 +34,15 @@
 #include "VideoCommon/VertexManagerBase.h"
 #include "VideoCommon/VideoBackendBase.h"
 
+//#define FIFO_DEBUG_LOG(...) do { WARN_LOG(VIDEO, __VA_ARGS__); } while (0)
+
+#ifndef FIFO_DEBUG_LOG
+#define FIFO_DEBUG_LOG(...)                                                                        \
+  do                                                                                               \
+  {                                                                                                \
+  } while (0)
+#endif
+
 namespace Fifo
 {
 // This constant controls the size of the video buffer, which is where the data from the FIFO
@@ -48,7 +57,7 @@ static constexpr u32 FIFO_EXECUTE_THRESHOLD_SIZE = 512;
 
 // This constant controls the interval at which the GPU will be executed in single-core mode, or
 // synchronized with the GPU thread in dual-core mode.
-static constexpr int GPU_TIME_SLOT_SIZE = 1000;
+static constexpr int GPU_TIME_SLOT_SIZE = 1050;
 
 static Common::BlockingLoop s_gpu_mainloop;
 
@@ -77,13 +86,15 @@ static std::atomic<u32> s_video_buffer_size{};
 static std::mutex s_video_buffer_lock;
 
 static std::atomic<s32> s_sync_ticks;
+static std::atomic_bool s_gpu_idle{true};
 static CoreTiming::EventType* s_event_sync_gpu;
 static bool s_syncing_suspended;
 
 // Checking whether we can run, due to breakpoints and R/W distance.
 static bool AtBreakpoint();
 static bool CanReadFromFifo();
-static bool GpuIsIdle();
+// static bool GpuIsIdle();
+static bool IsSyncingSuspended();
 
 // Raises interrupts based on FIFO state.
 static void UpdateInterrupts();
@@ -92,16 +103,18 @@ static void UpdateInterrupts();
 static void WakeGpu();
 
 // Reads from the FIFO and processes commands.
-static void RunGpuSingleCore();
+static void RunGpuSingleCore(bool allow_run_ahead = false);
 static void RunGpuDualCore();
 
-// Gives a ticks boost to the GPU, to execute any commands inbetween JIT blocks/sync events.
-static void SyncForRegisterAccess();
+// Runs any pending GPU cycles, to execute any commands inbetween JIT blocks/sync events.
+// If is_write is set, the GPU will be allowed to "run ahead". This is so that we do not lose
+// commands when in multi-FIFO (non-immediate) mode, when switching buffers.
+static void SyncForRegisterAccess(bool is_write);
 
 // Copies up to maximum_len bytes to the video buffer.
-static void CopyToVideoBuffer(u32 maximum_copy_size);
+static u32 CopyToVideoBuffer(u32 maximum_copy_size);
 
-// Updates the SyncGPU events tate.
+// Updates the SyncGPU event state.
 static void UpdateSyncEvent();
 
 // Updating registers with FIFO state.
@@ -152,6 +165,10 @@ void DoState(PointerWrap& p)
   p.DoPointer(s_video_buffer_read_ptr, s_video_buffer);
   p.Do(s_video_buffer_size);
   p.Do(s_sync_ticks);
+  p.Do(s_gpu_idle);
+
+  if (p.GetMode() == PointerWrap::MODE_READ && !s_gpu_idle)
+    UpdateSyncEvent();
 }
 
 static inline void WriteLow(volatile u32& _reg, u16 lowbits)
@@ -307,7 +324,7 @@ void RegisterMMIO(MMIO::Mapping* mmio, u32 base)
                  MMIO::InvalidWrite<u16>());
 
   mmio->Register(base | STATUS_REGISTER, MMIO::ComplexRead<u16>([](u32) {
-                   SyncForRegisterAccess();
+                   SyncForRegisterAccess(false);
                    SetCpStatusRegister();
                    return m_CPStatusReg.Hex;
                  }),
@@ -315,12 +332,12 @@ void RegisterMMIO(MMIO::Mapping* mmio, u32 base)
 
   mmio->Register(base | CTRL_REGISTER, MMIO::DirectRead<u16>(&m_CPCtrlReg.Hex),
                  MMIO::ComplexWrite<u16>([](u32, u16 val) {
-                   SyncForRegisterAccess();
+                   SyncForRegisterAccess(false);
                    UCPCtrlReg tmp(val);
                    m_CPCtrlReg.Hex = tmp.Hex;
                    SetCpControlRegister();
-                   // WARN_LOG(VIDEO, "CPRWD: %u, read=%s", fifo.CPReadWriteDistance,
-                   // fifo.bFF_GPReadEnable ? "yes" : "no");
+                   FIFO_DEBUG_LOG("CPRWD: %u, read=%s", fifo.CPReadWriteDistance,
+                                  fifo.bFF_GPReadEnable ? "yes" : "no");
                    WakeGpu();
                  }));
 
@@ -335,106 +352,112 @@ void RegisterMMIO(MMIO::Mapping* mmio, u32 base)
 
   mmio->Register(base | FIFO_BASE_LO, MMIO::DirectRead<u16>(MMIO::Utils::LowPart(&fifo.CPBase)),
                  MMIO::ComplexWrite<u16>([](u32, u16 val) {
-                   SyncForRegisterAccess();
+                   SyncForRegisterAccess(true);
                    WriteLow(fifo.CPBase, val & 0xFFE0);
                  }));
 
   mmio->Register(base | FIFO_BASE_HI, MMIO::DirectRead<u16>(MMIO::Utils::HighPart(&fifo.CPBase)),
                  MMIO::ComplexWrite<u16>([](u32, u16 val) {
-                   SyncForRegisterAccess();
+                   SyncForRegisterAccess(true);
                    WriteHigh(fifo.CPBase, val);
                  }));
 
   mmio->Register(base | FIFO_END_LO, MMIO::DirectRead<u16>(MMIO::Utils::LowPart(&fifo.CPEnd)),
                  MMIO::ComplexWrite<u16>([](u32, u16 val) {
-                   SyncForRegisterAccess();
+                   SyncForRegisterAccess(true);
                    WriteLow(fifo.CPEnd, val & 0xFFE0);
                  }));
 
   mmio->Register(base | FIFO_END_HI, MMIO::DirectRead<u16>(MMIO::Utils::HighPart(&fifo.CPEnd)),
                  MMIO::ComplexWrite<u16>([](u32, u16 val) {
-                   SyncForRegisterAccess();
+                   SyncForRegisterAccess(true);
                    WriteHigh(fifo.CPEnd, val);
                  }));
 
   mmio->Register(base | FIFO_BP_LO, MMIO::DirectRead<u16>(MMIO::Utils::LowPart(&fifo.CPBreakpoint)),
                  MMIO::ComplexWrite<u16>([](u32, u16 val) {
-                   SyncForRegisterAccess();
+                   SyncForRegisterAccess(true);
                    WriteLow(fifo.CPBreakpoint, val & 0xffe0);
                  }));
   mmio->Register(base | FIFO_BP_HI,
                  MMIO::DirectRead<u16>(MMIO::Utils::HighPart(&fifo.CPBreakpoint)),
                  MMIO::ComplexWrite<u16>([](u32, u16 val) {
-                   SyncForRegisterAccess();
+                   SyncForRegisterAccess(true);
                    WriteHigh(fifo.CPBreakpoint, val);
+                   WakeGpu();
                  }));
 
   mmio->Register(base | FIFO_LO_WATERMARK_LO,
                  MMIO::DirectRead<u16>(MMIO::Utils::LowPart(&fifo.CPLoWatermark)),
                  MMIO::ComplexWrite<u16>([](u32, u16 val) {
-                   SyncForRegisterAccess();
+                   SyncForRegisterAccess(true);
                    WriteLow(fifo.CPLoWatermark, val);
                  }));
 
   mmio->Register(base | FIFO_LO_WATERMARK_HI,
                  MMIO::DirectRead<u16>(MMIO::Utils::HighPart(&fifo.CPLoWatermark)),
                  MMIO::ComplexWrite<u16>([](u32, u16 val) {
-                   SyncForRegisterAccess();
+                   SyncForRegisterAccess(true);
                    WriteHigh(fifo.CPLoWatermark, val);
                  }));
 
   mmio->Register(base | FIFO_HI_WATERMARK_LO,
                  MMIO::DirectRead<u16>(MMIO::Utils::LowPart(&fifo.CPHiWatermark)),
                  MMIO::ComplexWrite<u16>([](u32, u16 val) {
-                   SyncForRegisterAccess();
+                   SyncForRegisterAccess(true);
                    WriteLow(fifo.CPHiWatermark, val);
                  }));
 
   mmio->Register(base | FIFO_HI_WATERMARK_HI,
                  MMIO::DirectRead<u16>(MMIO::Utils::HighPart(&fifo.CPHiWatermark)),
                  MMIO::ComplexWrite<u16>([](u32, u16 val) {
-                   SyncForRegisterAccess();
+                   SyncForRegisterAccess(true);
                    WriteHigh(fifo.CPHiWatermark, val);
                  }));
 
   // Some MMIOs have different handlers for single core vs. dual core mode.
   mmio->Register(base | FIFO_RW_DISTANCE_LO, MMIO::ComplexRead<u16>([](u32) {
-                   SyncForRegisterAccess();
+                   SyncForRegisterAccess(false);
                    return ReadLow(fifo.CPReadWriteDistance);
                  }),
                  MMIO::ComplexWrite<u16>([](u32, u16 val) {
-                   SyncForRegisterAccess();
+                   SyncForRegisterAccess(true);
                    WriteLow(fifo.CPReadWriteDistance, val & 0xFFE0);
+                   FIFO_DEBUG_LOG("Write RW Distance LOW %u", fifo.CPReadWriteDistance);
                  }));
   mmio->Register(base | FIFO_RW_DISTANCE_HI, MMIO::ComplexRead<u16>([](u32) {
-                   SyncForRegisterAccess();
+                   SyncForRegisterAccess(false);
                    return ReadHigh(fifo.CPReadWriteDistance);
                  }),
                  MMIO::ComplexWrite<u16>([](u32, u16 val) {
-                   SyncForRegisterAccess();
+                   SyncForRegisterAccess(true);
                    WriteHigh(fifo.CPReadWriteDistance, val);
 
-                   // TODO: Is this correct? BE so this should be on the hi not low?
+                   // TODO: Is this correct? libogc would suggest this happens by writing to WPAR.
                    if (fifo.CPReadWriteDistance == 0)
                      GPFifo::ResetGatherPipe();
 
+                   FIFO_DEBUG_LOG("Write RW Distance HI %u", fifo.CPReadWriteDistance);
                    WakeGpu();
                  }));
   mmio->Register(base | FIFO_READ_POINTER_LO, MMIO::ComplexRead<u16>([](u32) {
-                   SyncForRegisterAccess();
+                   SyncForRegisterAccess(false);
                    return ReadLow(fifo.CPReadPointer);
                  }),
                  MMIO::ComplexWrite<u16>([](u32, u16 val) {
-                   SyncForRegisterAccess();
+                   SyncForRegisterAccess(true);
                    WriteLow(fifo.CPReadPointer, val & 0xFFE0);
+                   FIFO_DEBUG_LOG("Write Read Pointer LO %08X", fifo.CPReadPointer);
                  }));
   mmio->Register(base | FIFO_READ_POINTER_HI, MMIO::ComplexRead<u16>([](u32) {
-                   SyncForRegisterAccess();
+                   SyncForRegisterAccess(false);
                    return ReadHigh(fifo.CPReadPointer);
                  }),
                  MMIO::ComplexWrite<u16>([](u32, u16 val) {
-                   SyncForRegisterAccess();
+                   SyncForRegisterAccess(true);
                    WriteHigh(fifo.CPReadPointer, val);
+                   FIFO_DEBUG_LOG("Write Read Pointer HI %08X", fifo.CPReadPointer);
+                   WakeGpu();
                  }));
 
   // Write pointer is updated at GP burst time, so no need to synchronize.
@@ -460,6 +483,9 @@ void GatherPipeBursted()
 
   fifo.CPReadWriteDistance += GATHER_PIPE_SIZE;
 
+  FIFO_DEBUG_LOG("GPBurst: RP=%08X, WP=%08X, RWD=%u, VBS=%u", fifo.CPReadPointer,
+                 fifo.CPWritePointer, fifo.CPReadWriteDistance, s_video_buffer_size.load());
+
   if (m_CPCtrlReg.GPReadEnable && m_CPCtrlReg.GPLinkEnable)
   {
     ProcessorInterface::Fifo_CPUWritePointer = fifo.CPWritePointer;
@@ -481,21 +507,22 @@ void GatherPipeBursted()
     if (SConfig::GetInstance().bCPUThread)
     {
       if (fifo.CPReadWriteDistance >= FIFO_EXECUTE_THRESHOLD_SIZE)
-      {
         RunGpuDualCore();
-        UpdateSyncEvent();
-      }
     }
     else
     {
-      const u32 threshold = std::max(u32(GATHER_PIPE_SIZE), (fifo.CPEnd - fifo.CPBase / 2));
+      // const u32 threshold = std::max(u32(GATHER_PIPE_SIZE), (fifo.CPEnd - fifo.CPBase / 2));
+      const u32 threshold = fifo.CPEnd - fifo.CPBase;
       if (fifo.CPReadWriteDistance >= threshold)
-        RunGpuSingleCore();
-
-      // Even if we don't have sufficient work now, make sure the GPU is awake (syncing enabled).
-      UpdateSyncEvent();
+        RunGpuSingleCore(true);
     }
+
+    // Even if we don't have sufficient work now, make sure the GPU is awake (syncing enabled).
+    UpdateSyncEvent();
   }
+
+  if (fifo.CPReadWriteDistance >= (fifo.CPEnd - fifo.CPBase) && !CanReadFromFifo())
+    PanicAlert("FIFO is completely stuffed");
 
   ASSERT_MSG(COMMANDPROCESSOR, fifo.CPReadWriteDistance <= fifo.CPEnd - fifo.CPBase,
              "FIFO is overflowed by GatherPipe !\nCPU thread is too fast!");
@@ -519,11 +546,17 @@ bool CanReadFromFifo()
   return fifo.bFF_GPReadEnable && fifo.CPReadWriteDistance >= GATHER_PIPE_SIZE && !AtBreakpoint();
 }
 
-bool GpuIsIdle()
+// bool GpuIsIdle()
+// {
+//   // TODO: Not strictly true, since we can be idle while waiting for the remainder of a command.
+//   // However, this is only used for SC event scheduling, so it's fine for now.
+//   return !CanReadFromFifo() && s_video_buffer_size.load() == 0;
+// }
+
+bool IsSyncingSuspended()
 {
-  // TODO: Not strictly true, since we can be idle while waiting for the remainder of a command.
-  // However, this is only used for SC event scheduling, so it's fine for now.
-  return !CanReadFromFifo() && s_video_buffer_size.load() == 0;
+  const auto& param = SConfig::GetInstance();
+  return s_syncing_suspended && (!param.bCPUThread || param.bSyncGPU);
 }
 
 void UpdateInterrupts()
@@ -581,31 +614,37 @@ void UpdateInterrupts()
   }
 }
 
-void RunGpuSingleCore()
+void RunGpuSingleCore(bool allow_run_ahead)
 {
   // Single core - run as many ticks as we have available, stall once we run out.
+  // s32 available_ticks = std::numeric_limits<s32>::max();
   s32 available_ticks = s_sync_ticks.load();
-  if (available_ticks <= 0 && !CanReadFromFifo())
+  if (!allow_run_ahead && available_ticks <= 0 && !CanReadFromFifo())
   {
     // We can't read from the FIFO, or execute any commands.
     // None of the statements below will execute.
     UpdateInterrupts();
+    s_gpu_idle = true;
     return;
   }
 
   FPURoundMode::SaveSIMDState();
   FPURoundMode::LoadDefaultSIMDState();
 
+  FIFO_DEBUG_LOG("running GPU for %u ticks", available_ticks);
+
   u32 total_bytes_used = 0;
   s32 total_cycles_used = 0;
-  while (total_cycles_used < available_ticks)
+  s_gpu_idle = false;
+
+  while (total_cycles_used < available_ticks || allow_run_ahead)
   {
     // Read as much as possible from the FIFO.
     // We could read in smaller batches, to make the RW pointer more accurate to the actual
     // GPU progress, but since our timings are garbage anyway, it's unlikely to make much of
     // a difference. Larger batches means fewer loops, and lower CPU usage.
-    // CopyToVideoBuffer(FIFO_EXECUTE_THRESHOLD_SIZE);
-    CopyToVideoBuffer(FIFO_SIZE);
+    u32 bytes_copied = CopyToVideoBuffer(FIFO_EXECUTE_THRESHOLD_SIZE);
+    // u32 bytes_copied = CopyToVideoBuffer(FIFO_SIZE);
 
     // Execute as many commands as possible.
     u32 cyclesExecuted = 0;
@@ -614,26 +653,23 @@ void RunGpuSingleCore()
         DataReader(s_video_buffer_read_ptr, s_video_buffer_write_ptr), &cyclesExecuted, false);
 
     u32 bytes_consumed = u32(s_video_buffer_read_ptr - old_read_ptr);
-    if (bytes_consumed == 0)
+    if (bytes_copied == 0 && bytes_consumed == 0)
     {
       // Waiting for more data.
+      s_gpu_idle = true;
       break;
     }
 
     total_bytes_used += bytes_consumed;
     total_cycles_used += static_cast<s32>(cyclesExecuted);
 
-#if 0
-    WARN_LOG(VIDEO, "used %u/%u/%u bytes, %d/%d cycles", total_bytes_used,
-             s_video_buffer_size.load(), fifo.CPReadWriteDistance, total_cycles_used,
-             s_sync_ticks.load());
-#endif
+    FIFO_DEBUG_LOG("used %u/%u/%u bytes, %d/%d cycles", total_bytes_used,
+                   s_video_buffer_size.load(), fifo.CPReadWriteDistance, total_cycles_used,
+                   s_sync_ticks.load());
   }
 
-#if 0
   if (total_cycles_used >= available_ticks)
-    WARN_LOG(VIDEO, "out of ticks %u/%u", total_cycles_used, available_ticks);
-#endif
+    FIFO_DEBUG_LOG("out of ticks %u/%u", total_cycles_used, available_ticks);
 
   s_video_buffer_size.fetch_sub(total_bytes_used);
   s_sync_ticks.fetch_sub(total_cycles_used);
@@ -645,41 +681,45 @@ void RunGpuDualCore()
 {
   // Dual core - simulate an "infinitely fast" GPU, copying as much as possible to the video buffer,
   // and executing it on the GPU thread.
-  if (!CanReadFromFifo() && s_video_buffer_size.load() == 0)
+  if (CopyToVideoBuffer(FIFO_SIZE) == 0)
   {
-    UpdateInterrupts();
+    // Nothing new copied, so don't bother waking the GPU thread.
     return;
   }
-
-  while (CanReadFromFifo())
-    CopyToVideoBuffer(FIFO_SIZE);
 
   // Wake the GPU thread, as there is new work.
   // We defer the wake until the next SyncGPU if it is enabled, and there are no ticks. Otherwise,
   // the GPU thread would wake, immediately sleep, and then wake again once ticks were added.
-  if (!SConfig::GetInstance().bSyncGPU ||
+  const bool at_breakpoint = AtBreakpoint();
+  if (at_breakpoint || !SConfig::GetInstance().bSyncGPU ||
       s_sync_ticks.load() > SConfig::GetInstance().iSyncGpuMinDistance)
   {
     s_gpu_mainloop.Wakeup();
   }
+
+  // Synchronize with the GPU thread when we hit a FIFO breakpoint.
+  if (at_breakpoint)
+    s_gpu_mainloop.Wait();
 }
 
-void SyncForRegisterAccess()
+void SyncForRegisterAccess(bool is_write)
 {
-  // Add GPU_TIME_SLOT_SIZE cycles to the GPU, run it, then remove the cycles.
-  // This way, the GPU always makes progress, but it will slow down in the next slice to compensate.
-  s_sync_ticks.fetch_add(GPU_TIME_SLOT_SIZE);
+  if (IsSyncingSuspended() && !is_write)
+    return;
+
   if (SConfig::GetInstance().bCPUThread)
     RunGpuDualCore();
   else
-    RunGpuSingleCore();
-  s_sync_ticks.fetch_sub(GPU_TIME_SLOT_SIZE);
+    RunGpuSingleCore(is_write);
+
   UpdateSyncEvent();
 }
 
 // Description: RunGpuLoop() sends data through this function.
-void CopyToVideoBuffer(u32 maximum_copy_size)
+u32 CopyToVideoBuffer(u32 maximum_copy_size)
 {
+  u32 bytes_copied = 0;
+
   UpdateInterrupts();
   while (CanReadFromFifo() && maximum_copy_size > 0)
   {
@@ -711,7 +751,7 @@ void CopyToVideoBuffer(u32 maximum_copy_size)
       {
         PanicAlert("FIFO out of bounds (existing %zu + new %u > %u)", existing_len, copy_size,
                    FIFO_SIZE);
-        return;
+        return bytes_copied;
       }
       std::memmove(s_video_buffer, s_video_buffer_read_ptr, existing_len);
       s_video_buffer_write_ptr = s_video_buffer + existing_len;
@@ -720,6 +760,18 @@ void CopyToVideoBuffer(u32 maximum_copy_size)
 
     // Copy new video instructions to s_video_buffer for future use in rendering the new picture
     Memory::CopyFromEmu(s_video_buffer_write_ptr, fifo.CPReadPointer, copy_size);
+#if 0
+    for (u32 i = 0; i < copy_size; i += 32)
+    {
+      u8* vb = s_video_buffer_write_ptr + i;
+      FIFO_DEBUG_LOG(
+          "FIFO: [%02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X "
+          "%02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X]",
+          vb[0], vb[1], vb[2], vb[3], vb[4], vb[5], vb[6], vb[7], vb[8], vb[9], vb[10], vb[11],
+          vb[12], vb[13], vb[14], vb[15], vb[15], vb[16], vb[17], vb[18], vb[19], vb[20], vb[21],
+          vb[22], vb[23], vb[24], vb[25], vb[26], vb[27], vb[28], vb[29], vb[30], vb[31]);
+    }
+#endif
     s_video_buffer_write_ptr += copy_size;
     s_video_buffer_size.fetch_add(copy_size);
 
@@ -736,14 +788,18 @@ void CopyToVideoBuffer(u32 maximum_copy_size)
 
     fifo.CPReadWriteDistance -= copy_size;
     maximum_copy_size -= copy_size;
+    bytes_copied += copy_size;
     UpdateInterrupts();
   }
+
+  return bytes_copied;
 }
 
 static void ExecuteGpuSliceDualCore()
 {
   const SConfig& param = SConfig::GetInstance();
   bool did_any_work = false;
+  s_gpu_idle.store(false);
 
   while (s_video_buffer_size.load() > 0)
   {
@@ -760,13 +816,14 @@ static void ExecuteGpuSliceDualCore()
         DataReader(s_video_buffer_read_ptr, s_video_buffer_write_ptr), &cyclesExecuted, false);
     u32 bytes_consumed = u32(s_video_buffer_read_ptr - old_read_ptr);
 
-#if 0
-    WARN_LOG(VIDEO, "used %u/%u/%u bytes, %d/%d cycles", bytes_consumed, s_video_buffer_size.load(),
-             fifo.CPReadWriteDistance, cyclesExecuted, s_sync_ticks.load());
-#endif
+    FIFO_DEBUG_LOG("used %u/%u/%u bytes, %d/%d cycles", bytes_consumed, s_video_buffer_size.load(),
+                   fifo.CPReadWriteDistance, cyclesExecuted, s_sync_ticks.load());
 
     if (bytes_consumed == 0)
+    {
+      s_gpu_idle.store(true);
       break;
+    }
 
     if (param.bSyncGPU)
     {
@@ -803,9 +860,17 @@ void RunGpuLoop()
 
 void Flush(bool idle)
 {
-  // If we're idling, set a maximum number of ticks, so that we execute all commands.
-  if (idle)
-    s_sync_ticks.store(std::numeric_limits<s32>::max());
+  if (IsSyncingSuspended())
+  {
+    // If the GPU is suspended, just wait for the GPU thread in DC mode.
+    if (SConfig::GetInstance().bCPUThread)
+    {
+      RunGpuDualCore();
+      s_gpu_mainloop.Wait();
+    }
+
+    return;
+  }
 
   // Run the GPU until it has no more work to do.
   if (SConfig::GetInstance().bCPUThread)
@@ -817,10 +882,10 @@ void Flush(bool idle)
   }
   else
   {
-    RunGpuSingleCore();
+    RunGpuSingleCore(idle);
   }
 
-  // Clear the sync ticks, it'll get boosted next event.
+  // Clear the sync ticks, it'll get reset next event.
   if (idle)
     s_sync_ticks.store(0);
 
@@ -836,7 +901,7 @@ void SetCpStatusRegister()
   m_CPStatusReg.UnderflowLoWatermark = fifo.bFF_LoWatermark;
   m_CPStatusReg.OverflowHiWatermark = fifo.bFF_HiWatermark;
 
-  DEBUG_LOG(COMMANDPROCESSOR, "\t Read from STATUS_REGISTER : %04x", m_CPStatusReg.Hex);
+  DEBUG_LOG(COMMANDPROCESSOR, "Read from STATUS_REGISTER : %04x", m_CPStatusReg.Hex);
   DEBUG_LOG(
       COMMANDPROCESSOR, "(r) status: iBP %s | fReadIdle %s | fCmdIdle %s | iOvF %s | iUndF %s",
       m_CPStatusReg.Breakpoint ? "ON" : "OFF", m_CPStatusReg.ReadIdle ? "ON" : "OFF",
@@ -853,7 +918,8 @@ void SetCpControlRegister()
   fifo.bFF_GPLinkEnable = m_CPCtrlReg.GPLinkEnable != 0;
   fifo.bFF_GPReadEnable = m_CPCtrlReg.GPReadEnable != 0;
 
-  DEBUG_LOG(COMMANDPROCESSOR, "\t GPREAD %s | BP %s | Int %s | OvF %s | UndF %s | LINK %s",
+  DEBUG_LOG(COMMANDPROCESSOR,
+            "CONTROL_REGISTER WRITE GPREAD %s | BP %s | Int %s | OvF %s | UndF %s | LINK %s",
             fifo.bFF_GPReadEnable ? "ON" : "OFF", fifo.bFF_BPEnable ? "ON" : "OFF",
             fifo.bFF_BPInt ? "ON" : "OFF", m_CPCtrlReg.FifoOverflowIntEnable ? "ON" : "OFF",
             m_CPCtrlReg.FifoUnderflowIntEnable ? "ON" : "OFF",
@@ -901,7 +967,7 @@ static int WaitForGpuThread(int ticks)
   int now = old + ticks;
 
   // GPU is idle, so stop polling.
-  if (old >= 0 && GpuIsIdle() && s_gpu_mainloop.IsDone())
+  if (old >= 0 && s_gpu_mainloop.IsDone() && s_gpu_idle)
     return -1;
 
   // Wakeup GPU
@@ -933,7 +999,7 @@ static void SyncGPUCallback(u64 ticks, s64 cyclesLate)
     RunGpuSingleCore();
 
     // Cancel the event if the GPU is now idle.
-    next = GpuIsIdle() ? -1 : (-s_sync_ticks.load() + GPU_TIME_SLOT_SIZE);
+    next = s_gpu_idle ? -1 : (/*-s_sync_ticks.load() + */ GPU_TIME_SLOT_SIZE);
   }
   else if (SConfig::GetInstance().bSyncGPU)
   {
@@ -943,10 +1009,8 @@ static void SyncGPUCallback(u64 ticks, s64 cyclesLate)
   s_syncing_suspended = next < 0;
   if (!s_syncing_suspended)
     CoreTiming::ScheduleEvent(next, s_event_sync_gpu, next);
-#if 0
   else
-    WARN_LOG(VIDEO, "Syncing disabled");
-#endif
+    FIFO_DEBUG_LOG("Syncing disabled");
 }
 
 // Initialize GPU - CPU thread syncing, this gives us a deterministic way to start the GPU thread.
@@ -966,23 +1030,22 @@ void UpdateSyncEvent()
   if (!SConfig::GetInstance().bCPUThread)
   {
     // For single-core, we need the event if there is a non-empty FIFO, or a non-empty video buffer.
-    syncing_suspended = GpuIsIdle();
+    syncing_suspended = !CanReadFromFifo() && s_gpu_idle;
   }
   else
   {
     // For SyncGPU, the GPU thread must be busy.
-    syncing_suspended = GpuIsIdle() && s_gpu_mainloop.IsDone();
+    syncing_suspended = !CanReadFromFifo() && s_gpu_mainloop.IsDone() && s_gpu_idle;
   }
 
   if (syncing_suspended != s_syncing_suspended)
   {
-#if 0
-    WARN_LOG(VIDEO, "syncing %s", syncing_suspended ? "disabled" : "enabled");
-#endif
+    FIFO_DEBUG_LOG("syncing %s", syncing_suspended ? "disabled" : "enabled");
+
     if (syncing_suspended)
       CoreTiming::RemoveEvent(s_event_sync_gpu);
     else
-      CoreTiming::ScheduleEvent(GPU_TIME_SLOT_SIZE, s_event_sync_gpu, GPU_TIME_SLOT_SIZE);
+      CoreTiming::ScheduleEvent(GPU_TIME_SLOT_SIZE * 2, s_event_sync_gpu, GPU_TIME_SLOT_SIZE * 2);
 
     s_syncing_suspended = syncing_suspended;
   }

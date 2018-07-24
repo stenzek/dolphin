@@ -179,6 +179,9 @@ static void BPWritten(const BPCmd& bp)
     case 0x02:
       PixelEngine::SetFinish();  // may generate interrupt
       DEBUG_LOG(VIDEO, "GXSetDrawDone SetPEFinish (value: 0x%02X)", (bp.newvalue & 0xFFFF));
+#if 0
+      WARN_LOG(VIDEO, "DrawDone RP=%08X, WP=%08X, RWD=%u", Fifo::fifo.CPReadPointer, Fifo::fifo.CPWritePointer, Fifo::fifo.CPReadWriteDistance);
+#endif
       return;
 
     default:
