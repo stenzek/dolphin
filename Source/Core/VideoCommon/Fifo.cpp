@@ -35,6 +35,7 @@
 #include "VideoCommon/VideoBackendBase.h"
 
 //#define FIFO_DEBUG_LOG(...) do { WARN_LOG(VIDEO, __VA_ARGS__); } while (0)
+// #define INFINITELY_FAST_GPU
 
 #ifndef FIFO_DEBUG_LOG
 #define FIFO_DEBUG_LOG(...)                                                                        \
@@ -509,6 +510,7 @@ void GatherPipeBursted()
     // GPU as soon as there is half a kilobyte of commands. of commands, before kicking the GPU.
     // Kicking on every GP burst is too slow, and waiting too long introduces latency when we
     // eventually do need to synchronize with the GPU thread.
+#ifndef INFINITELY_FAST_GPU
     if (SConfig::GetInstance().bCPUThread)
     {
       if (fifo.CPReadWriteDistance >= FIFO_EXECUTE_THRESHOLD_SIZE)
@@ -522,6 +524,12 @@ void GatherPipeBursted()
 
     // Even if we don't have sufficient work now, make sure the GPU is awake (syncing enabled).
     UpdateGPUSuspendState();
+#else
+    if (SConfig::GetInstance().bCPUThread)
+      RunGpuDualCore();
+    else
+      RunGpuSingleCore(true);
+#endif
   }
 
   if (fifo.CPReadWriteDistance >= (fifo.CPEnd - fifo.CPBase) && !CanReadFromFifo())
@@ -613,8 +621,11 @@ void UpdateInterrupts()
 void RunGpuSingleCore(bool allow_run_ahead)
 {
   // Single core - run as many ticks as we have available, stall once we run out.
-  // s32 available_ticks = std::numeric_limits<s32>::max();
+#ifndef INFINITELY_FAST_GPU
   s32 available_ticks = s_sync_ticks.load();
+#else
+  s32 available_ticks = std::numeric_limits<s32>::max();
+#endif
   if (!allow_run_ahead && available_ticks <= 0 && !CanReadFromFifo())
   {
     // We can't read from the FIFO, or execute any commands.
@@ -1011,6 +1022,16 @@ void Prepare()
 
 void UpdateGPUSuspendState()
 {
+#ifdef INFINITELY_FAST_GPU
+  if (CanReadFromFifo())
+  {
+    if (SConfig::GetInstance().bCPUThread)
+      RunGpuDualCore();
+    else
+      RunGpuSingleCore(true);
+  }
+#endif
+
   bool syncing_suspended;
   if (!SConfig::GetInstance().bCPUThread)
   {
