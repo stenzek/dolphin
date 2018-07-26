@@ -172,7 +172,7 @@ u8* Run(DataReader src, u32* cycles, bool in_display_list)
           goto end;
         totalCycles += 12;
         u32 bp_cmd = src.Read<u32>();
-        LoadBPReg(bp_cmd);
+        totalCycles += LoadBPReg(bp_cmd);
         INCSTAT(stats.thisFrame.numBPLoads);
       }
       break;
