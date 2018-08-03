@@ -78,6 +78,7 @@ void RenderWidget::SetFillBackground(bool fill)
 {
   setAttribute(Qt::WA_OpaquePaintEvent, !fill);
   setAttribute(Qt::WA_NoSystemBackground, !fill);
+  setAttribute(Qt::WA_PaintOnScreen, !fill);
   setAutoFillBackground(fill);
 }
 
@@ -186,6 +187,11 @@ bool RenderWidget::event(QEvent* event)
     break;
   }
   return QWidget::event(event);
+}
+
+QPaintEngine* RenderWidget::paintEngine() const
+{
+  return nullptr;
 }
 
 void RenderWidget::OnFreeLookMouseMove(QMouseEvent* event)

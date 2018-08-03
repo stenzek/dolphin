@@ -20,6 +20,7 @@ public:
   explicit RenderWidget(QWidget* parent = nullptr);
 
   bool event(QEvent* event) override;
+  QPaintEngine* paintEngine() const override;
   void showFullScreen();
 
 signals:
