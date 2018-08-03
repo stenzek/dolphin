@@ -163,9 +163,8 @@ void DoState(PointerWrap& f);
 void RegisterMMIO(MMIO::Mapping* mmio, u32 base);
 void GatherPipeBursted();
 
-// Flushes any pending bytes in the FIFO to the GPU.
-// If idle is set, the remaining ticks will be ignored, and all commands will be completed.
-void Flush(bool idle);
+// Runs any outstanding ticks on the GPU, if the GPU can make progress.
+void Flush(bool wait_for_gpu_thread);
 
 void RunGpuLoop();
 void ExitGpuLoop();

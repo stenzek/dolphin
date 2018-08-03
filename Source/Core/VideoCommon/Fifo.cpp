@@ -94,7 +94,7 @@ static bool s_gpu_suspended;
 // Checking whether we can run, due to breakpoints and R/W distance.
 static bool AtBreakpoint();
 static bool CanReadFromFifo();
-static bool IsSyncingSuspended();
+static bool IsGPUSuspended();
 
 // Raises interrupts based on FIFO state.
 static void UpdateInterrupts();
@@ -504,12 +504,12 @@ void GatherPipeBursted()
 
   if (CanReadFromFifo())
   {
-    // The FIFO can be overflowed by the gatherpipe, if a large number of bytes is written in a
-    // single JIT block. In this case, "borrow" some cycles to execute the GPU now instead of later,
-    // reducing the amount of data in the FIFO. In dual core, we take this even further, kicking the
-    // GPU as soon as there is half a kilobyte of commands. of commands, before kicking the GPU.
-    // Kicking on every GP burst is too slow, and waiting too long introduces latency when we
-    // eventually do need to synchronize with the GPU thread.
+  // The FIFO can be overflowed by the gatherpipe, if a large number of bytes is written in a
+  // single JIT block. In this case, "borrow" some cycles to execute the GPU now instead of later,
+  // reducing the amount of data in the FIFO. In dual core, we take this even further, kicking the
+  // GPU as soon as there is half a kilobyte of commands. of commands, before kicking the GPU.
+  // Kicking on every GP burst is too slow, and waiting too long introduces latency when we
+  // eventually do need to synchronize with the GPU thread.
 #ifndef INFINITELY_FAST_GPU
     if (SConfig::GetInstance().bCPUThread)
     {
@@ -557,7 +557,7 @@ bool CanReadFromFifo()
   return fifo.bFF_GPReadEnable && fifo.CPReadWriteDistance >= GATHER_PIPE_SIZE && !AtBreakpoint();
 }
 
-bool IsSyncingSuspended()
+bool IsGPUSuspended()
 {
   const auto& param = SConfig::GetInstance();
   return s_gpu_suspended && (!param.bCPUThread || param.bSyncGPU);
@@ -620,7 +620,7 @@ void UpdateInterrupts()
 
 void RunGpuSingleCore(bool allow_run_ahead)
 {
-  // Single core - run as many ticks as we have available, stall once we run out.
+// Single core - run as many ticks as we have available, stall once we run out.
 #ifndef INFINITELY_FAST_GPU
   s32 available_ticks = s_sync_ticks.load();
 #else
@@ -711,7 +711,7 @@ void RunGpuDualCore()
 
 void SyncForRegisterAccess(bool is_write)
 {
-  if (IsSyncingSuspended() && !is_write)
+  if (IsGPUSuspended() && !is_write)
     return;
 
   if (SConfig::GetInstance().bCPUThread)
@@ -865,16 +865,13 @@ void RunGpuLoop()
   AsyncRequests::GetInstance()->SetPassthrough(true);
 }
 
-void Flush(bool idle)
+void Flush(bool wait_for_gpu_thread)
 {
-  if (IsSyncingSuspended())
+  if (IsGPUSuspended())
   {
     // If the GPU is suspended, just wait for the GPU thread in DC mode.
-    if (SConfig::GetInstance().bCPUThread)
-    {
-      RunGpuDualCore();
+    if (wait_for_gpu_thread)
       s_gpu_mainloop.Wait();
-    }
 
     return;
   }
@@ -882,19 +879,14 @@ void Flush(bool idle)
   // Run the GPU until it has no more work to do.
   if (SConfig::GetInstance().bCPUThread)
   {
-    // In dual-core, when we're idling, ensure the GPU thread has finished all commands.
     RunGpuDualCore();
-    if (idle)
+    if (wait_for_gpu_thread)
       s_gpu_mainloop.Wait();
   }
   else
   {
-    RunGpuSingleCore(idle);
+    RunGpuSingleCore();
   }
-
-  // Clear the sync ticks, it'll get reset next event.
-  if (idle)
-    s_sync_ticks.store(0);
 
   UpdateGPUSuspendState();
 }
@@ -1030,36 +1022,35 @@ void UpdateGPUSuspendState()
   }
 #endif
 
-  bool syncing_suspended;
+  bool gpu_suspended;
+  int next = GPU_TIME_SLOT_SIZE;
   if (!SConfig::GetInstance().bCPUThread)
   {
     // For single-core, we need the event if there is a non-empty FIFO, or a non-empty video buffer.
-    syncing_suspended = !CanReadFromFifo() && s_gpu_idle;
+    gpu_suspended = !CanReadFromFifo() && s_gpu_idle;
+    next = std::max(GPU_TIME_SLOT_SIZE - s_sync_ticks.load(), 1);
   }
   else if (SConfig::GetInstance().bSyncGPU)
   {
     // For SyncGPU, the GPU thread must be busy.
-    syncing_suspended = !CanReadFromFifo() && s_gpu_mainloop.IsDone() && s_gpu_idle;
+    gpu_suspended = !CanReadFromFifo() && s_gpu_mainloop.IsDone() && s_gpu_idle;
   }
   else
   {
     // Pure dualcore - we only need to sync (read from the FIFO) when there is data.
-    syncing_suspended = !CanReadFromFifo();
+    gpu_suspended = !CanReadFromFifo();
   }
 
-  if (syncing_suspended != s_gpu_suspended)
+  if (gpu_suspended != s_gpu_suspended)
   {
-    FIFO_DEBUG_LOG("syncing %s", syncing_suspended ? "disabled" : "enabled");
+    FIFO_DEBUG_LOG("syncing %s", gpu_suspended ? "disabled" : "enabled");
 
-    // Double the time time before the first GPU sync executes. This simulates in part the pipelined
-    // nature of the GX, where it takes several cycles from the FIFO memory read to hit the graphics
-    // pipeline.
-    if (!syncing_suspended)
-      CoreTiming::ScheduleEvent(GPU_TIME_SLOT_SIZE * 2, s_event_sync_gpu, GPU_TIME_SLOT_SIZE * 2);
+    if (!gpu_suspended)
+      CoreTiming::ScheduleEvent(next, s_event_sync_gpu, next);
     else
       CoreTiming::RemoveEvent(s_event_sync_gpu);
 
-    s_gpu_suspended = syncing_suspended;
+    s_gpu_suspended = gpu_suspended;
   }
 }
 
