@@ -981,10 +981,8 @@ static int WaitForGpuThread(int ticks)
 
 static void SyncGPUCallback(u64 ticks, s64 cyclesLate)
 {
-  int prev_extra_ticks = s_sync_ticks.load();
   int ticks_to_add =
-      static_cast<int>((ticks + cyclesLate) * SConfig::GetInstance().fSyncGpuOverclock) -
-      prev_extra_ticks;
+      static_cast<int>((ticks + cyclesLate) * SConfig::GetInstance().fSyncGpuOverclock);
   int next = -1;
 
   if (!SConfig::GetInstance().bCPUThread)
