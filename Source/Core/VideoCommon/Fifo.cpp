@@ -349,6 +349,7 @@ void RegisterMMIO(MMIO::Mapping* mmio, u32 base)
 
   mmio->Register(base | CLEAR_REGISTER, MMIO::DirectRead<u16>(&m_CPClearReg.Hex),
                  MMIO::ComplexWrite<u16>([](u32, u16 val) {
+                   SyncForRegisterAccess(false);
                    UCPClearReg tmp(val);
                    m_CPClearReg.Hex = tmp.Hex;
                    SetCpClearRegister();
@@ -591,11 +592,10 @@ void UpdateInterrupts()
   }
 
   // overflow & underflow check
-  fifo.bFF_HiWatermark = (fifo.CPReadWriteDistance > fifo.CPHiWatermark);
-  fifo.bFF_LoWatermark = (fifo.CPReadWriteDistance < fifo.CPLoWatermark);
+  fifo.bFF_HiWatermark |= (fifo.CPReadWriteDistance >= fifo.CPHiWatermark);
+  fifo.bFF_LoWatermark |= (fifo.CPReadWriteDistance <= fifo.CPLoWatermark);
 
   const bool has_interrupt =
-      fifo.bFF_GPReadEnable &&  // TODO: Is this correct
       ((fifo.bFF_HiWatermark & fifo.bFF_HiWatermarkInt) |
        (fifo.bFF_LoWatermark & fifo.bFF_LoWatermarkInt) | (fifo.bFF_Breakpoint & fifo.bFF_BPInt));
 
@@ -929,6 +929,12 @@ void SetCpControlRegister()
 // We don't emulate proper GP timing anyway at the moment, so it would just slow down emulation.
 void SetCpClearRegister()
 {
+  if (m_CPClearReg.ClearFifoOverflow != 0)
+    fifo.bFF_HiWatermark = false;
+  if (m_CPClearReg.ClearFifoUnderflow != 0)
+    fifo.bFF_LoWatermark = false;
+
+  UpdateInterrupts();
 }
 
 void GpuMaySleep()
