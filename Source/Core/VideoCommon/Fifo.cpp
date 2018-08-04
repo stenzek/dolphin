@@ -567,22 +567,16 @@ bool IsGPUSuspended()
 void UpdateInterrupts()
 {
   // breakpoint
-  if (fifo.bFF_BPEnable)
+  bool has_interrupt = false;
+  if (fifo.bFF_BPEnable && fifo.CPBreakpoint == fifo.CPReadPointer)
   {
-    if (fifo.CPBreakpoint == fifo.CPReadPointer)
+    if (!fifo.bFF_Breakpoint)
     {
-      if (!fifo.bFF_Breakpoint)
-      {
-        DEBUG_LOG(COMMANDPROCESSOR, "Hit breakpoint at %i", fifo.CPReadPointer);
-        fifo.bFF_Breakpoint = true;
-      }
+      DEBUG_LOG(COMMANDPROCESSOR, "Hit breakpoint at %i", fifo.CPReadPointer);
+      fifo.bFF_Breakpoint = true;
     }
-    else
-    {
-      if (fifo.bFF_Breakpoint)
-        DEBUG_LOG(COMMANDPROCESSOR, "Cleared breakpoint at %i", fifo.CPReadPointer);
-      fifo.bFF_Breakpoint = false;
-    }
+
+    has_interrupt |= fifo.bFF_BPInt;
   }
   else
   {
@@ -592,12 +586,16 @@ void UpdateInterrupts()
   }
 
   // overflow & underflow check
-  fifo.bFF_HiWatermark |= (fifo.CPReadWriteDistance >= fifo.CPHiWatermark);
-  fifo.bFF_LoWatermark |= (fifo.CPReadWriteDistance <= fifo.CPLoWatermark);
-
-  const bool has_interrupt =
-      ((fifo.bFF_HiWatermark & fifo.bFF_HiWatermarkInt) |
-       (fifo.bFF_LoWatermark & fifo.bFF_LoWatermarkInt) | (fifo.bFF_Breakpoint & fifo.bFF_BPInt));
+  if (fifo.bFF_HiWatermarkInt)
+  {
+    fifo.bFF_HiWatermark |= (fifo.CPReadWriteDistance >= fifo.CPHiWatermark);
+    has_interrupt |= fifo.bFF_HiWatermark;
+  }
+  if (fifo.bFF_LoWatermarkInt)
+  {
+    fifo.bFF_LoWatermark |= (fifo.CPReadWriteDistance <= fifo.CPLoWatermark);
+    has_interrupt |= fifo.bFF_LoWatermark;
+  }
 
   if (has_interrupt)
   {
