@@ -630,12 +630,12 @@ void RunGpuSingleCore(bool allow_run_ahead)
 #else
   s32 available_ticks = std::numeric_limits<s32>::max();
 #endif
-  if (!allow_run_ahead && available_ticks <= 0 && !CanReadFromFifo())
+  if (!allow_run_ahead && available_ticks <= 0)
   {
     // We can't read from the FIFO, or execute any commands.
     // None of the statements below will execute.
     UpdateInterrupts();
-    s_gpu_idle = true;
+    s_gpu_idle = false;
     return;
   }
 
@@ -900,7 +900,7 @@ void SetCpStatusRegister()
   // Here always there is one fifo attached to the GPU
   m_CPStatusReg.Breakpoint = fifo.bFF_Breakpoint;
   m_CPStatusReg.ReadIdle = !CanReadFromFifo();
-  m_CPStatusReg.CommandIdle = !CanReadFromFifo() && s_sync_ticks.load() >= 0;
+  m_CPStatusReg.CommandIdle = !CanReadFromFifo() && s_gpu_idle.load();
   m_CPStatusReg.UnderflowLoWatermark = fifo.bFF_LoWatermark;
   m_CPStatusReg.OverflowHiWatermark = fifo.bFF_HiWatermark;
 
