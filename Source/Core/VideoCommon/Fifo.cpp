@@ -97,7 +97,9 @@ static bool CanReadFromFifo();
 static bool IsGPUSuspended();
 
 // Raises interrupts based on FIFO state.
-static void UpdateInterrupts();
+static void UpdateBreakpointFlag();
+static void UpdateWatermarkFlags();
+static void UpdateInterrupt();
 
 // Reads from the FIFO and processes commands.
 static void RunGpuSingleCore(bool allow_run_ahead = false);
@@ -338,7 +340,7 @@ void RegisterMMIO(MMIO::Mapping* mmio, u32 base)
 
   mmio->Register(base | CTRL_REGISTER, MMIO::DirectRead<u16>(&m_CPCtrlReg.Hex),
                  MMIO::ComplexWrite<u16>([](u32, u16 val) {
-                   SyncForRegisterAccess(false);
+                   SyncForRegisterAccess(true);
                    UCPCtrlReg tmp(val);
                    m_CPCtrlReg.Hex = tmp.Hex;
                    SetCpControlRegister();
@@ -349,7 +351,7 @@ void RegisterMMIO(MMIO::Mapping* mmio, u32 base)
 
   mmio->Register(base | CLEAR_REGISTER, MMIO::DirectRead<u16>(&m_CPClearReg.Hex),
                  MMIO::ComplexWrite<u16>([](u32, u16 val) {
-                   SyncForRegisterAccess(false);
+                   SyncForRegisterAccess(true);
                    UCPClearReg tmp(val);
                    m_CPClearReg.Hex = tmp.Hex;
                    SetCpClearRegister();
@@ -500,10 +502,17 @@ void GatherPipeBursted()
     ProcessorInterface::Fifo_CPUEnd = fifo.CPEnd;
   }
 
-  // Update interrupts. This way we trigger high watermark interrupts as soon as possible.
-  UpdateInterrupts();
-
-  if (CanReadFromFifo())
+  // If this write will exceed the high watermark, run the GPU before incrementing the distance.
+  // This way, the interrupt only fires when there is a true overflow, and not just because the
+  // last GPU sync was a while ago.
+  if (fifo.bFF_HiWatermarkInt && !fifo.bFF_HiWatermark &&
+      fifo.CPReadWriteDistance >= fifo.CPHiWatermark)
+  {
+    SyncForRegisterAccess(true);
+    UpdateWatermarkFlags();
+    UpdateInterrupt();
+  }
+  else if (CanReadFromFifo())
   {
   // The FIFO can be overflowed by the gatherpipe, if a large number of bytes is written in a
   // single JIT block. In this case, "borrow" some cycles to execute the GPU now instead of later,
@@ -564,19 +573,16 @@ bool IsGPUSuspended()
   return s_gpu_suspended && (!param.bCPUThread || param.bSyncGPU);
 }
 
-void UpdateInterrupts()
+void UpdateBreakpointFlag()
 {
   // breakpoint
-  bool has_interrupt = false;
-  if (fifo.bFF_BPEnable && fifo.CPBreakpoint == fifo.CPReadPointer)
+  if (AtBreakpoint())
   {
     if (!fifo.bFF_Breakpoint)
     {
       DEBUG_LOG(COMMANDPROCESSOR, "Hit breakpoint at %i", fifo.CPReadPointer);
       fifo.bFF_Breakpoint = true;
     }
-
-    has_interrupt |= fifo.bFF_BPInt;
   }
   else
   {
@@ -584,18 +590,31 @@ void UpdateInterrupts()
       DEBUG_LOG(COMMANDPROCESSOR, "Cleared breakpoint at %i", fifo.CPReadPointer);
     fifo.bFF_Breakpoint = false;
   }
+}
 
+void UpdateWatermarkFlags()
+{
   // overflow & underflow check
-  if (fifo.bFF_HiWatermarkInt && 0)
+  if (fifo.bFF_HiWatermarkInt && fifo.CPReadWriteDistance >= fifo.CPHiWatermark)
   {
-    fifo.bFF_HiWatermark |= (fifo.CPReadWriteDistance >= fifo.CPHiWatermark);
-    has_interrupt |= fifo.bFF_HiWatermark;
+    DEBUG_LOG(COMMANDPROCESSOR, "Set overflow at %08X %u", fifo.CPReadPointer,
+              fifo.CPReadWriteDistance);
+    fifo.bFF_HiWatermark = true;
   }
-  if (fifo.bFF_LoWatermarkInt && 0)
+
+  if (fifo.bFF_LoWatermarkInt && fifo.CPReadWriteDistance <= fifo.CPLoWatermark)
   {
-    fifo.bFF_LoWatermark |= (fifo.CPReadWriteDistance <= fifo.CPLoWatermark);
-    has_interrupt |= fifo.bFF_LoWatermark;
+    DEBUG_LOG(COMMANDPROCESSOR, "Set underflow at %08X %u", fifo.CPReadPointer,
+              fifo.CPReadWriteDistance);
+    fifo.bFF_LoWatermark = true;
   }
+}
+
+void UpdateInterrupt()
+{
+  const bool has_interrupt = (fifo.bFF_Breakpoint & fifo.bFF_BPInt) |
+                             (fifo.bFF_HiWatermark & fifo.bFF_HiWatermarkInt) |
+                             (fifo.bFF_LoWatermark & fifo.bFF_LoWatermarkInt);
 
   if (has_interrupt)
   {
@@ -628,8 +647,6 @@ void RunGpuSingleCore(bool allow_run_ahead)
   {
     // We can't read from the FIFO, or execute any commands.
     // None of the statements below will execute.
-    UpdateInterrupts();
-    s_gpu_idle = false;
     return;
   }
 
@@ -678,6 +695,9 @@ void RunGpuSingleCore(bool allow_run_ahead)
 
   s_video_buffer_size.fetch_sub(total_bytes_used);
   s_sync_ticks.fetch_sub(total_cycles_used);
+  UpdateBreakpointFlag();
+  UpdateWatermarkFlags();
+  UpdateInterrupt();
 
   FPURoundMode::LoadSIMDState();
 }
@@ -686,7 +706,11 @@ void RunGpuDualCore()
 {
   // Dual core - simulate an "infinitely fast" GPU, copying as much as possible to the video buffer,
   // and executing it on the GPU thread.
-  if (CopyToVideoBuffer(FIFO_SIZE) == 0)
+  u32 bytes_copied = CopyToVideoBuffer(FIFO_SIZE);
+  UpdateBreakpointFlag();
+  UpdateWatermarkFlags();
+  UpdateInterrupt();
+  if (bytes_copied == 0)
   {
     // Nothing new copied, so don't bother waking the GPU thread.
     return;
@@ -715,7 +739,7 @@ void SyncForRegisterAccess(bool is_write)
   if (SConfig::GetInstance().bCPUThread)
     RunGpuDualCore();
   else
-    RunGpuSingleCore(is_write);
+    RunGpuSingleCore();
 
   UpdateGPUSuspendState();
 }
@@ -725,7 +749,6 @@ u32 CopyToVideoBuffer(u32 maximum_copy_size)
 {
   u32 bytes_copied = 0;
 
-  UpdateInterrupts();
   while (CanReadFromFifo() && maximum_copy_size > 0)
   {
     // Work out the copy size. We can copy up until the next breakpoint, or the FIFO wraps around.
@@ -794,7 +817,6 @@ u32 CopyToVideoBuffer(u32 maximum_copy_size)
     fifo.CPReadWriteDistance -= copy_size;
     maximum_copy_size -= copy_size;
     bytes_copied += copy_size;
-    UpdateInterrupts();
   }
 
   return bytes_copied;
@@ -928,11 +950,19 @@ void SetCpControlRegister()
 void SetCpClearRegister()
 {
   if (m_CPClearReg.ClearFifoOverflow != 0)
+  {
+    DEBUG_LOG(COMMANDPROCESSOR, "Cleared overflow at %08X %u", fifo.CPReadPointer,
+              fifo.CPReadWriteDistance);
     fifo.bFF_HiWatermark = false;
+  }
   if (m_CPClearReg.ClearFifoUnderflow != 0)
+  {
+    DEBUG_LOG(COMMANDPROCESSOR, "Cleared underflow at %08X %u", fifo.CPReadPointer,
+              fifo.CPReadWriteDistance);
     fifo.bFF_LoWatermark = false;
+  }
 
-  UpdateInterrupts();
+  UpdateInterrupt();
 }
 
 void GpuMaySleep()
