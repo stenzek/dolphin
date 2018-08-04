@@ -592,12 +592,12 @@ void UpdateInterrupts()
   }
 
   // overflow & underflow check
-  if (fifo.bFF_HiWatermarkInt)
+  if (fifo.bFF_HiWatermarkInt && 0)
   {
     fifo.bFF_HiWatermark |= (fifo.CPReadWriteDistance >= fifo.CPHiWatermark);
     has_interrupt |= fifo.bFF_HiWatermark;
   }
-  if (fifo.bFF_LoWatermarkInt)
+  if (fifo.bFF_LoWatermarkInt && 0)
   {
     fifo.bFF_LoWatermark |= (fifo.CPReadWriteDistance <= fifo.CPLoWatermark);
     has_interrupt |= fifo.bFF_LoWatermark;
