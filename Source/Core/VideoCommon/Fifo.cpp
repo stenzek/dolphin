@@ -35,7 +35,6 @@
 #include "VideoCommon/VideoBackendBase.h"
 
 //#define FIFO_DEBUG_LOG(...) do { WARN_LOG(VIDEO, __VA_ARGS__); } while (0)
-// #define INFINITELY_FAST_GPU
 
 #ifndef FIFO_DEBUG_LOG
 #define FIFO_DEBUG_LOG(...)                                                                        \
@@ -254,10 +253,9 @@ void Init()
     s_gpu_mainloop.Prepare();
   s_sync_ticks.store(0);
 
-  INFO_LOG(VIDEO, "FIFO initialized in %s mode",
-           SConfig::GetInstance().bCPUThread ?
-               (SConfig::GetInstance().bSyncGPU ? "Dual Core (SyncGPU)" : "Dual Core") :
-               "Single Core");
+  INFO_LOG(VIDEO, "FIFO initialized in %s%s mode",
+           SConfig::GetInstance().bCPUThread ? "Dual Core" : "Single Core",
+           SConfig::GetInstance().bSyncGPU ? " (SyncGPU)" : "");
 }
 
 void Shutdown()
@@ -512,35 +510,26 @@ void GatherPipeBursted()
     UpdateWatermarkFlags();
     UpdateInterrupt();
   }
-  else if (CanReadFromFifo())
-  {
+
   // The FIFO can be overflowed by the gatherpipe, if a large number of bytes is written in a
   // single JIT block. In this case, "borrow" some cycles to execute the GPU now instead of later,
   // reducing the amount of data in the FIFO. In dual core, we take this even further, kicking the
   // GPU as soon as there is half a kilobyte of commands. of commands, before kicking the GPU.
   // Kicking on every GP burst is too slow, and waiting too long introduces latency when we
   // eventually do need to synchronize with the GPU thread.
-#ifndef INFINITELY_FAST_GPU
-    if (SConfig::GetInstance().bCPUThread)
-    {
-      if (fifo.CPReadWriteDistance >= FIFO_EXECUTE_THRESHOLD_SIZE)
-        RunGpuDualCore();
-    }
-    else
-    {
-      if (fifo.CPReadWriteDistance >= fifo.CPEnd - fifo.CPBase)
-        RunGpuSingleCore(true);
-    }
-
-    // Even if we don't have sufficient work now, make sure the GPU is awake (syncing enabled).
-    UpdateGPUSuspendState();
-#else
-    if (SConfig::GetInstance().bCPUThread)
+  if (SConfig::GetInstance().bCPUThread)
+  {
+    if (fifo.CPReadWriteDistance >= FIFO_EXECUTE_THRESHOLD_SIZE)
       RunGpuDualCore();
-    else
-      RunGpuSingleCore(true);
-#endif
   }
+  else
+  {
+    if (fifo.CPReadWriteDistance >= fifo.CPEnd - fifo.CPBase)
+      RunGpuSingleCore(true);
+  }
+
+  // Even if we don't have sufficient work now, make sure the GPU is awake (syncing enabled).
+  UpdateGPUSuspendState();
 
   if (fifo.CPReadWriteDistance >= (fifo.CPEnd - fifo.CPBase) && !CanReadFromFifo())
     PanicAlert("FIFO is completely stuffed");
@@ -637,12 +626,11 @@ void UpdateInterrupt()
 
 void RunGpuSingleCore(bool allow_run_ahead)
 {
-// Single core - run as many ticks as we have available, stall once we run out.
-#ifndef INFINITELY_FAST_GPU
+  // If SyncGPU is disabled, always let the GPU run ahead.
+  allow_run_ahead |= !SConfig::GetInstance().bSyncGPU;
+
+  // Single core - run as many ticks as we have available, stall once we run out.
   s32 available_ticks = s_sync_ticks.load();
-#else
-  s32 available_ticks = std::numeric_limits<s32>::max();
-#endif
   if (!allow_run_ahead && available_ticks <= 0)
   {
     // We can't read from the FIFO, or execute any commands.
@@ -694,7 +682,9 @@ void RunGpuSingleCore(bool allow_run_ahead)
     FIFO_DEBUG_LOG("out of ticks %u/%u", total_cycles_used, available_ticks);
 
   s_video_buffer_size.fetch_sub(total_bytes_used);
-  s_sync_ticks.fetch_sub(total_cycles_used);
+  if (SConfig::GetInstance().bSyncGPU)
+    s_sync_ticks.fetch_sub(total_cycles_used);
+
   UpdateBreakpointFlag();
   UpdateWatermarkFlags();
   UpdateInterrupt();
@@ -1007,14 +997,20 @@ static int WaitForGpuThread(int ticks)
 
 static void SyncGPUCallback(u64 ticks, s64 cyclesLate)
 {
-  int ticks_to_add =
-      static_cast<int>((ticks + cyclesLate) * SConfig::GetInstance().fSyncGpuOverclock);
+  const auto& param = SConfig::GetInstance();
+  int ticks_to_add = static_cast<int>((ticks + cyclesLate) * param.fSyncGpuOverclock);
   int next = -1;
 
-  if (!SConfig::GetInstance().bCPUThread)
+  if (!param.bCPUThread)
   {
     s_sync_ticks.fetch_add(ticks_to_add);
     RunGpuSingleCore();
+    if (!param.bSyncGPU)
+    {
+      // Remove all ticks when SyncGPU is disabled, so the event runs again.
+      // Because we set allow_run_ahead to true, it'll likely be negative.
+      s_sync_ticks.store(0);
+    }
 
     // Cancel the event if the GPU is now idle.
     next = s_gpu_idle ? -1 : (-s_sync_ticks.load() + GPU_TIME_SLOT_SIZE);
@@ -1046,16 +1042,6 @@ void Prepare()
 
 void UpdateGPUSuspendState()
 {
-#ifdef INFINITELY_FAST_GPU
-  if (CanReadFromFifo())
-  {
-    if (SConfig::GetInstance().bCPUThread)
-      RunGpuDualCore();
-    else
-      RunGpuSingleCore(true);
-  }
-#endif
-
   bool gpu_suspended;
   int next = GPU_TIME_SLOT_SIZE;
   if (!SConfig::GetInstance().bCPUThread)
