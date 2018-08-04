@@ -305,9 +305,9 @@ static u32 BPWritten(const BPCmd& bp)
     // raw number of pixels.
     // TODO: Hardware tests to confirm the actual copy speeds of each texture format.
     if (PE_copy.clear || PE_copy.copy_to_xfb || PE_copy.tp_realFormat() == EFBCopyFormat::RGBA8)
-      return (srcRect.GetWidth() * srcRect.GetHeight() / 4) * 3;
+      return (srcRect.GetWidth() * srcRect.GetHeight() / 4);
     else
-      return (srcRect.GetWidth() * srcRect.GetHeight() / 8) * 3;
+      return (srcRect.GetWidth() * srcRect.GetHeight() / 8);
   }
   case BPMEM_LOADTLUT0:  // This one updates bpmem.tlutXferSrc, no need to do anything here.
     return 0;

@@ -61,6 +61,46 @@ void Init()
   s_bFifoErrorSeen = false;
 }
 
+static int GetPrimitiveCountForVertices(int primitive, int num_vertices)
+{
+  switch (primitive)
+  {
+  case GX_DRAW_QUADS:
+  case GX_DRAW_QUADS_2:
+    return num_vertices / 4;
+
+  case GX_DRAW_TRIANGLES:
+    return num_vertices / 3;
+
+  case GX_DRAW_TRIANGLE_STRIP:
+  case GX_DRAW_TRIANGLE_FAN:
+    return (num_vertices > 2) ? (num_vertices - 2) : 0;
+
+  case GX_DRAW_LINES:
+    return num_vertices / 2;
+    break;
+  case GX_DRAW_LINE_STRIP:
+    return (num_vertices > 1) ? (num_vertices - 1) : 0;
+
+  case GX_DRAW_POINTS:
+    return num_vertices;
+
+  default:
+    return 0;
+  }
+}
+
+static u32 FakeRasterizationCycles(int primitive, int num_vertices)
+{
+  // No rasterization is performed if cull all is set.
+  if (bpmem.genMode.cullmode == GenMode::CULL_ALL)
+    return 0;
+
+  // We have no idea of knowing how many pixels these primitives covered, without using queries
+  // and stalling the host GPU. Instead, we just assign a fixed cost to each triangle.
+  return GetPrimitiveCountForVertices(primitive, num_vertices) * 8;
+}
+
 u8* Run(DataReader src, u32* cycles, bool in_display_list)
 {
   u32 totalCycles = 0;
@@ -172,7 +212,7 @@ u8* Run(DataReader src, u32* cycles, bool in_display_list)
           goto end;
         totalCycles += 12;
         u32 bp_cmd = src.Read<u32>();
-        totalCycles += LoadBPReg(bp_cmd);
+        totalCycles += LoadBPReg(bp_cmd) * 3;
         INCSTAT(stats.thisFrame.numBPLoads);
       }
       break;
@@ -184,18 +224,23 @@ u8* Run(DataReader src, u32* cycles, bool in_display_list)
         // load vertices
         if (src.size() < 2)
           goto end;
-        u16 num_vertices = src.Read<u16>();
-        int bytes = VertexLoaderManager::RunVertices(
-            cmd_byte & GX_VAT_MASK,  // Vertex loader index (0 - 7)
-            (cmd_byte & GX_PRIMITIVE_MASK) >> GX_PRIMITIVE_SHIFT, num_vertices, src);
+        int num_vertices = static_cast<u32>(src.Read<u16>());
+        if (num_vertices > 0)
+        {
+          const int vtx_attr_group = cmd_byte & GX_VAT_MASK;  // Vertex loader index (0 - 7)
+          const int primitive = (cmd_byte & GX_PRIMITIVE_MASK) >> GX_PRIMITIVE_SHIFT;
+          u32 vertex_cycles = 0;
+          int bytes = VertexLoaderManager::RunVertices(vtx_attr_group, primitive, num_vertices, src,
+                                                       vertex_cycles);
+          if (bytes < 0)
+            goto end;
 
-        if (bytes < 0)
-          goto end;
+          src.Skip(bytes);
 
-        src.Skip(bytes);
-
-        // 4 GPU ticks per vertex, 3 CPU ticks per GPU tick
-        totalCycles += num_vertices * 4 * 3 + 6;
+          // 3 CPU ticks per GPU tick
+          u32 shading_cycles = FakeRasterizationCycles(primitive, num_vertices);
+          totalCycles += (vertex_cycles + shading_cycles) * 3 + 6;
+        }
       }
       else
       {
