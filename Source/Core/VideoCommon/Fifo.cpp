@@ -34,7 +34,7 @@
 #include "VideoCommon/VertexManagerBase.h"
 #include "VideoCommon/VideoBackendBase.h"
 
-//#define FIFO_DEBUG_LOG(...) do { WARN_LOG(VIDEO, __VA_ARGS__); } while (0)
+// #define FIFO_DEBUG_LOG(...) do { WARN_LOG(VIDEO, __VA_ARGS__); } while (0)
 // #define INFINITELY_FAST_GPU
 
 #ifndef FIFO_DEBUG_LOG
@@ -344,6 +344,7 @@ void RegisterMMIO(MMIO::Mapping* mmio, u32 base)
                    SetCpControlRegister();
                    FIFO_DEBUG_LOG("CPRWD: %u, read=%s", fifo.CPReadWriteDistance,
                                   fifo.bFF_GPReadEnable ? "yes" : "no");
+                   UpdateInterrupts();
                    UpdateGPUSuspendState();
                  }));
 
@@ -353,6 +354,8 @@ void RegisterMMIO(MMIO::Mapping* mmio, u32 base)
                    UCPClearReg tmp(val);
                    m_CPClearReg.Hex = tmp.Hex;
                    SetCpClearRegister();
+                   UpdateInterrupts();
+                   UpdateGPUSuspendState();
                  }));
 
   mmio->Register(base | PERF_SELECT, MMIO::InvalidRead<u16>(), MMIO::Nop<u16>());
@@ -391,6 +394,7 @@ void RegisterMMIO(MMIO::Mapping* mmio, u32 base)
                  MMIO::ComplexWrite<u16>([](u32, u16 val) {
                    SyncForRegisterAccess(true);
                    WriteHigh(fifo.CPBreakpoint, val);
+                   UpdateInterrupts();
                    UpdateGPUSuspendState();
                  }));
 
@@ -445,6 +449,7 @@ void RegisterMMIO(MMIO::Mapping* mmio, u32 base)
                      GPFifo::ResetGatherPipe();
 
                    FIFO_DEBUG_LOG("Write RW Distance HI %u", fifo.CPReadWriteDistance);
+                   UpdateInterrupts();
                    UpdateGPUSuspendState();
                  }));
   mmio->Register(base | FIFO_READ_POINTER_LO, MMIO::ComplexRead<u16>([](u32) {
@@ -464,6 +469,7 @@ void RegisterMMIO(MMIO::Mapping* mmio, u32 base)
                    SyncForRegisterAccess(true);
                    WriteHigh(fifo.CPReadPointer, val);
                    FIFO_DEBUG_LOG("Write Read Pointer HI %08X", fifo.CPReadPointer);
+                   UpdateInterrupts();
                    UpdateGPUSuspendState();
                  }));
 
@@ -674,7 +680,7 @@ void RunGpuSingleCore(bool allow_run_ahead)
   }
 
   if (total_cycles_used >= available_ticks)
-    FIFO_DEBUG_LOG("out of ticks %u/%u", total_cycles_used, available_ticks);
+    FIFO_DEBUG_LOG("out of ticks %d/%d", total_cycles_used, available_ticks);
 
   s_video_buffer_size.fetch_sub(total_bytes_used);
   s_sync_ticks.fetch_sub(total_cycles_used);
