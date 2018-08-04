@@ -54,8 +54,22 @@ void AdvancedPane::CreateLayout()
   m_cpu_clock_override_slider_label = new QLabel();
   cpu_clock_override_slider_layout->addWidget(m_cpu_clock_override_slider_label);
 
+  m_sync_gpu_checkbox = new QCheckBox(tr("Enable GPU Synchronization"));
+  cpu_options_layout->addWidget(m_sync_gpu_checkbox);
+
+  auto* sync_gpu_overclock_slider_layout = new QHBoxLayout();
+  sync_gpu_overclock_slider_layout->setContentsMargins(0, 0, 0, 0);
+  cpu_options_layout->addLayout(sync_gpu_overclock_slider_layout);
+
+  m_sync_gpu_overclock_slider = new QSlider(Qt::Horizontal);
+  m_sync_gpu_overclock_slider->setRange(0, 150);
+  sync_gpu_overclock_slider_layout->addWidget(m_sync_gpu_overclock_slider);
+
+  m_sync_gpu_overclock_slider_label = new QLabel();
+  sync_gpu_overclock_slider_layout->addWidget(m_sync_gpu_overclock_slider_label);
+
   auto* cpu_clock_override_description =
-      new QLabel(tr("Adjusts the emulated CPU's clock rate.\n\n"
+      new QLabel(tr("Adjusts the emulated CPU/GPU clock rate.\n\n"
                     "Higher values may make variable-framerate games run at a higher framerate, "
                     "at the expense of performance. Lower values may activate a game's "
                     "internal frameskip, potentially improving performance.\n\n"
@@ -114,6 +128,21 @@ void AdvancedPane::ConnectLayout()
     Update();
   });
 
+  m_sync_gpu_checkbox->setChecked(SConfig::GetInstance().bSyncGPU);
+  connect(m_sync_gpu_checkbox, &QCheckBox::toggled, [this](bool syncgpu) {
+    SConfig::GetInstance().bSyncGPU = syncgpu;
+    Config::SetBaseOrCurrent(Config::MAIN_SYNC_GPU, syncgpu);
+    Update();
+  });
+
+  connect(m_sync_gpu_overclock_slider, &QSlider::valueChanged, [this](int oc_factor) {
+    // Vaguely exponential scaling?
+    const float factor = std::exp2f((m_sync_gpu_overclock_slider->value() - 100.f) / 25.f);
+    SConfig::GetInstance().fSyncGpuOverclock = factor;
+    Config::SetBaseOrCurrent(Config::MAIN_SYNC_GPU_OVERCLOCK, factor);
+    Update();
+  });
+
   m_custom_rtc_checkbox->setChecked(SConfig::GetInstance().bEnableCustomRTC);
   connect(m_custom_rtc_checkbox, &QCheckBox::toggled, [this](bool enable_custom_rtc) {
     SConfig::GetInstance().bEnableCustomRTC = enable_custom_rtc;
@@ -133,6 +162,7 @@ void AdvancedPane::Update()
 {
   const bool running = Core::GetState() != Core::State::Uninitialized;
   const bool enable_cpu_clock_override_widgets = SConfig::GetInstance().m_OCEnable;
+  const bool enable_sync_gpu_overclock_widgets = SConfig::GetInstance().bSyncGPU;
   const bool enable_custom_rtc_widgets = SConfig::GetInstance().bEnableCustomRTC && !running;
 
   m_cpu_clock_override_slider->setEnabled(enable_cpu_clock_override_widgets);
@@ -145,6 +175,19 @@ void AdvancedPane::Update()
     int core_clock = SystemTimers::GetTicksPerSecond() / std::pow(10, 6);
     int percent = static_cast<int>(std::round(SConfig::GetInstance().m_OCFactor * 100.f));
     int clock = static_cast<int>(std::round(SConfig::GetInstance().m_OCFactor * core_clock));
+    return tr("%1 % (%2 MHz)").arg(QString::number(percent), QString::number(clock));
+  }());
+
+  m_sync_gpu_overclock_slider->setEnabled(enable_sync_gpu_overclock_widgets);
+  m_sync_gpu_overclock_slider_label->setEnabled(enable_sync_gpu_overclock_widgets);
+
+  m_sync_gpu_overclock_slider->setValue(
+      static_cast<int>(std::ceil(std::log2f(SConfig::GetInstance().m_OCFactor) * 25.f + 100.f)));
+
+  m_sync_gpu_overclock_slider_label->setText([] {
+    int core_clock = SystemTimers::GetTicksPerSecond() / 3 / std::pow(10, 6);
+    int percent = static_cast<int>(std::round(SConfig::GetInstance().fSyncGpuOverclock * 100.f));
+    int clock = static_cast<int>(std::round(SConfig::GetInstance().fSyncGpuOverclock * core_clock));
     return tr("%1 % (%2 MHz)").arg(QString::number(percent), QString::number(clock));
   }());
 
