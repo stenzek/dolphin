@@ -851,6 +851,13 @@ void VulkanContext::InitDriverDetails()
     driver = DriverDetails::DRIVER_UNKNOWN;
   }
 
+#ifdef __APPLE__
+  // Vulkan on macOS goes through Metal, and is not susceptible to the same bugs
+  // as the vendor's native Vulkan drivers. We use a different driver fields to
+  // differentiate MoltenVK.
+  driver = DriverDetails::DRIVER_PORTABILITY;
+#endif
+
   DriverDetails::Init(DriverDetails::API_VULKAN, vendor, driver,
                       static_cast<double>(m_device_properties.driverVersion),
                       DriverDetails::Family::UNKNOWN);
