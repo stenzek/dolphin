@@ -372,6 +372,26 @@ void WritePixelShaderCommonHeader(ShaderCode& out, APIType ApiType, u32 num_texg
             "int3 iround(float3 x) { return int3(round(x)); }\n"
             "int4 iround(float4 x) { return int4(round(x)); }\n\n");
 
+  if (DriverDetails::HasBug(DriverDetails::BUG_MISSING_SIGN_INT_TYPE))
+  {
+    // SPIR-V to MSL shader translation does not generate a wrapper function for sign() with integer
+    // integer types, resulting in shaders failing to compile. Generate our own isign() wrapper when
+    // using Vulkan/Metal on macOS.
+    out.Write("int isign(int x) { return x < 0 ? -1 : (x > 0 ? 1 : 0); }\n");
+    out.Write("int2 isign(int2 x) { return int2(isign(x.x), isign(x.y)); }\n");
+    out.Write("int3 isign(int3 x) { return int3(isign(x.x), isign(x.y), isign(x.z)); }\n");
+    out.Write(
+        "int4 isign(int4 x) { return int4(isign(x.x), isign(x.y), isign(x.z), isign(x.w)); }\n\n");
+  }
+  else
+  {
+    // Use built-in sign() for integer types.
+    out.Write("int isign(int x) { return sign(x); }\n");
+    out.Write("int2 isign(int2 x) { return sign(x); }\n");
+    out.Write("int3 isign(int3 x) { return sign(x); }\n");
+    out.Write("int4 isign(int4 x) { return sign(x); }\n");
+  }
+
   if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
   {
     out.Write("SAMPLER_BINDING(0) uniform sampler2DArray samp[8];\n");
@@ -1139,9 +1159,9 @@ static void WriteStage(ShaderCode& out, const pixel_shader_uid_data* uid_data, i
         "((idot(tevin_a.rgb, comp24) >  idot(tevin_b.rgb, comp24)) ? tevin_c.rgb : "
         "int3(0,0,0))",  // TEVCMP_BGR24_GT
         "((idot(tevin_a.rgb, comp24) == idot(tevin_b.rgb, comp24)) ? tevin_c.rgb : "
-        "int3(0,0,0))",                                                         // TEVCMP_BGR24_EQ
-        "(max(sign(tevin_a.rgb - tevin_b.rgb), int3(0,0,0)) * tevin_c.rgb)",    // TEVCMP_RGB8_GT
-        "((int3(1,1,1) - sign(abs(tevin_a.rgb - tevin_b.rgb))) * tevin_c.rgb)"  // TEVCMP_RGB8_EQ
+        "int3(0,0,0))",                                                          // TEVCMP_BGR24_EQ
+        "(max(isign(tevin_a.rgb - tevin_b.rgb), int3(0,0,0)) * tevin_c.rgb)",    // TEVCMP_RGB8_GT
+        "((int3(1,1,1) - isign(abs(tevin_a.rgb - tevin_b.rgb))) * tevin_c.rgb)"  // TEVCMP_RGB8_EQ
     };
 
     int mode = (cc.shift << 1) | cc.op;

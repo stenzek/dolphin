@@ -276,6 +276,11 @@ enum Bug
   // Started version: -1
   // Ended version: -1
   BUG_BROKEN_D32F_CLEAR,
+
+  // BUG: SPIR-V to MSL shader translation does not generate a wrapper function for sign()
+  // with integer types, resulting in shaders failing to compile. Generate our own isign()
+  // wrapper when using Vulkan/Metal on macOS.
+  BUG_MISSING_SIGN_INT_TYPE,
 };
 
 // Initializes our internal vendor, device family, and driver version

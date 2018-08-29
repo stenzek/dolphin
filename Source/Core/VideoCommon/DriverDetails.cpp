@@ -107,6 +107,8 @@ static BugInfo m_known_bugs[] = {
     {API_VULKAN, OS_ALL, VENDOR_IMGTEC, DRIVER_IMGTEC, Family::UNKNOWN,
      BUG_BROKEN_CLEAR_LOADOP_RENDERPASS, -1.0, -1.0, true},
     {API_VULKAN, OS_ALL, VENDOR_QUALCOMM, DRIVER_QUALCOMM, Family::UNKNOWN, BUG_BROKEN_D32F_CLEAR,
+     -1.0, -1.0, true},
+    {API_VULKAN, OS_OSX, VENDOR_ALL, DRIVER_PORTABILITY, Family::UNKNOWN, BUG_MISSING_SIGN_INT_TYPE,
      -1.0, -1.0, true}};
 
 static std::map<Bug, BugInfo> m_bugs;
