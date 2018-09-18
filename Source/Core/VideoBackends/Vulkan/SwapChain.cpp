@@ -133,7 +133,7 @@ VkSurfaceKHR SwapChain::CreateVulkanSurface(VkInstance instance, const WindowSys
 
   // Now the easy part, actually creating the surface.
   VkMacOSSurfaceCreateInfoMVK surface_create_info = {
-      VK_STRUCTURE_TYPE_MACOS_SURFACE_CREATE_INFO_MVK, nullptr, 0, hwnd};
+      VK_STRUCTURE_TYPE_MACOS_SURFACE_CREATE_INFO_MVK, nullptr, 0, layer};
 
   VkSurfaceKHR surface;
   VkResult res = vkCreateMacOSSurfaceMVK(instance, &surface_create_info, nullptr, &surface);
