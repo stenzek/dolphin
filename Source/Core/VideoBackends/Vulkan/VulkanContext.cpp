@@ -205,6 +205,13 @@ bool VulkanContext::SelectInstanceExtensions(ExtensionList* extension_list, Wind
     return false;
   }
 #endif
+#if defined(VK_USE_PLATFORM_WAYLAND_KHR)
+  if (wstype == WindowSystemType::Wayland &&
+      !SupportsExtension(VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME, true))
+  {
+    return false;
+  }
+#endif
 #if defined(VK_USE_PLATFORM_ANDROID_KHR)
   if (wstype == WindowSystemType::Android &&
       !SupportsExtension(VK_KHR_ANDROID_SURFACE_EXTENSION_NAME, true))
