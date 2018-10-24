@@ -112,13 +112,20 @@ std::unique_ptr<optparse::OptionParser> CreateParser(ParserOptions options)
 
 static void AddConfigLayer(const optparse::Values& options)
 {
+  std::list<std::string> config_args;
+  std::string video_backend, audio_emulation;
   if (options.is_set_by_user("config"))
-  {
-    const std::list<std::string>& config_args = options.all("config");
-    Config::AddLayer(std::make_unique<CommandLineConfigLayerLoader>(
-        config_args, static_cast<const char*>(options.get("video_backend")),
-        static_cast<const char*>(options.get("audio_emulation"))));
-  }
+    config_args = options.all("config");
+  if (options.is_set_by_user("video_backend"))
+    video_backend = static_cast<const char*>(options.get("video_backend"));
+  if (options.is_set_by_user("audio_emulation"))
+    audio_emulation = static_cast<const char*>(options.get("audio_emulation"));
+
+  if (config_args.empty() && video_backend.empty() && audio_emulation.empty())
+    return;
+
+  Config::AddLayer(std::make_unique<CommandLineConfigLayerLoader>(
+      config_args, video_backend, audio_emulation));
 }
 
 optparse::Values& ParseArguments(optparse::OptionParser* parser, int argc, char** argv)
@@ -135,4 +142,4 @@ optparse::Values& ParseArguments(optparse::OptionParser* parser,
   AddConfigLayer(options);
   return options;
 }
-}
+}  // namespace CommandLineParse
