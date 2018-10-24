@@ -83,11 +83,11 @@ bool VulkanContext::CheckValidationLayerAvailablility()
           }) != layer_list.end());
 }
 
-VkInstance VulkanContext::CreateVulkanInstance(bool enable_surface, bool enable_debug_report,
+VkInstance VulkanContext::CreateVulkanInstance(WindowSystemType wstype, bool enable_debug_report,
                                                bool enable_validation_layer)
 {
   ExtensionList enabled_extensions;
-  if (!SelectInstanceExtensions(&enabled_extensions, enable_surface, enable_debug_report))
+  if (!SelectInstanceExtensions(&enabled_extensions, wstype, enable_debug_report))
     return VK_NULL_HANDLE;
 
   VkApplicationInfo app_info = {};
@@ -128,7 +128,7 @@ VkInstance VulkanContext::CreateVulkanInstance(bool enable_surface, bool enable_
   return instance;
 }
 
-bool VulkanContext::SelectInstanceExtensions(ExtensionList* extension_list, bool enable_surface,
+bool VulkanContext::SelectInstanceExtensions(ExtensionList* extension_list, WindowSystemType wstype,
                                              bool enable_debug_report)
 {
   u32 extension_count = 0;
@@ -171,21 +171,32 @@ bool VulkanContext::SelectInstanceExtensions(ExtensionList* extension_list, bool
   };
 
   // Common extensions
-  if (enable_surface && !SupportsExtension(VK_KHR_SURFACE_EXTENSION_NAME, true))
+  if (wstype != WindowSystemType::Headless &&
+      !SupportsExtension(VK_KHR_SURFACE_EXTENSION_NAME, true))
+  {
     return false;
+  }
 
 #if defined(VK_USE_PLATFORM_WIN32_KHR)
-  if (enable_surface && !SupportsExtension(VK_KHR_WIN32_SURFACE_EXTENSION_NAME, true))
+  if (wstype == WindowSystemType::Windows &&
+      !SupportsExtension(VK_KHR_WIN32_SURFACE_EXTENSION_NAME, true))
+  {
     return false;
-#elif defined(VK_USE_PLATFORM_XLIB_KHR)
-  if (enable_surface && !SupportsExtension(VK_KHR_XLIB_SURFACE_EXTENSION_NAME, true))
+  }
+#endif
+#if defined(VK_USE_PLATFORM_XLIB_KHR)
+  if (wstype == WindowSystemType::X11 &&
+      !SupportsExtension(VK_KHR_XLIB_SURFACE_EXTENSION_NAME, true))
+  {
     return false;
-#elif defined(VK_USE_PLATFORM_XCB_KHR)
-  if (enable_surface && !SupportsExtension(VK_KHR_XCB_SURFACE_EXTENSION_NAME, true))
+  }
+#endif
+#if defined(VK_USE_PLATFORM_ANDROID_KHR)
+  if (wstype == WindowSystemType::Android &&
+      !SupportsExtension(VK_KHR_ANDROID_SURFACE_EXTENSION_NAME, true))
+  {
     return false;
-#elif defined(VK_USE_PLATFORM_ANDROID_KHR)
-  if (enable_surface && !SupportsExtension(VK_KHR_ANDROID_SURFACE_EXTENSION_NAME, true))
-    return false;
+  }
 #endif
 
   // VK_EXT_debug_report
@@ -837,4 +848,4 @@ void VulkanContext::InitDriverDetails()
                       static_cast<double>(m_device_properties.driverVersion),
                       DriverDetails::Family::UNKNOWN);
 }
-}
+}  // namespace Vulkan
