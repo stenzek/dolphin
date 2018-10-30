@@ -108,7 +108,7 @@ VkSurfaceKHR SwapChain::CreateVulkanSurface(VkInstance instance, const WindowSys
 
 #if defined(VK_USE_PLATFORM_MACOS_MVK)
   // This is kinda messy, but it avoids having to write Objective C++ just to create a metal layer.
-  id view = reinterpret_cast<id>(hwnd);
+  id view = reinterpret_cast<id>(wsi.render_surface);
   Class clsCAMetalLayer = objc_getClass("CAMetalLayer");
   if (!clsCAMetalLayer)
   {
