@@ -41,7 +41,7 @@ RenderWidget::RenderWidget(QWidget* parent) : QWidget(parent)
   });
 
   connect(&Settings::Instance(), &Settings::EmulationStateChanged, this, [this](Core::State state) {
-    SetFillBackground(SConfig::GetInstance().bRenderToMain && state == Core::State::Uninitialized);
+    //SetFillBackground(SConfig::GetInstance().bRenderToMain && state == Core::State::Uninitialized);
   });
 
   // We have to use Qt::DirectConnection here because we don't want those signals to get queued

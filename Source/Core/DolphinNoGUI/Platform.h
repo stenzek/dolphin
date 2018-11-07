@@ -35,6 +35,9 @@ public:
 #ifdef HAVE_X11
   static std::unique_ptr<Platform> CreateX11Platform();
 #endif
+#ifdef __APPLE__
+  static std::unique_ptr<Platform> CreateMacOSPlatform();
+#endif
 
 protected:
   void UpdateRunningFlag();

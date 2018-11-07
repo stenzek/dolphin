@@ -109,6 +109,11 @@ static std::unique_ptr<Platform> GetPlatform(const optparse::Values& options)
     return Platform::CreateX11Platform();
 #endif
 
+#ifdef __APPLE__
+  if (platform_name == "macos" || platform_name.empty())
+    return Platform::CreateMacOSPlatform();
+#endif
+
   if (platform_name == "headless" || platform_name.empty())
     return Platform::CreateHeadlessPlatform();
 

@@ -8,6 +8,11 @@ if(ENABLE_X11 AND X11_FOUND)
   target_sources(dolphin-nogui PRIVATE PlatformX11.cpp)
 endif()
 
+if(APPLE)
+  target_sources(dolphin-nogui PRIVATE PlatformMacOS.mm)
+  target_link_libraries(dolphin-nogui PRIVATE "-framework QuartzCore")
+endif()
+
 set_target_properties(dolphin-nogui PROPERTIES OUTPUT_NAME dolphin-emu-nogui)
 
 target_link_libraries(dolphin-nogui

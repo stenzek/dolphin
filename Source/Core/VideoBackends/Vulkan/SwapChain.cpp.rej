@@ -1,0 +1,19 @@
+diff a/Source/Core/VideoBackends/Vulkan/SwapChain.cpp b/Source/Core/VideoBackends/Vulkan/SwapChain.cpp	(rejected hunks)
+@@ -25,6 +25,9 @@
+ #include <objc/message.h>
+ #endif
+ 
++void* CreateMetalView(void* parent, void** layer);
++void DestroyMetalView(void* parent);
++
+ namespace Vulkan
+ {
+ SwapChain::SwapChain(void* native_handle, VkSurfaceKHR surface, bool vsync)
+@@ -125,6 +128,7 @@ VkSurfaceKHR SwapChain::CreateVulkanSurface(VkInstance instance, void* hwnd)
+   return surface;
+ 
+ #elif defined(VK_USE_PLATFORM_MACOS_MVK)
++#if 0
+   // This is kinda messy, but it avoids having to write Objective C++ just to create a metal layer.
+   id view = reinterpret_cast<id>(hwnd);
+   Class clsCAMetalLayer = objc_getClass("CAMetalLayer");

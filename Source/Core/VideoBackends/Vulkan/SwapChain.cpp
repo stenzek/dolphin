@@ -22,6 +22,9 @@
 #include <objc/message.h>
 #endif
 
+void* CreateMetalView(void* parent, void** layer);
+void DestroyMetalView(void* parent);
+
 namespace Vulkan
 {
 SwapChain::SwapChain(const WindowSystemInfo& wsi, VkSurfaceKHR surface, bool vsync)
@@ -107,6 +110,7 @@ VkSurfaceKHR SwapChain::CreateVulkanSurface(VkInstance instance, const WindowSys
 #endif
 
 #if defined(VK_USE_PLATFORM_MACOS_MVK)
+#if 1
   // This is kinda messy, but it avoids having to write Objective C++ just to create a metal layer.
   id view = reinterpret_cast<id>(wsi.render_surface);
   Class clsCAMetalLayer = objc_getClass("CAMetalLayer");
@@ -125,15 +129,19 @@ VkSurfaceKHR SwapChain::CreateVulkanSurface(VkInstance instance, const WindowSys
     return VK_NULL_HANDLE;
   }
 
-  // [view setWantsLayer:YES]
-  reinterpret_cast<void (*)(id, SEL, BOOL)>(objc_msgSend)(view, sel_getUid("setWantsLayer:"), YES);
-
   // [view setLayer:layer]
   reinterpret_cast<void (*)(id, SEL, id)>(objc_msgSend)(view, sel_getUid("setLayer:"), layer);
 
+  // [view setWantsLayer:YES]
+  reinterpret_cast<void (*)(id, SEL, BOOL)>(objc_msgSend)(view, sel_getUid("setWantsLayer:"), YES);
+#endif
+
+  //void* layer;
+  //void* metal_view = CreateMetalView(wsi.render_surface, &layer);
+
   // Now the easy part, actually creating the surface.
   VkMacOSSurfaceCreateInfoMVK surface_create_info = {
-      VK_STRUCTURE_TYPE_MACOS_SURFACE_CREATE_INFO_MVK, nullptr, 0, layer};
+      VK_STRUCTURE_TYPE_MACOS_SURFACE_CREATE_INFO_MVK, nullptr, 0, wsi.render_surface};
 
   VkSurfaceKHR surface;
   VkResult res = vkCreateMacOSSurfaceMVK(instance, &surface_create_info, nullptr, &surface);

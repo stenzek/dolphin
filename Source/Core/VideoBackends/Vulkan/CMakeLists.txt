@@ -50,3 +50,9 @@ SYSTEM PRIVATE
   ${CMAKE_SOURCE_DIR}/Externals/glslang/glslang/Public
   ${CMAKE_SOURCE_DIR}/Externals/glslang/SPIRV
 )
+
+# Needed for MoltenVK support on macOS.
+if(APPLE)
+  target_sources(videovulkan PRIVATE MetalView.mm)
+  target_link_libraries(videovulkan PRIVATE "-framework QuartzCore")
+endif()
