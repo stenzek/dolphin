@@ -159,6 +159,8 @@ WindowSystemInfo PlatformX11::GetWindowSystemInfo() const
   wsi.type = WindowSystemType::X11;
   wsi.display_connection = static_cast<void*>(m_display);
   wsi.render_surface = reinterpret_cast<void*>(m_window);
+  wsi.render_surface_width = m_window_width;
+  wsi.render_surface_height = m_window_height;
   return wsi;
 }
 

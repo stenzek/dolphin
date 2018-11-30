@@ -34,7 +34,7 @@ protected:
   virtual EGLDisplay OpenEGLDisplay();
   virtual EGLNativeWindowType GetEGLNativeWindow(EGLConfig config);
 
-  bool Initialize(void* display_handle, void* window_handle, bool stereo, bool core) override;
+  bool Initialize(const WindowSystemInfo& wsi, bool stereo, bool core) override;
 
   bool CreateWindowSurface();
   void DestroyWindowSurface();
