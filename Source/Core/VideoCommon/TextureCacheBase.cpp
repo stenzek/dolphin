@@ -1801,13 +1801,16 @@ void TextureCacheBase::CopyRenderTargetToTexture(
     }
     else
     {
+      static u8 fill_pattern = 0x00;
+      fill_pattern++;
+
       // Hack: Most games don't actually need the correct texture data in RAM
       //       and we can just keep a copy in VRAM. We zero the memory so we
       //       can check it hasn't changed before using our copy in VRAM.
       u8* ptr = dst;
       for (u32 i = 0; i < num_blocks_y; i++)
       {
-        std::memset(ptr, 0, bytes_per_row);
+        std::memset(ptr, fill_pattern, bytes_per_row);
         ptr += dstStride;
       }
     }
@@ -1859,6 +1862,14 @@ void TextureCacheBase::CopyRenderTargetToTexture(
       if (overlapping_entry->is_xfb_copy && copy_to_ram)
       {
         overlapping_entry->hash = overlapping_entry->CalculateHash();
+      }
+      else if (overlapping_entry->is_efb_copy)
+      {
+        if (overlapping_entry->CalculateHash() != overlapping_entry->hash)
+        {
+          iter.first = InvalidateTexture(iter.first, true);
+          continue;
+        }
       }
 
       // Do not load textures by hash, if they were at least partly overwritten by an efb copy.
