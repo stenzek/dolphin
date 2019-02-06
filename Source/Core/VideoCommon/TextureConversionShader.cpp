@@ -15,7 +15,9 @@
 #include "VideoCommon/RenderBase.h"
 #include "VideoCommon/TextureCacheBase.h"
 #include "VideoCommon/TextureConversionShader.h"
+#include "VideoCommon/VertexManagerBase.h"
 #include "VideoCommon/VideoCommon.h"
+#include "VideoCommon/VideoConfig.h"
 
 #define WRITE p += sprintf
 
@@ -59,21 +61,10 @@ u16 GetEncodedSampleCount(EFBCopyFormat format)
 
 static void WriteHeader(char*& p, APIType ApiType)
 {
-  if (ApiType == APIType::OpenGL)
+  if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
   {
     // left, top, of source rectangle within source texture
     // width of the destination rectangle, scale_factor (1 or 2)
-    WRITE(p, "uniform int4 position;\n");
-    WRITE(p, "uniform float y_scale;\n");
-    WRITE(p, "uniform float gamma_rcp;\n");
-    WRITE(p, "uniform float2 clamp_tb;\n");
-    WRITE(p, "uniform float3 filter_coefficients;\n");
-    WRITE(p, "#define samp0 samp9\n");
-    WRITE(p, "SAMPLER_BINDING(9) uniform sampler2DArray samp0;\n");
-    WRITE(p, "FRAGMENT_OUTPUT_LOCATION(0) out vec4 ocol0;\n");
-  }
-  else if (ApiType == APIType::Vulkan)
-  {
     WRITE(p, "UBO_BINDING(std140, 1) uniform PSBlock {\n");
     WRITE(p, "  int4 position;\n");
     WRITE(p, "  float y_scale;\n");
@@ -81,6 +72,7 @@ static void WriteHeader(char*& p, APIType ApiType)
     WRITE(p, "  float2 clamp_tb;\n");
     WRITE(p, "  float3 filter_coefficients;\n");
     WRITE(p, "};\n");
+    WRITE(p, "VARYING_LOCATION(0) in float3 v_tex0;\n");
     WRITE(p, "SAMPLER_BINDING(0) uniform sampler2DArray samp0;\n");
     WRITE(p, "FRAGMENT_OUTPUT_LOCATION(0) out vec4 ocol0;\n");
   }
@@ -147,7 +139,7 @@ static void WriteSampleFunction(char*& p, const EFBCopyParams& params, APIType A
     else
     {
       // Handle D3D depth inversion.
-      if (ApiType == APIType::D3D || ApiType == APIType::Vulkan)
+      if (!g_ActiveConfig.backend_info.bSupportsReversedDepthRange)
         WRITE(p, "1.0 - (");
       else
         WRITE(p, "(");
@@ -225,7 +217,9 @@ static void WriteSwizzler(char*& p, const EFBCopyParams& params, EFBCopyFormat f
   else  // D3D
   {
     WRITE(p, "void main(\n");
-    WRITE(p, "  out float4 ocol0 : SV_Target, in float4 rawpos : SV_Position)\n");
+    WRITE(p, "  in float3 v_tex0 : TEXCOORD0,\n");
+    WRITE(p, "  in float4 rawpos : SV_Position,\n");
+    WRITE(p, "  out float4 ocol0 : SV_Target)\n");
     WRITE(p, "{\n"
              "  int2 sampleUv;\n"
              "  int2 uv1 = int2(rawpos.xy);\n");
@@ -846,40 +840,18 @@ const char* GenerateEncodingShader(const EFBCopyParams& params, APIType api_type
 
 // NOTE: In these uniforms, a row refers to a row of blocks, not texels.
 static const char decoding_shader_header[] = R"(
-#ifdef VULKAN
-
-layout(std140, push_constant) uniform PushConstants {
-  uvec2 dst_size;
-  uvec2 src_size;
-  uint src_offset;
-  uint src_row_stride;
-  uint palette_offset;
-} push_constants;
-#define u_dst_size (push_constants.dst_size)
-#define u_src_size (push_constants.src_size)
-#define u_src_offset (push_constants.src_offset)
-#define u_src_row_stride (push_constants.src_row_stride)
-#define u_palette_offset (push_constants.palette_offset)
+UBO_BINDING(std140, 1) uniform UBO {
+  uvec2 u_dst_size;
+  uvec2 u_src_size;
+  uint u_src_offset;
+  uint u_src_row_stride;
+  uint u_palette_offset;
+};
 
 TEXEL_BUFFER_BINDING(0) uniform usamplerBuffer s_input_buffer;
 TEXEL_BUFFER_BINDING(1) uniform usamplerBuffer s_palette_buffer;
 
 IMAGE_BINDING(rgba8, 0) uniform writeonly image2DArray output_image;
-
-#else
-
-uniform uvec2 u_dst_size;
-uniform uvec2 u_src_size;
-uniform uint u_src_offset;
-uniform uint u_src_row_stride;
-uniform uint u_palette_offset;
-
-SAMPLER_BINDING(9) uniform usamplerBuffer s_input_buffer;
-SAMPLER_BINDING(10) uniform usamplerBuffer s_palette_buffer;
-
-layout(rgba8, binding = 0) uniform writeonly image2DArray output_image;
-
-#endif
 
 uint Swap16(uint v)
 {
@@ -969,7 +941,7 @@ vec4 GetPaletteColorNormalized(uint index)
 
 static const std::map<TextureFormat, DecodingShaderInfo> s_decoding_shader_info{
     {TextureFormat::I4,
-     {BUFFER_FORMAT_R8_UINT, 0, 8, 8, false,
+     {TEXEL_BUFFER_FORMAT_R8_UINT, 0, 8, 8, false,
       R"(
       layout(local_size_x = 8, local_size_y = 8) in;
 
@@ -1004,7 +976,7 @@ static const std::map<TextureFormat, DecodingShaderInfo> s_decoding_shader_info{
 
       )"}},
     {TextureFormat::IA4,
-     {BUFFER_FORMAT_R8_UINT, 0, 8, 8, false,
+     {TEXEL_BUFFER_FORMAT_R8_UINT, 0, 8, 8, false,
       R"(
       layout(local_size_x = 8, local_size_y = 8) in;
 
@@ -1024,7 +996,7 @@ static const std::map<TextureFormat, DecodingShaderInfo> s_decoding_shader_info{
       }
       )"}},
     {TextureFormat::I8,
-     {BUFFER_FORMAT_R8_UINT, 0, 8, 8, false,
+     {TEXEL_BUFFER_FORMAT_R8_UINT, 0, 8, 8, false,
       R"(
       layout(local_size_x = 8, local_size_y = 8) in;
 
@@ -1042,7 +1014,7 @@ static const std::map<TextureFormat, DecodingShaderInfo> s_decoding_shader_info{
       }
       )"}},
     {TextureFormat::IA8,
-     {BUFFER_FORMAT_R16_UINT, 0, 8, 8, false,
+     {TEXEL_BUFFER_FORMAT_R16_UINT, 0, 8, 8, false,
       R"(
       layout(local_size_x = 8, local_size_y = 8) in;
 
@@ -1061,7 +1033,7 @@ static const std::map<TextureFormat, DecodingShaderInfo> s_decoding_shader_info{
       }
       )"}},
     {TextureFormat::RGB565,
-     {BUFFER_FORMAT_R16_UINT, 0, 8, 8, false,
+     {TEXEL_BUFFER_FORMAT_R16_UINT, 0, 8, 8, false,
       R"(
       layout(local_size_x = 8, local_size_y = 8) in;
 
@@ -1085,7 +1057,7 @@ static const std::map<TextureFormat, DecodingShaderInfo> s_decoding_shader_info{
 
       )"}},
     {TextureFormat::RGB5A3,
-     {BUFFER_FORMAT_R16_UINT, 0, 8, 8, false,
+     {TEXEL_BUFFER_FORMAT_R16_UINT, 0, 8, 8, false,
       R"(
       layout(local_size_x = 8, local_size_y = 8) in;
 
@@ -1119,7 +1091,7 @@ static const std::map<TextureFormat, DecodingShaderInfo> s_decoding_shader_info{
 
       )"}},
     {TextureFormat::RGBA8,
-     {BUFFER_FORMAT_R16_UINT, 0, 8, 8, false,
+     {TEXEL_BUFFER_FORMAT_R16_UINT, 0, 8, 8, false,
       R"(
       layout(local_size_x = 8, local_size_y = 8) in;
 
@@ -1155,7 +1127,7 @@ static const std::map<TextureFormat, DecodingShaderInfo> s_decoding_shader_info{
       }
       )"}},
     {TextureFormat::CMPR,
-     {BUFFER_FORMAT_R32G32_UINT, 0, 64, 1, true,
+     {TEXEL_BUFFER_FORMAT_R32G32_UINT, 0, 64, 1, true,
       R"(
       // In the compute version of this decoder, we flatten the blocks to a one-dimension array.
       // Each group is subdivided into 16, and the first thread in each group fetches the DXT data.
@@ -1273,8 +1245,8 @@ static const std::map<TextureFormat, DecodingShaderInfo> s_decoding_shader_info{
       }
       )"}},
     {TextureFormat::C4,
-     {BUFFER_FORMAT_R8_UINT, static_cast<u32>(TexDecoder_GetPaletteSize(TextureFormat::C4)), 8, 8,
-      false,
+     {TEXEL_BUFFER_FORMAT_R8_UINT, static_cast<u32>(TexDecoder_GetPaletteSize(TextureFormat::C4)),
+      8, 8, false,
       R"(
       layout(local_size_x = 8, local_size_y = 8) in;
 
@@ -1302,8 +1274,8 @@ static const std::map<TextureFormat, DecodingShaderInfo> s_decoding_shader_info{
 
       )"}},
     {TextureFormat::C8,
-     {BUFFER_FORMAT_R8_UINT, static_cast<u32>(TexDecoder_GetPaletteSize(TextureFormat::C8)), 8, 8,
-      false,
+     {TEXEL_BUFFER_FORMAT_R8_UINT, static_cast<u32>(TexDecoder_GetPaletteSize(TextureFormat::C8)),
+      8, 8, false,
       R"(
       layout(local_size_x = 8, local_size_y = 8) in;
 
@@ -1319,8 +1291,8 @@ static const std::map<TextureFormat, DecodingShaderInfo> s_decoding_shader_info{
       }
       )"}},
     {TextureFormat::C14X2,
-     {BUFFER_FORMAT_R16_UINT, static_cast<u32>(TexDecoder_GetPaletteSize(TextureFormat::C14X2)), 8,
-      8, false,
+     {TEXEL_BUFFER_FORMAT_R16_UINT,
+      static_cast<u32>(TexDecoder_GetPaletteSize(TextureFormat::C14X2)), 8, 8, false,
       R"(
       layout(local_size_x = 8, local_size_y = 8) in;
 
@@ -1339,7 +1311,7 @@ static const std::map<TextureFormat, DecodingShaderInfo> s_decoding_shader_info{
     // We do the inverse BT.601 conversion for YCbCr to RGB
     // http://www.equasys.de/colorconversion.html#YCbCr-RGBColorFormatConversion
     {TextureFormat::XFB,
-     {BUFFER_FORMAT_RGBA8_UINT, 0, 8, 8, false,
+     {TEXEL_BUFFER_FORMAT_RGBA8_UINT, 0, 8, 8, false,
       R"(
       layout(local_size_x = 8, local_size_y = 8) in;
 
@@ -1364,22 +1336,10 @@ static const std::map<TextureFormat, DecodingShaderInfo> s_decoding_shader_info{
       }
       )"}}};
 
-static const std::array<u32, BUFFER_FORMAT_COUNT> s_buffer_bytes_per_texel = {{
-    1,  // BUFFER_FORMAT_R8_UINT
-    2,  // BUFFER_FORMAT_R16_UINT
-    8,  // BUFFER_FORMAT_R32G32_UINT
-    4,  // BUFFER_FORMAT_RGBA8_UINT
-}};
-
 const DecodingShaderInfo* GetDecodingShaderInfo(TextureFormat format)
 {
   auto iter = s_decoding_shader_info.find(format);
   return iter != s_decoding_shader_info.end() ? &iter->second : nullptr;
-}
-
-u32 GetBytesPerBufferElement(BufferFormat buffer_format)
-{
-  return s_buffer_bytes_per_texel[buffer_format];
 }
 
 std::pair<u32, u32> GetDispatchCount(const DecodingShaderInfo* info, u32 width, u32 height)
@@ -1415,6 +1375,128 @@ std::string GenerateDecodingShader(TextureFormat format, TLUTFormat palette_form
 
   ss << decoding_shader_header;
   ss << info->shader_body;
+
+  return ss.str();
+}
+
+std::string GeneratePaletteConversionShader(TLUTFormat palette_format, APIType api_type)
+{
+  std::stringstream ss;
+
+  ss << R"(
+int Convert3To8(int v)
+{
+  // Swizzle bits: 00000123 -> 12312312
+  return (v << 5) | (v << 2) | (v >> 1);
+}
+int Convert4To8(int v)
+{
+  // Swizzle bits: 00001234 -> 12341234
+  return (v << 4) | v;
+}
+int Convert5To8(int v)
+{
+  // Swizzle bits: 00012345 -> 12345123
+  return (v << 3) | (v >> 2);
+}
+int Convert6To8(int v)
+{
+  // Swizzle bits: 00123456 -> 12345612
+  return (v << 2) | (v >> 4);
+})";
+
+  switch (palette_format)
+  {
+  case TLUTFormat::IA8:
+    ss << R"(
+float4 DecodePixel(int val)
+{
+  int i = val & 0xFF;
+  int a = val >> 8;
+  return float4(i, i, i, a) / 255.0;
+})";
+    break;
+
+  case TLUTFormat::RGB565:
+    ss << R"(
+float4 DecodePixel(int val)
+{
+  int r, g, b, a;
+  r = Convert5To8((val >> 11) & 0x1f);
+  g = Convert6To8((val >> 5) & 0x3f);
+  b = Convert5To8((val) & 0x1f);
+  a = 0xFF;
+  return float4(r, g, b, a) / 255.0;
+})";
+    break;
+
+  case TLUTFormat::RGB5A3:
+    ss << R"(
+float4 DecodePixel(int val)
+{
+  int r,g,b,a;
+  if ((val&0x8000) > 0)
+  {
+    r=Convert5To8((val>>10) & 0x1f);
+    g=Convert5To8((val>>5 ) & 0x1f);
+    b=Convert5To8((val    ) & 0x1f);
+    a=0xFF;
+  }
+  else
+  {
+    a=Convert3To8((val>>12) & 0x7);
+    r=Convert4To8((val>>8 ) & 0xf);
+    g=Convert4To8((val>>4 ) & 0xf);
+    b=Convert4To8((val    ) & 0xf);
+  }
+  return float4(r, g, b, a) / 255.0;
+})";
+    break;
+
+  default:
+    PanicAlert("Unknown format");
+    break;
+  }
+
+  ss << "\n";
+
+  if (api_type == APIType::D3D)
+  {
+    ss << "Buffer<uint> tex0 : register(t0);\n";
+    ss << "Texture2DArray tex1 : register(t1);\n";
+    ss << "SamplerState samp1 : register(s1);\n";
+    ss << "cbuffer PSBlock : register(b0) {\n";
+  }
+  else
+  {
+    ss << "TEXEL_BUFFER_BINDING(0) uniform usamplerBuffer samp0;\n";
+    ss << "SAMPLER_BINDING(1) uniform sampler2DArray samp1;\n";
+    ss << "UBO_BINDING(std140, 1) uniform PSBlock {\n";
+  }
+
+  ss << "  float multiplier;\n";
+  ss << "  int texel_buffer_offset;\n";
+  ss << "};\n";
+
+  if (api_type == APIType::D3D)
+  {
+    ss << "void main(in float3 v_tex0 : TEXCOORD0, out float4 ocol0 : SV_Target) {\n";
+    ss << "  int src = int(round(tex1.Sample(samp1, v_tex0).r * multiplier));\n";
+    ss << "  src = int(tex0.Load(src + texel_buffer_offset).r);\n";
+  }
+  else
+  {
+    ss << "VARYING_LOCATION(0) in float3 v_tex0;\n";
+    ss << "FRAGMENT_OUTPUT_LOCATION(0) out float4 ocol0;\n";
+    ss << "void main() {\n";
+    ss << "  float3 coords = v_tex0;\n";
+    ss << "  int src = int(round(texture(samp1, coords).r * multiplier));\n";
+    ss << "  src = int(texelFetch(samp0, src + texel_buffer_offset).r);\n";
+  }
+
+  ss << "  src = ((src << 8) & 0xFF00) | (src >> 8);\n";
+  ss << "  ocol0 = DecodePixel(src);\n";
+  ss << "}\n";
 
   return ss.str();
 }

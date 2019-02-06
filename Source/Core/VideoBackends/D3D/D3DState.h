@@ -16,6 +16,8 @@
 
 namespace DX11
 {
+class DXFramebuffer;
+
 class StateCache
 {
 public:
@@ -195,9 +197,36 @@ public:
     m_pending.computeShader = shader;
   }
 
+  void SetFramebuffer(DXFramebuffer* fb)
+  {
+    if (m_current.framebuffer != fb)
+      m_dirtyFlags |= DirtyFlag_Framebuffer;
+
+    m_pending.framebuffer = fb;
+  }
+
+  void SetCSUAV(ID3D11UnorderedAccessView* uav) {}
+
+  void SetOMUAV(ID3D11UnorderedAccessView* uav)
+  {
+    if (m_current.uav != uav)
+      m_dirtyFlags |= DirtyFlag_Framebuffer;
+
+    m_pending.uav = uav;
+  }
+
+  void SetIntegerRTV(bool enable)
+  {
+    if (m_current.use_integer_rtv != enable)
+      m_dirtyFlags |= DirtyFlag_Framebuffer;
+
+    m_pending.use_integer_rtv = enable;
+  }
+
   // removes currently set texture from all slots, returns mask of previously bound slots
   u32 UnsetTexture(ID3D11ShaderResourceView* srv);
   void SetTextureByMask(u32 textureSlotMask, ID3D11ShaderResourceView* srv);
+  void ApplyTextures();
 
   // call this immediately before any drawing operation or to explicitly apply pending resource
   // state changes
@@ -241,6 +270,7 @@ private:
     DirtyFlag_BlendState = 1 << 27,
     DirtyFlag_DepthState = 1 << 28,
     DirtyFlag_RasterizerState = 1 << 29,
+    DirtyFlag_Framebuffer = 1 << 30
   };
 
   u32 m_dirtyFlags = ~0u;
@@ -266,6 +296,9 @@ private:
     ID3D11BlendState* blendState;
     ID3D11DepthStencilState* depthState;
     ID3D11RasterizerState* rasterizerState;
+    DXFramebuffer* framebuffer;
+    ID3D11UnorderedAccessView* uav;
+    bool use_integer_rtv;
   };
 
   Resources m_pending = {};
@@ -274,6 +307,6 @@ private:
 
 extern StateManager* stateman;
 
-}  // namespace
+}  // namespace D3D
 
 }  // namespace DX11

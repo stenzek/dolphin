@@ -22,7 +22,6 @@
 #include "VideoCommon/VideoCommon.h"
 
 #include "VideoBackends/Vulkan/Constants.h"
-#include "VideoBackends/Vulkan/Util.h"
 
 namespace Vulkan
 {

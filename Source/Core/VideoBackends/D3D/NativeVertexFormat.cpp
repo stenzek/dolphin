@@ -7,8 +7,8 @@
 #include "VideoBackends/D3D/D3DBase.h"
 #include "VideoBackends/D3D/D3DBlob.h"
 #include "VideoBackends/D3D/D3DState.h"
+#include "VideoBackends/D3D/Render.h"
 #include "VideoBackends/D3D/VertexManager.h"
-#include "VideoBackends/D3D/VertexShaderCache.h"
 #include "VideoCommon/NativeVertexFormat.h"
 
 namespace DX11
@@ -16,7 +16,7 @@ namespace DX11
 std::mutex s_input_layout_lock;
 
 std::unique_ptr<NativeVertexFormat>
-VertexManager::CreateNativeVertexFormat(const PortableVertexDeclaration& vtx_decl)
+Renderer::CreateNativeVertexFormat(const PortableVertexDeclaration& vtx_decl)
 {
   return std::make_unique<D3DVertexFormat>(vtx_decl);
 }
@@ -77,11 +77,11 @@ DXGI_FORMAT VarToD3D(VarType t, int size, bool integer)
   return retval;
 }
 
-D3DVertexFormat::D3DVertexFormat(const PortableVertexDeclaration& _vtx_decl)
-{
-  this->vtx_decl = _vtx_decl;
+D3DVertexFormat::D3DVertexFormat(const PortableVertexDeclaration& vtx_decl)
+    : NativeVertexFormat(vtx_decl)
 
-  const AttributeFormat* format = &_vtx_decl.position;
+{
+  const AttributeFormat* format = &vtx_decl.position;
   if (format->enable)
   {
     m_elems[m_num_elems].SemanticName = "POSITION";
@@ -93,7 +93,7 @@ D3DVertexFormat::D3DVertexFormat(const PortableVertexDeclaration& _vtx_decl)
 
   for (int i = 0; i < 3; i++)
   {
-    format = &_vtx_decl.normals[i];
+    format = &vtx_decl.normals[i];
     if (format->enable)
     {
       m_elems[m_num_elems].SemanticName = "NORMAL";
@@ -107,7 +107,7 @@ D3DVertexFormat::D3DVertexFormat(const PortableVertexDeclaration& _vtx_decl)
 
   for (int i = 0; i < 2; i++)
   {
-    format = &_vtx_decl.colors[i];
+    format = &vtx_decl.colors[i];
     if (format->enable)
     {
       m_elems[m_num_elems].SemanticName = "COLOR";
@@ -121,7 +121,7 @@ D3DVertexFormat::D3DVertexFormat(const PortableVertexDeclaration& _vtx_decl)
 
   for (int i = 0; i < 8; i++)
   {
-    format = &_vtx_decl.texcoords[i];
+    format = &vtx_decl.texcoords[i];
     if (format->enable)
     {
       m_elems[m_num_elems].SemanticName = "TEXCOORD";
@@ -133,7 +133,7 @@ D3DVertexFormat::D3DVertexFormat(const PortableVertexDeclaration& _vtx_decl)
     }
   }
 
-  format = &_vtx_decl.posmtx;
+  format = &vtx_decl.posmtx;
   if (format->enable)
   {
     m_elems[m_num_elems].SemanticName = "BLENDINDICES";
