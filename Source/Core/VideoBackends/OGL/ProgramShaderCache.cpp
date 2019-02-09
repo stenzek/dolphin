@@ -768,6 +768,8 @@ void ProgramShaderCache::CreateHeader()
       "#define frac fract\n"
       "#define lerp mix\n"
 
+      "#define API_OPENGL 1\n"
+
       ,
       GetGLSLVersionString().c_str(),
       v < Glsl140 ? "#extension GL_ARB_uniform_buffer_object : enable" : "", earlyz_string.c_str(),

@@ -371,24 +371,10 @@ void WritePixelShaderCommonHeader(ShaderCode& out, APIType ApiType, u32 num_texg
             "int3 iround(float3 x) { return int3(round(x)); }\n"
             "int4 iround(float4 x) { return int4(round(x)); }\n\n");
 
-  if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
-  {
-    out.Write("SAMPLER_BINDING(0) uniform sampler2DArray samp[8];\n");
-  }
-  else  // D3D
-  {
-    // Declare samplers
-    out.Write("SamplerState samp[8] : register(s0);\n");
-    out.Write("\n");
-    out.Write("Texture2DArray Tex[8] : register(t0);\n");
-  }
+  out.Write("SAMPLER_BINDING(0) uniform sampler2DArray samp[8];\n");
   out.Write("\n");
 
-  if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
-    out.Write("UBO_BINDING(std140, 1) uniform PSBlock {\n");
-  else
-    out.Write("cbuffer PSBlock : register(b0) {\n");
-
+  out.Write("UBO_BINDING(std140, 1) uniform PSBlock {\n");
   out.Write("\tint4 " I_COLORS "[4];\n"
             "\tint4 " I_KCOLORS "[4];\n"
             "\tint4 " I_ALPHA ";\n"
@@ -432,28 +418,16 @@ void WritePixelShaderCommonHeader(ShaderCode& out, APIType ApiType, u32 num_texg
   if (host_config.per_pixel_lighting)
   {
     out.Write("%s", s_lighting_struct);
-
-    if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
-      out.Write("UBO_BINDING(std140, 2) uniform VSBlock {\n");
-    else
-      out.Write("cbuffer VSBlock : register(b1) {\n");
-
+    out.Write("UBO_BINDING(std140, 2) uniform VSBlock {\n");
     out.Write(s_shader_uniforms);
     out.Write("};\n");
   }
 
   if (bounding_box)
   {
-    if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
-    {
-      out.Write("SSBO_BINDING(0) buffer BBox {\n"
-                "\tint bbox_left, bbox_right, bbox_top, bbox_bottom;\n"
-                "};\n");
-    }
-    else
-    {
-      out.Write("globallycoherent RWBuffer<int> bbox_data : register(u2);\n");
-    }
+    out.Write("SSBO_BINDING(0) buffer BBox {\n"
+              "\tint bbox_left, bbox_right, bbox_top, bbox_bottom;\n"
+              "};\n");
   }
 
   out.Write("struct VS_OUTPUT {\n");
@@ -528,16 +502,8 @@ ShaderCode GeneratePixelShaderCode(APIType ApiType, const ShaderHostConfig& host
     // all of the
     // ARB_image_load_store extension yet.
 
-    // D3D11 also has a way to force the driver to enable early-z, so we're fine here.
-    if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
-    {
-      // This is a #define which signals whatever early-z method the driver supports.
-      out.Write("FORCE_EARLY_Z; \n");
-    }
-    else
-    {
-      out.Write("[earlydepthstencil]\n");
-    }
+    // This is a #define which signals whatever early-z method the driver supports.
+    out.Write("FORCE_EARLY_Z; \n");
   }
 
   // Only use dual-source blending when required on drivers that don't support it very well.
@@ -548,131 +514,92 @@ ShaderCode GeneratePixelShaderCode(APIType ApiType, const ShaderHostConfig& host
   const bool use_shader_blend =
       !use_dual_source && (uid_data->useDstAlpha && host_config.backend_shader_framebuffer_fetch);
 
-  if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
+  if (uid_data->uint_output)
   {
-    if (use_dual_source)
-    {
-      if (DriverDetails::HasBug(DriverDetails::BUG_BROKEN_FRAGMENT_SHADER_INDEX_DECORATION))
-      {
-        out.Write("FRAGMENT_OUTPUT_LOCATION(0) out vec4 ocol0;\n");
-        out.Write("FRAGMENT_OUTPUT_LOCATION(1) out vec4 ocol1;\n");
-      }
-      else
-      {
-        out.Write("FRAGMENT_OUTPUT_LOCATION_INDEXED(0, 0) out vec4 ocol0;\n");
-        out.Write("FRAGMENT_OUTPUT_LOCATION_INDEXED(0, 1) out vec4 ocol1;\n");
-      }
-    }
-    else if (use_shader_blend)
-    {
-      // QComm's Adreno driver doesn't seem to like using the framebuffer_fetch value as an
-      // intermediate value with multiple reads & modifications, so pull out the "real" output value
-      // and use a temporary for calculations, then set the output value once at the end of the
-      // shader
-      if (DriverDetails::HasBug(DriverDetails::BUG_BROKEN_FRAGMENT_SHADER_INDEX_DECORATION))
-      {
-        out.Write("FRAGMENT_OUTPUT_LOCATION(0) FRAGMENT_INOUT vec4 real_ocol0;\n");
-      }
-      else
-      {
-        out.Write("FRAGMENT_OUTPUT_LOCATION_INDEXED(0, 0) FRAGMENT_INOUT vec4 real_ocol0;\n");
-      }
-    }
-    else
+    out.Write("FRAGMENT_OUTPUT_LOCATION(0) out uvec4 ocol0;\n");
+  }
+  else if (use_dual_source)
+  {
+    if (DriverDetails::HasBug(DriverDetails::BUG_BROKEN_FRAGMENT_SHADER_INDEX_DECORATION))
     {
       out.Write("FRAGMENT_OUTPUT_LOCATION(0) out vec4 ocol0;\n");
-    }
-
-    if (uid_data->per_pixel_depth)
-      out.Write("#define depth gl_FragDepth\n");
-
-    if (host_config.backend_geometry_shaders)
-    {
-      out.Write("VARYING_LOCATION(0) in VertexData {\n");
-      GenerateVSOutputMembers(out, ApiType, uid_data->genMode_numtexgens, host_config,
-                              GetInterpolationQualifier(msaa, ssaa, true, true));
-
-      if (stereo)
-        out.Write("\tflat int layer;\n");
-
-      out.Write("};\n");
+      out.Write("FRAGMENT_OUTPUT_LOCATION(1) out vec4 ocol1;\n");
     }
     else
     {
-      // Let's set up attributes
-      u32 counter = 0;
-      out.Write("VARYING_LOCATION(%u) %s in float4 colors_0;\n", counter++,
-                GetInterpolationQualifier(msaa, ssaa));
-      out.Write("VARYING_LOCATION(%u) %s in float4 colors_1;\n", counter++,
-                GetInterpolationQualifier(msaa, ssaa));
-      for (unsigned int i = 0; i < uid_data->genMode_numtexgens; ++i)
-      {
-        out.Write("VARYING_LOCATION(%u) %s in float3 tex%d;\n", counter++,
-                  GetInterpolationQualifier(msaa, ssaa), i);
-      }
-      if (!host_config.fast_depth_calc)
-        out.Write("VARYING_LOCATION(%u) %s in float4 clipPos;\n", counter++,
-                  GetInterpolationQualifier(msaa, ssaa));
-      if (per_pixel_lighting)
-      {
-        out.Write("VARYING_LOCATION(%u) %s in float3 Normal;\n", counter++,
-                  GetInterpolationQualifier(msaa, ssaa));
-        out.Write("VARYING_LOCATION(%u) %s in float3 WorldPos;\n", counter++,
-                  GetInterpolationQualifier(msaa, ssaa));
-      }
-    }
-
-    out.Write("void main()\n{\n");
-    out.Write("\tfloat4 rawpos = gl_FragCoord;\n");
-    if (use_shader_blend)
-    {
-      // Store off a copy of the initial fb value for blending
-      out.Write("\tfloat4 initial_ocol0 = FB_FETCH_VALUE;\n");
-      out.Write("\tfloat4 ocol0;\n");
-      out.Write("\tfloat4 ocol1;\n");
+      out.Write("FRAGMENT_OUTPUT_LOCATION_INDEXED(0, 0) out vec4 ocol0;\n");
+      out.Write("FRAGMENT_OUTPUT_LOCATION_INDEXED(0, 1) out vec4 ocol1;\n");
     }
   }
-  else  // D3D
+  else if (use_shader_blend)
   {
-    out.Write("void main(\n");
-    if (uid_data->uint_output)
-      out.Write("  out uint4 ocol0 : SV_Target,\n");
-    else
-      out.Write("  out float4 ocol0 : SV_Target0,\n"
-                "  out float4 ocol1 : SV_Target1,\n");
-    out.Write("%s"
-              "  in float4 rawpos : SV_Position,\n",
-              uid_data->per_pixel_depth ? "  out float depth : SV_Depth,\n" : "");
-
-    out.Write("  in %s float4 colors_0 : COLOR0,\n", GetInterpolationQualifier(msaa, ssaa));
-    out.Write("  in %s float4 colors_1 : COLOR1\n", GetInterpolationQualifier(msaa, ssaa));
-
-    // compute window position if needed because binding semantic WPOS is not widely supported
-    for (unsigned int i = 0; i < uid_data->genMode_numtexgens; ++i)
-      out.Write(",\n  in %s float3 tex%d : TEXCOORD%d", GetInterpolationQualifier(msaa, ssaa), i,
-                i);
-    if (!host_config.fast_depth_calc)
+    // QComm's Adreno driver doesn't seem to like using the framebuffer_fetch value as an
+    // intermediate value with multiple reads & modifications, so pull out the "real" output value
+    // and use a temporary for calculations, then set the output value once at the end of the
+    // shader
+    if (DriverDetails::HasBug(DriverDetails::BUG_BROKEN_FRAGMENT_SHADER_INDEX_DECORATION))
     {
-      out.Write(",\n  in %s float4 clipPos : TEXCOORD%d", GetInterpolationQualifier(msaa, ssaa),
-                uid_data->genMode_numtexgens);
+      out.Write("FRAGMENT_OUTPUT_LOCATION(0) FRAGMENT_INOUT vec4 real_ocol0;\n");
     }
+    else
+    {
+      out.Write("FRAGMENT_OUTPUT_LOCATION_INDEXED(0, 0) FRAGMENT_INOUT vec4 real_ocol0;\n");
+    }
+  }
+  else
+  {
+    out.Write("FRAGMENT_OUTPUT_LOCATION(0) out vec4 ocol0;\n");
+  }
+
+  if (uid_data->per_pixel_depth)
+    out.Write("#define depth gl_FragDepth\n");
+
+  if (host_config.backend_geometry_shaders)
+  {
+    out.Write("VARYING_LOCATION(0) in VertexData {\n");
+    GenerateVSOutputMembers(out, ApiType, uid_data->genMode_numtexgens, host_config,
+                            GetInterpolationQualifier(msaa, ssaa, true, true));
+
+    if (stereo)
+      out.Write("\tflat int layer;\n");
+
+    out.Write("};\n");
+  }
+  else
+  {
+    // Let's set up attributes
+    u32 counter = 0;
+    out.Write("VARYING_LOCATION(%u) %s in float4 colors_0;\n", counter++,
+              GetInterpolationQualifier(msaa, ssaa));
+    out.Write("VARYING_LOCATION(%u) %s in float4 colors_1;\n", counter++,
+              GetInterpolationQualifier(msaa, ssaa));
+    for (unsigned int i = 0; i < uid_data->genMode_numtexgens; ++i)
+    {
+      out.Write("VARYING_LOCATION(%u) %s in float3 tex%d;\n", counter++,
+                GetInterpolationQualifier(msaa, ssaa), i);
+    }
+    if (!host_config.fast_depth_calc)
+      out.Write("VARYING_LOCATION(%u) %s in float4 clipPos;\n", counter++,
+                GetInterpolationQualifier(msaa, ssaa));
     if (per_pixel_lighting)
     {
-      out.Write(",\n  in %s float3 Normal : TEXCOORD%d", GetInterpolationQualifier(msaa, ssaa),
-                uid_data->genMode_numtexgens + 1);
-      out.Write(",\n  in %s float3 WorldPos : TEXCOORD%d", GetInterpolationQualifier(msaa, ssaa),
-                uid_data->genMode_numtexgens + 2);
+      out.Write("VARYING_LOCATION(%u) %s in float3 Normal;\n", counter++,
+                GetInterpolationQualifier(msaa, ssaa));
+      out.Write("VARYING_LOCATION(%u) %s in float3 WorldPos;\n", counter++,
+                GetInterpolationQualifier(msaa, ssaa));
     }
-    if (host_config.backend_geometry_shaders)
-    {
-      out.Write(",\n  in float clipDist0 : SV_ClipDistance0\n");
-      out.Write(",\n  in float clipDist1 : SV_ClipDistance1\n");
-    }
-    if (stereo)
-      out.Write(",\n  in uint layer : SV_RenderTargetArrayIndex\n");
-    out.Write("        ) {\n");
   }
 
+  out.Write("void main()\n{\n");
+  out.Write("\tfloat4 rawpos = gl_FragCoord;\n");
+  if (use_shader_blend)
+  {
+    // Store off a copy of the initial fb value for blending
+    out.Write("\tfloat4 initial_ocol0 = FB_FETCH_VALUE;\n");
+    out.Write("\tfloat4 ocol0;\n");
+    out.Write("\tfloat4 ocol1;\n");
+  }
+  
   out.Write("\tint4 c0 = " I_COLORS "[1], c1 = " I_COLORS "[2], c2 = " I_COLORS
             "[3], prev = " I_COLORS "[0];\n"
             "\tint4 rastemp = int4(0, 0, 0, 0), textemp = int4(0, 0, 0, 0), konsttemp = int4(0, 0, "
@@ -864,21 +791,10 @@ ShaderCode GeneratePixelShaderCode(APIType ApiType, const ShaderHostConfig& host
 
   if (uid_data->bounding_box)
   {
-    if (ApiType == APIType::D3D)
-    {
-      out.Write(
-          "\tif(bbox_data[0] > int(rawpos.x)) InterlockedMin(bbox_data[0], int(rawpos.x));\n"
-          "\tif(bbox_data[1] < int(rawpos.x)) InterlockedMax(bbox_data[1], int(rawpos.x));\n"
-          "\tif(bbox_data[2] > int(rawpos.y)) InterlockedMin(bbox_data[2], int(rawpos.y));\n"
-          "\tif(bbox_data[3] < int(rawpos.y)) InterlockedMax(bbox_data[3], int(rawpos.y));\n");
-    }
-    else
-    {
-      out.Write("\tif(bbox_left > int(rawpos.x)) atomicMin(bbox_left, int(rawpos.x));\n"
-                "\tif(bbox_right < int(rawpos.x)) atomicMax(bbox_right, int(rawpos.x));\n"
-                "\tif(bbox_top > int(rawpos.y)) atomicMin(bbox_top, int(rawpos.y));\n"
-                "\tif(bbox_bottom < int(rawpos.y)) atomicMax(bbox_bottom, int(rawpos.y));\n");
-    }
+    out.Write("\tif(bbox_left > int(rawpos.x)) atomicMin(bbox_left, int(rawpos.x));\n"
+              "\tif(bbox_right < int(rawpos.x)) atomicMax(bbox_right, int(rawpos.x));\n"
+              "\tif(bbox_top > int(rawpos.y)) atomicMin(bbox_top, int(rawpos.y));\n"
+              "\tif(bbox_bottom < int(rawpos.y)) atomicMax(bbox_bottom, int(rawpos.y));\n");
   }
 
   out.Write("}\n");
@@ -1250,18 +1166,8 @@ static void SampleTexture(ShaderCode& out, const char* texcoords, const char* te
                           bool stereo, APIType ApiType)
 {
   out.SetConstantsUsed(C_TEXDIMS + texmap, C_TEXDIMS + texmap);
-
-  if (ApiType == APIType::D3D)
-  {
-    out.Write("iround(255.0 * Tex[%d].Sample(samp[%d], float3(%s.xy * " I_TEXDIMS
-              "[%d].xy, %s))).%s;\n",
-              texmap, texmap, texcoords, texmap, stereo ? "layer" : "0.0", texswap);
-  }
-  else
-  {
-    out.Write("iround(255.0 * texture(samp[%d], float3(%s.xy * " I_TEXDIMS "[%d].xy, %s))).%s;\n",
-              texmap, texcoords, texmap, stereo ? "layer" : "0.0", texswap);
-  }
+  out.Write("iround(255.0 * texture(samp[%d], float3(%s.xy * " I_TEXDIMS "[%d].xy, %s))).%s;\n",
+            texmap, texcoords, texmap, stereo ? "layer" : "0.0", texswap);
 }
 
 static const char* tevAlphaFuncsTable[] = {
@@ -1322,8 +1228,7 @@ static void WriteAlphaTest(ShaderCode& out, const pixel_shader_uid_data* uid_dat
   if (!uid_data->alpha_test_use_zcomploc_hack)
   {
     out.Write("\t\tdiscard;\n");
-    if (ApiType != APIType::D3D)
-      out.Write("\t\treturn;\n");
+    out.Write("\t\treturn;\n");
   }
 
   out.Write("\t}\n");

@@ -74,6 +74,8 @@ static const char SHADER_HEADER[] = R"(
   // These were changed in Vulkan
   #define gl_VertexID gl_VertexIndex
   #define gl_InstanceID gl_InstanceIndex
+
+  #define API_VULKAN 1
 )";
 static const char COMPUTE_SHADER_HEADER[] = R"(
   // Target GLSL 4.5.
@@ -96,6 +98,8 @@ static const char COMPUTE_SHADER_HEADER[] = R"(
   #define int4 ivec4
   #define frac fract
   #define lerp mix
+
+  #define API_VULKAN 1
 )";
 
 bool CompileShaderToSPV(SPIRVCodeVector* out_code, EShLanguage stage, const char* stage_filename,

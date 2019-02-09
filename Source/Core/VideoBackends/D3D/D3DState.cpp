@@ -74,12 +74,13 @@ void StateManager::Apply()
     if (m_current.vertexConstants != m_pending.vertexConstants)
     {
       D3D::context->VSSetConstantBuffers(0, 1, &m_pending.vertexConstants);
+      D3D::context->VSSetConstantBuffers(1, 1, &m_pending.vertexConstants);
       m_current.vertexConstants = m_pending.vertexConstants;
     }
 
     if (m_current.geometryConstants != m_pending.geometryConstants)
     {
-      D3D::context->GSSetConstantBuffers(0, 1, &m_pending.geometryConstants);
+      D3D::context->GSSetConstantBuffers(2, 1, &m_pending.geometryConstants);
       m_current.geometryConstants = m_pending.geometryConstants;
     }
   }

@@ -844,40 +844,20 @@ static std::string GenerateImGuiVertexShader()
   std::stringstream ss;
 
   // Uniform buffer contains the viewport size, and we transform in the vertex shader.
-  if (api_type == APIType::D3D)
-    ss << "cbuffer PSBlock : register(b0) {\n";
-  else if (api_type == APIType::OpenGL)
-    ss << "UBO_BINDING(std140, 1) uniform PSBlock {\n";
-  else if (api_type == APIType::Vulkan)
-    ss << "UBO_BINDING(std140, 1) uniform PSBlock {\n";
+  ss << "UBO_BINDING(std140, 1) uniform PSBlock {\n";
   ss << "float2 u_rcp_viewport_size_mul2;\n";
   ss << "};\n";
 
-  if (api_type == APIType::D3D)
-  {
-    ss << "void main(in float2 rawpos : POSITION,\n"
-       << "          in float2 rawtex0 : TEXCOORD,\n"
-       << "          in float4 rawcolor0 : COLOR,\n"
-       << "          out float2 frag_uv : TEXCOORD,\n"
-       << "          out float4 frag_color : COLOR,\n"
-       << "          out float4 out_pos : SV_Position)\n";
-  }
-  else
-  {
-    ss << "ATTRIBUTE_LOCATION(" << SHADER_POSITION_ATTRIB << ") in float2 rawpos;\n"
-       << "ATTRIBUTE_LOCATION(" << SHADER_TEXTURE0_ATTRIB << ") in float2 rawtex0;\n"
-       << "ATTRIBUTE_LOCATION(" << SHADER_COLOR0_ATTRIB << ") in float4 rawcolor0;\n"
-       << "VARYING_LOCATION(0) out float2 frag_uv;\n"
-       << "VARYING_LOCATION(1) out float4 frag_color;\n"
-       << "void main()\n";
-  }
-
-  ss << "{\n"
+  ss << "ATTRIBUTE_LOCATION(" << SHADER_POSITION_ATTRIB << ") in float2 rawpos;\n"
+     << "ATTRIBUTE_LOCATION(" << SHADER_TEXTURE0_ATTRIB << ") in float2 rawtex0;\n"
+     << "ATTRIBUTE_LOCATION(" << SHADER_COLOR0_ATTRIB << ") in float4 rawcolor0;\n"
+     << "VARYING_LOCATION(0) out float2 frag_uv;\n"
+     << "VARYING_LOCATION(1) out float4 frag_color;\n"
+     << "void main()\n"
+     << "{\n"
      << "  frag_uv = rawtex0;\n"
-     << "  frag_color = rawcolor0;\n";
-
-  ss << "  " << (api_type == APIType::D3D ? "out_pos" : "gl_Position")
-     << "= float4(rawpos.x * u_rcp_viewport_size_mul2.x - 1.0, 1.0 - rawpos.y * "
+     << "  frag_color = rawcolor0;\n"
+     << "  gl_Position = float4(rawpos.x * u_rcp_viewport_size_mul2.x - 1.0, 1.0 - rawpos.y * "
         "u_rcp_viewport_size_mul2.y, 0.0, 1.0);\n";
 
   // Clip-space is flipped in Vulkan
@@ -890,34 +870,15 @@ static std::string GenerateImGuiVertexShader()
 
 static std::string GenerateImGuiPixelShader()
 {
-  const APIType api_type = g_ActiveConfig.backend_info.api_type;
-
   std::stringstream ss;
-  if (api_type == APIType::D3D)
-  {
-    ss << "Texture2DArray tex0 : register(t0);\n"
-       << "SamplerState samp0 : register(s0);\n"
-       << "void main(in float2 frag_uv : TEXCOORD,\n"
-       << "          in float4 frag_color : COLOR,\n"
-       << "          out float4 ocol0 : SV_Target)\n";
-  }
-  else
-  {
-    ss << "SAMPLER_BINDING(0) uniform sampler2DArray samp0;\n"
-       << "VARYING_LOCATION(0) in float2 frag_uv; \n"
-       << "VARYING_LOCATION(1) in float4 frag_color;\n"
-       << "FRAGMENT_OUTPUT_LOCATION(0) out float4 ocol0;\n"
-       << "void main()\n";
-  }
-
-  ss << "{\n";
-
-  if (api_type == APIType::D3D)
-    ss << "  ocol0 = tex0.Sample(samp0, float3(frag_uv, 0.0)) * frag_color;\n";
-  else
-    ss << "  ocol0 = texture(samp0, float3(frag_uv, 0.0)) * frag_color;\n";
-
-  ss << "}\n";
+  ss << "SAMPLER_BINDING(0) uniform sampler2DArray samp0;\n"
+     << "VARYING_LOCATION(0) in float2 frag_uv; \n"
+     << "VARYING_LOCATION(1) in float4 frag_color;\n"
+     << "FRAGMENT_OUTPUT_LOCATION(0) out float4 ocol0;\n"
+     << "void main()\n"
+     << "{\n"
+     << "  ocol0 = texture(samp0, float3(frag_uv, 0.0)) * frag_color;\n"
+     << "}\n";
 
   return ss.str();
 }

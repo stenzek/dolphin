@@ -425,10 +425,7 @@ std::string PostProcessing::GetUniformBufferHeader() const
 {
   std::stringstream ss;
   u32 unused_counter = 1;
-  if (g_ActiveConfig.backend_info.api_type == APIType::D3D)
-    ss << "struct Options {\n";
-  else
-    ss << "UBO_BINDING(std140, 1) uniform PSBlock {\n";
+  ss << "UBO_BINDING(std140, 1) uniform PSBlock {\n";
 
   // Builtin uniforms
   ss << "  float4 resolution;\n";
@@ -475,59 +472,21 @@ std::string PostProcessing::GetUniformBufferHeader() const
     }
   }
 
-  if (g_ActiveConfig.backend_info.api_type == APIType::D3D)
-    ss << "};\ncbuffer PSBlock : register(b0) { Options options; };\n";
-  else
-    ss << "} options;\n\n";
+  ss << "} options;\n\n";
   return ss.str();
 }
 
 std::string PostProcessing::GetHeader() const
 {
-  std::stringstream ss;
-  ss << GetUniformBufferHeader();
-  if (g_ActiveConfig.backend_info.api_type == APIType::D3D)
-  {
-    ss << "Texture2DArray tex0 : register(t0);\n";
-    ss << "SamplerState samp0 : register(s0);\n";
-  }
-  else
-  {
-    ss << "SAMPLER_BINDING(0) uniform sampler2DArray samp0;\n";
-    ss << "VARYING_LOCATION(0) in float3 v_tex0;\n";
-    ss << "FRAGMENT_OUTPUT_LOCATION(0) out float4 ocol0;\n";
-  }
+  return R"(
+SAMPLER_BINDING(0) uniform sampler2DArray samp0;
+VARYING_LOCATION(0) in float3 v_tex0;
+FRAGMENT_OUTPUT_LOCATION(0) out float4 ocol0;
 
-  // Rename main, since we need to set up globals
-  if (g_ActiveConfig.backend_info.api_type == APIType::D3D)
-  {
-    ss << R"(
-#define main real_main
-static float4 src_rect;
-static float3 uv0;
-static int layer;
-static float4 ocol0;
-
-float4 Sample() { return tex0.Sample(samp0, uv0); }
-float4 SampleLocation(float2 location) { return tex0.Sample(samp0, float3(location, uv0.z)); }
-float4 SampleLayer(int layer) { return tex0.Sample(samp0, float3(uv0.xy, float(layer))); }
-#define SampleOffset(offset) tex0.SampleOffset(samp0, uv0, offset)";
-  }
-  else
-  {
-    ss << R"(
-#define main real_main
-float4 src_rect = float4(options.src_offset, options.src_size);
-float3 uv0 = float3(v_tex0.xy, options.src_layer);
-int layer = int(options.src_layer);
-
-float4 Sample() { return texture(samp0, uv0); }
-float4 SampleLocation(float2 location) { return texture(samp0, float3(location, uv0.z)); }
-float4 SampleLayer(int layer) { return texture(samp0, float3(uv0.xy, float(layer))); }
-#define SampleOffset(offset) textureOffset(samp0, uv0, offset)";
-  }
-
-  ss << R"(
+float4 Sample() { return texture(samp0, float3(v_tex0.xy, float(options.src_layer))); }
+float4 SampleLocation(float2 location) { return texture(samp0, float3(location, float(options.src_layer))); }
+float4 SampleLayer(int layer) { return texture(samp0, float3(v_tex0.xy, float(layer))); }
+#define SampleOffset(offset) textureOffset(samp0, float3(v_tex0.xy, float(options.src_layer)), offset)
 
 float2 GetResolution()
 {
@@ -541,7 +500,7 @@ float2 GetInvResolution()
 
 float2 GetCoordinates()
 {
-  return uv0.xy;
+  return v_tex0.xy;
 }
 
 uint GetTime()
@@ -558,35 +517,11 @@ void SetOutput(float4 color)
 #define OptionEnabled(x) (options.x != 0)
 
 )";
-  return ss.str();
 }
 
 std::string PostProcessing::GetFooter() const
 {
-  if (g_ActiveConfig.backend_info.api_type == APIType::D3D)
-  {
-    return R"(
-
-#undef main
-void main(in float3 v_tex0 : TEXCOORD0, out float4 ocol0_ : SV_Target)
-{
-  src_rect = float4(options.src_offset, options.src_size);
-  uv0 = float3(v_tex0.xy, options.src_layer);
-  layer = int(options.src_layer);
-  real_main();
-  ocol0_ = ocol0;
-})";
-  }
-  else
-  {
-    return R"(
-
-#undef main
-void main()
-{
-  real_main();
-})";
-  }
+  return {};
 }
 
 bool PostProcessing::CompileVertexShader()
@@ -594,18 +529,10 @@ bool PostProcessing::CompileVertexShader()
   std::stringstream ss;
   ss << GetUniformBufferHeader();
 
-  if (g_ActiveConfig.backend_info.api_type == APIType::D3D)
-  {
-    ss << "void main(in uint id : SV_VertexID, out float3 v_tex0 : TEXCOORD0,\n";
-    ss << "          out float4 opos : SV_Position) {\n";
-  }
-  else
-  {
-    ss << "VARYING_LOCATION(0) out float3 v_tex0;\n";
-    ss << "#define id gl_VertexID\n";
-    ss << "#define opos gl_Position\n";
-    ss << "void main() {\n";
-  }
+  ss << "VARYING_LOCATION(0) out float3 v_tex0;\n";
+  ss << "#define id gl_VertexID\n";
+  ss << "#define opos gl_Position\n";
+  ss << "void main() {\n";
   ss << "  v_tex0 = float3(float((id << 1) & 2), float(id & 2), 0.0f);\n";
   ss << "  opos = float4(v_tex0.xy * float2(2.0f, -2.0f) + float2(-1.0f, 1.0f), 0.0f, 1.0f);\n";
   ss << "  v_tex0 = float3(options.src_offset + (options.src_size * v_tex0.xy), 0.0f);\n";
@@ -699,7 +626,7 @@ bool PostProcessing::CompilePixelShader()
   // Generate GLSL and compile the new shader.
   m_config.LoadShader(g_ActiveConfig.sPostProcessingShader);
   m_pixel_shader = g_renderer->CreateShaderFromSource(
-      ShaderStage::Pixel, GetHeader() + m_config.GetShaderCode() + GetFooter());
+      ShaderStage::Pixel, GetUniformBufferHeader() + GetHeader() + m_config.GetShaderCode() + GetFooter());
   if (!m_pixel_shader)
   {
     PanicAlert("Failed to compile post-processing shader %s", m_config.GetShader().c_str());
@@ -707,7 +634,7 @@ bool PostProcessing::CompilePixelShader()
     // Use default shader.
     m_config.LoadDefaultShader();
     m_pixel_shader = g_renderer->CreateShaderFromSource(
-        ShaderStage::Pixel, GetHeader() + m_config.GetShaderCode() + GetFooter());
+        ShaderStage::Pixel, GetUniformBufferHeader() + GetHeader() + m_config.GetShaderCode() + GetFooter());
     if (!m_pixel_shader)
       return false;
   }

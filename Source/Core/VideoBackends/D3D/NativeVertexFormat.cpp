@@ -84,7 +84,8 @@ D3DVertexFormat::D3DVertexFormat(const PortableVertexDeclaration& vtx_decl)
   const AttributeFormat* format = &vtx_decl.position;
   if (format->enable)
   {
-    m_elems[m_num_elems].SemanticName = "POSITION";
+    m_elems[m_num_elems].SemanticName = "TEXCOORD";
+    m_elems[m_num_elems].SemanticIndex = SHADER_POSITION_ATTRIB;
     m_elems[m_num_elems].AlignedByteOffset = format->offset;
     m_elems[m_num_elems].Format = VarToD3D(format->type, format->components, format->integer);
     m_elems[m_num_elems].InputSlotClass = D3D11_INPUT_PER_VERTEX_DATA;
@@ -96,8 +97,8 @@ D3DVertexFormat::D3DVertexFormat(const PortableVertexDeclaration& vtx_decl)
     format = &vtx_decl.normals[i];
     if (format->enable)
     {
-      m_elems[m_num_elems].SemanticName = "NORMAL";
-      m_elems[m_num_elems].SemanticIndex = i;
+      m_elems[m_num_elems].SemanticName = "TEXCOORD";
+      m_elems[m_num_elems].SemanticIndex = SHADER_NORM0_ATTRIB + i;
       m_elems[m_num_elems].AlignedByteOffset = format->offset;
       m_elems[m_num_elems].Format = VarToD3D(format->type, format->components, format->integer);
       m_elems[m_num_elems].InputSlotClass = D3D11_INPUT_PER_VERTEX_DATA;
@@ -110,8 +111,8 @@ D3DVertexFormat::D3DVertexFormat(const PortableVertexDeclaration& vtx_decl)
     format = &vtx_decl.colors[i];
     if (format->enable)
     {
-      m_elems[m_num_elems].SemanticName = "COLOR";
-      m_elems[m_num_elems].SemanticIndex = i;
+      m_elems[m_num_elems].SemanticName = "TEXCOORD";
+      m_elems[m_num_elems].SemanticIndex = SHADER_COLOR0_ATTRIB + i;
       m_elems[m_num_elems].AlignedByteOffset = format->offset;
       m_elems[m_num_elems].Format = VarToD3D(format->type, format->components, format->integer);
       m_elems[m_num_elems].InputSlotClass = D3D11_INPUT_PER_VERTEX_DATA;
@@ -125,7 +126,7 @@ D3DVertexFormat::D3DVertexFormat(const PortableVertexDeclaration& vtx_decl)
     if (format->enable)
     {
       m_elems[m_num_elems].SemanticName = "TEXCOORD";
-      m_elems[m_num_elems].SemanticIndex = i;
+      m_elems[m_num_elems].SemanticIndex = SHADER_TEXTURE0_ATTRIB + i;
       m_elems[m_num_elems].AlignedByteOffset = format->offset;
       m_elems[m_num_elems].Format = VarToD3D(format->type, format->components, format->integer);
       m_elems[m_num_elems].InputSlotClass = D3D11_INPUT_PER_VERTEX_DATA;
@@ -136,7 +137,8 @@ D3DVertexFormat::D3DVertexFormat(const PortableVertexDeclaration& vtx_decl)
   format = &vtx_decl.posmtx;
   if (format->enable)
   {
-    m_elems[m_num_elems].SemanticName = "BLENDINDICES";
+    m_elems[m_num_elems].SemanticName = "TEXCOORD";
+    m_elems[m_num_elems].SemanticIndex = SHADER_POSMTX_ATTRIB;
     m_elems[m_num_elems].AlignedByteOffset = format->offset;
     m_elems[m_num_elems].Format = VarToD3D(format->type, format->components, format->integer);
     m_elems[m_num_elems].InputSlotClass = D3D11_INPUT_PER_VERTEX_DATA;

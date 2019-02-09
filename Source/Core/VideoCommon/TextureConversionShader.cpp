@@ -61,39 +61,18 @@ u16 GetEncodedSampleCount(EFBCopyFormat format)
 
 static void WriteHeader(char*& p, APIType ApiType)
 {
-  if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
-  {
-    // left, top, of source rectangle within source texture
-    // width of the destination rectangle, scale_factor (1 or 2)
-    WRITE(p, "UBO_BINDING(std140, 1) uniform PSBlock {\n");
-    WRITE(p, "  int4 position;\n");
-    WRITE(p, "  float y_scale;\n");
-    WRITE(p, "  float gamma_rcp;\n");
-    WRITE(p, "  float2 clamp_tb;\n");
-    WRITE(p, "  float3 filter_coefficients;\n");
-    WRITE(p, "};\n");
-    WRITE(p, "VARYING_LOCATION(0) in float3 v_tex0;\n");
-    WRITE(p, "SAMPLER_BINDING(0) uniform sampler2DArray samp0;\n");
-    WRITE(p, "FRAGMENT_OUTPUT_LOCATION(0) out vec4 ocol0;\n");
-  }
-  else  // D3D
-  {
-    WRITE(p, "cbuffer PSBlock : register(b0) {\n");
-    WRITE(p, "  int4 position;\n");
-    WRITE(p, "  float y_scale;\n");
-    WRITE(p, "  float gamma_rcp;\n");
-    WRITE(p, "  float2 clamp_tb;\n");
-    WRITE(p, "  float3 filter_coefficients;\n");
-    WRITE(p, "};\n");
-    WRITE(p, "sampler samp0 : register(s0);\n");
-    WRITE(p, "Texture2DArray Tex0 : register(t0);\n");
-  }
-
-  // D3D does not have roundEven(), only round(), which is specified "to the nearest integer".
-  // This differs from the roundEven() behavior, but to get consistency across drivers in OpenGL
-  // we need to use roundEven().
-  if (ApiType == APIType::D3D)
-    WRITE(p, "#define roundEven(x) round(x)\n");
+  // left, top, of source rectangle within source texture
+  // width of the destination rectangle, scale_factor (1 or 2)
+  WRITE(p, "UBO_BINDING(std140, 1) uniform PSBlock {\n");
+  WRITE(p, "  int4 position;\n");
+  WRITE(p, "  float y_scale;\n");
+  WRITE(p, "  float gamma_rcp;\n");
+  WRITE(p, "  float2 clamp_tb;\n");
+  WRITE(p, "  float3 filter_coefficients;\n");
+  WRITE(p, "};\n");
+  WRITE(p, "VARYING_LOCATION(0) in float3 v_tex0;\n");
+  WRITE(p, "SAMPLER_BINDING(0) uniform sampler2DArray samp0;\n");
+  WRITE(p, "FRAGMENT_OUTPUT_LOCATION(0) out vec4 ocol0;\n");
 
   // Alpha channel in the copy is set to 1 the EFB format does not have an alpha channel.
   WRITE(p, "float4 RGBA8ToRGB8(float4 src)\n");
@@ -145,11 +124,7 @@ static void WriteSampleFunction(char*& p, const EFBCopyParams& params, APIType A
         WRITE(p, "(");
     }
 
-    if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
-      WRITE(p, "texture(samp0, float3(");
-    else
-      WRITE(p, "Tex0.Sample(samp0, float3(");
-
+    WRITE(p, "texture(samp0, float3(");
     WRITE(p, "uv.x + float(xoffset) * pixel_size.x, ");
 
     // Reverse the direction for OpenGL, since positive numbers are distance from the bottom row.
@@ -204,26 +179,19 @@ static void WriteSampleFunction(char*& p, const EFBCopyParams& params, APIType A
 static void WriteSwizzler(char*& p, const EFBCopyParams& params, EFBCopyFormat format,
                           APIType ApiType)
 {
+  // D3D does not have roundEven(), only round(), which is specified "to the nearest integer".
+  // This differs from the roundEven() behavior, but to get consistency across drivers in OpenGL
+  // we need to use roundEven().
+  if (ApiType == APIType::D3D)
+    WRITE(p, "#define roundEven(x) round(x)\n");
+
   WriteHeader(p, ApiType);
   WriteSampleFunction(p, params, ApiType);
 
-  if (ApiType == APIType::OpenGL || ApiType == APIType::Vulkan)
-  {
-    WRITE(p, "void main()\n");
-    WRITE(p, "{\n"
-             "  int2 sampleUv;\n"
-             "  int2 uv1 = int2(gl_FragCoord.xy);\n");
-  }
-  else  // D3D
-  {
-    WRITE(p, "void main(\n");
-    WRITE(p, "  in float3 v_tex0 : TEXCOORD0,\n");
-    WRITE(p, "  in float4 rawpos : SV_Position,\n");
-    WRITE(p, "  out float4 ocol0 : SV_Target)\n");
-    WRITE(p, "{\n"
-             "  int2 sampleUv;\n"
-             "  int2 uv1 = int2(rawpos.xy);\n");
-  }
+  WRITE(p, "void main()\n");
+  WRITE(p, "{\n"
+            "  int2 sampleUv;\n"
+            "  int2 uv1 = int2(gl_FragCoord.xy);\n");
 
   int blkW = TexDecoder_GetEFBCopyBlockWidthInTexels(format);
   int blkH = TexDecoder_GetEFBCopyBlockHeightInTexels(format);
@@ -1460,40 +1428,18 @@ float4 DecodePixel(int val)
 
   ss << "\n";
 
-  if (api_type == APIType::D3D)
-  {
-    ss << "Buffer<uint> tex0 : register(t0);\n";
-    ss << "Texture2DArray tex1 : register(t1);\n";
-    ss << "SamplerState samp1 : register(s1);\n";
-    ss << "cbuffer PSBlock : register(b0) {\n";
-  }
-  else
-  {
-    ss << "TEXEL_BUFFER_BINDING(0) uniform usamplerBuffer samp0;\n";
-    ss << "SAMPLER_BINDING(1) uniform sampler2DArray samp1;\n";
-    ss << "UBO_BINDING(std140, 1) uniform PSBlock {\n";
-  }
-
+  ss << "TEXEL_BUFFER_BINDING(0) uniform usamplerBuffer samp0;\n";
+  ss << "SAMPLER_BINDING(1) uniform sampler2DArray samp1;\n";
+  ss << "UBO_BINDING(std140, 1) uniform PSBlock {\n";
   ss << "  float multiplier;\n";
   ss << "  int texel_buffer_offset;\n";
   ss << "};\n";
-
-  if (api_type == APIType::D3D)
-  {
-    ss << "void main(in float3 v_tex0 : TEXCOORD0, out float4 ocol0 : SV_Target) {\n";
-    ss << "  int src = int(round(tex1.Sample(samp1, v_tex0).r * multiplier));\n";
-    ss << "  src = int(tex0.Load(src + texel_buffer_offset).r);\n";
-  }
-  else
-  {
-    ss << "VARYING_LOCATION(0) in float3 v_tex0;\n";
-    ss << "FRAGMENT_OUTPUT_LOCATION(0) out float4 ocol0;\n";
-    ss << "void main() {\n";
-    ss << "  float3 coords = v_tex0;\n";
-    ss << "  int src = int(round(texture(samp1, coords).r * multiplier));\n";
-    ss << "  src = int(texelFetch(samp0, src + texel_buffer_offset).r);\n";
-  }
-
+  ss << "VARYING_LOCATION(0) in float3 v_tex0;\n";
+  ss << "FRAGMENT_OUTPUT_LOCATION(0) out float4 ocol0;\n";
+  ss << "void main() {\n";
+  ss << "  float3 coords = v_tex0;\n";
+  ss << "  int src = int(round(texture(samp1, coords).r * multiplier));\n";
+  ss << "  src = int(texelFetch(samp0, src + texel_buffer_offset).r);\n";
   ss << "  src = ((src << 8) & 0xFF00) | (src >> 8);\n";
   ss << "  ocol0 = DecodePixel(src);\n";
   ss << "}\n";

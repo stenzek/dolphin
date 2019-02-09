@@ -194,21 +194,12 @@ std::string GetDiskShaderCacheFileName(APIType api_type, const char* type, bool 
 
 template <class T>
 inline void DefineOutputMember(T& object, APIType api_type, const char* qualifier, const char* type,
-                               const char* name, int var_index, const char* semantic = "",
-                               int semantic_index = -1)
+                               const char* name, int var_index)
 {
   object.Write("\t%s %s %s", qualifier, type, name);
 
   if (var_index != -1)
     object.Write("%d", var_index);
-
-  if (api_type == APIType::D3D && strlen(semantic) > 0)
-  {
-    if (semantic_index != -1)
-      object.Write(" : %s%d", semantic, semantic_index);
-    else
-      object.Write(" : %s", semantic);
-  }
 
   object.Write(";\n");
 }
@@ -217,28 +208,26 @@ template <class T>
 inline void GenerateVSOutputMembers(T& object, APIType api_type, u32 texgens,
                                     const ShaderHostConfig& host_config, const char* qualifier)
 {
-  DefineOutputMember(object, api_type, qualifier, "float4", "pos", -1, "POSITION");
-  DefineOutputMember(object, api_type, qualifier, "float4", "colors_", 0, "COLOR", 0);
-  DefineOutputMember(object, api_type, qualifier, "float4", "colors_", 1, "COLOR", 1);
+  DefineOutputMember(object, api_type, qualifier, "float4", "pos", -1);
+  DefineOutputMember(object, api_type, qualifier, "float4", "colors_", 0);
+  DefineOutputMember(object, api_type, qualifier, "float4", "colors_", 1);
 
   for (unsigned int i = 0; i < texgens; ++i)
-    DefineOutputMember(object, api_type, qualifier, "float3", "tex", i, "TEXCOORD", i);
+    DefineOutputMember(object, api_type, qualifier, "float3", "tex", i);
 
   if (!host_config.fast_depth_calc)
-    DefineOutputMember(object, api_type, qualifier, "float4", "clipPos", -1, "TEXCOORD", texgens);
+    DefineOutputMember(object, api_type, qualifier, "float4", "clipPos", -1);
 
   if (host_config.per_pixel_lighting)
   {
-    DefineOutputMember(object, api_type, qualifier, "float3", "Normal", -1, "TEXCOORD",
-                       texgens + 1);
-    DefineOutputMember(object, api_type, qualifier, "float3", "WorldPos", -1, "TEXCOORD",
-                       texgens + 2);
+    DefineOutputMember(object, api_type, qualifier, "float3", "Normal", -1);
+    DefineOutputMember(object, api_type, qualifier, "float3", "WorldPos", -1);
   }
 
   if (host_config.backend_geometry_shaders)
   {
-    DefineOutputMember(object, api_type, qualifier, "float", "clipDist", 0, "SV_ClipDistance", 0);
-    DefineOutputMember(object, api_type, qualifier, "float", "clipDist", 1, "SV_ClipDistance", 1);
+    DefineOutputMember(object, api_type, qualifier, "float", "clipDist", 0);
+    DefineOutputMember(object, api_type, qualifier, "float", "clipDist", 1);
   }
 }
 

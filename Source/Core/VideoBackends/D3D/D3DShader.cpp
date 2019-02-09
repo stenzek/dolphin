@@ -3,6 +3,7 @@
 // Refer to the license.txt file included.
 
 #include <fstream>
+#include <optional>
 #include <string>
 
 #include "Common/FileUtil.h"
@@ -11,12 +12,26 @@
 #include "Common/StringUtil.h"
 #include "VideoBackends/D3D/D3DBase.h"
 #include "VideoBackends/D3D/D3DShader.h"
+#include "VideoCommon/SPIRVCompiler.h"
 #include "VideoCommon/VideoConfig.h"
+#include "spirv_hlsl.hpp"
 
 namespace DX11
 {
 namespace D3D
 {
+static std::optional<std::string> SPVToHLSL(VideoCommon::SPIRVCompiler::CodeVector spv)
+{
+  spirv_cross::CompilerHLSL::Options options;
+  options.shader_model = 50;  // TODO: FIXME
+
+  spirv_cross::CompilerHLSL compiler(std::move(spv));
+  compiler.set_hlsl_options(options);
+
+  std::string hlsl = compiler.compile();
+  return hlsl;
+}
+
 // bytecode->shader
 ID3D11VertexShader* CreateVertexShaderFromByteCode(const void* bytecode, size_t len)
 {
@@ -31,16 +46,26 @@ ID3D11VertexShader* CreateVertexShaderFromByteCode(const void* bytecode, size_t 
 // code->bytecode
 bool CompileVertexShader(const std::string& code, D3DBlob** blob)
 {
+  VideoCommon::SPIRVCompiler::CodeVector spv;
+  if (!VideoCommon::SPIRVCompiler::CompileVertexShader(&spv, APIType::D3D, code.c_str(),
+                                                       code.length()))
+  {
+    return false;
+  }
+  auto hlsl = SPVToHLSL(std::move(spv));
+  if (!hlsl)
+    return false;
+
   ID3D10Blob* shaderBuffer = nullptr;
   ID3D10Blob* errorBuffer = nullptr;
 
-#if defined(_DEBUG) || defined(DEBUGFAST)
+#if defined(_DEBUG) || defined(DEBUGFAST) || 1
   UINT flags = D3D10_SHADER_ENABLE_BACKWARDS_COMPATIBILITY | D3D10_SHADER_DEBUG;
 #else
   UINT flags = D3D10_SHADER_ENABLE_BACKWARDS_COMPATIBILITY | D3D10_SHADER_OPTIMIZATION_LEVEL3 |
                D3D10_SHADER_SKIP_VALIDATION;
 #endif
-  HRESULT hr = PD3DCompile(code.c_str(), code.length(), nullptr, nullptr, nullptr, "main",
+  HRESULT hr = PD3DCompile(hlsl->c_str(), hlsl->length(), nullptr, nullptr, nullptr, "main",
                            D3D::VertexShaderVersionString(), flags, 0, &shaderBuffer, &errorBuffer);
   if (errorBuffer)
   {
@@ -87,17 +112,27 @@ ID3D11GeometryShader* CreateGeometryShaderFromByteCode(const void* bytecode, siz
 bool CompileGeometryShader(const std::string& code, D3DBlob** blob,
                            const D3D_SHADER_MACRO* pDefines)
 {
+  VideoCommon::SPIRVCompiler::CodeVector spv;
+  if (!VideoCommon::SPIRVCompiler::CompileGeometryShader(&spv, APIType::D3D, code.c_str(),
+                                                         code.length()))
+  {
+    return false;
+  }
+  auto hlsl = SPVToHLSL(std::move(spv));
+  if (!hlsl)
+    return false;
+
   ID3D10Blob* shaderBuffer = nullptr;
   ID3D10Blob* errorBuffer = nullptr;
 
-#if defined(_DEBUG) || defined(DEBUGFAST)
+#if defined(_DEBUG) || defined(DEBUGFAST) || 1
   UINT flags = D3D10_SHADER_ENABLE_BACKWARDS_COMPATIBILITY | D3D10_SHADER_DEBUG;
 #else
   UINT flags = D3D10_SHADER_ENABLE_BACKWARDS_COMPATIBILITY | D3D10_SHADER_OPTIMIZATION_LEVEL3 |
                D3D10_SHADER_SKIP_VALIDATION;
 #endif
   HRESULT hr =
-      PD3DCompile(code.c_str(), code.length(), nullptr, pDefines, nullptr, "main",
+      PD3DCompile(hlsl->c_str(), hlsl->length(), nullptr, pDefines, nullptr, "main",
                   D3D::GeometryShaderVersionString(), flags, 0, &shaderBuffer, &errorBuffer);
 
   if (errorBuffer)
@@ -113,7 +148,7 @@ bool CompileGeometryShader(const std::string& code, D3DBlob** blob,
                                             File::GetUserPath(D_DUMP_IDX).c_str(), num_failures++);
     std::ofstream file;
     File::OpenFStream(file, filename, std::ios_base::out);
-    file << code;
+    file << *hlsl;
     file.close();
 
     PanicAlert("Failed to compile geometry shader: %s\nDebug info (%s):\n%s", filename.c_str(),
@@ -146,15 +181,25 @@ ID3D11PixelShader* CreatePixelShaderFromByteCode(const void* bytecode, size_t le
 // code->bytecode
 bool CompilePixelShader(const std::string& code, D3DBlob** blob, const D3D_SHADER_MACRO* pDefines)
 {
+  VideoCommon::SPIRVCompiler::CodeVector spv;
+  if (!VideoCommon::SPIRVCompiler::CompileFragmentShader(&spv, APIType::D3D, code.c_str(),
+                                                         code.length()))
+  {
+    return false;
+  }
+  auto hlsl = SPVToHLSL(std::move(spv));
+  if (!hlsl)
+    return false;
+
   ID3D10Blob* shaderBuffer = nullptr;
   ID3D10Blob* errorBuffer = nullptr;
 
-#if defined(_DEBUG) || defined(DEBUGFAST)
+#if defined(_DEBUG) || defined(DEBUGFAST) || 1
   UINT flags = D3D10_SHADER_DEBUG;
 #else
   UINT flags = D3D10_SHADER_OPTIMIZATION_LEVEL3;
 #endif
-  HRESULT hr = PD3DCompile(code.c_str(), code.length(), nullptr, pDefines, nullptr, "main",
+  HRESULT hr = PD3DCompile(hlsl->c_str(), hlsl->length(), nullptr, pDefines, nullptr, "main",
                            D3D::PixelShaderVersionString(), flags, 0, &shaderBuffer, &errorBuffer);
 
   if (errorBuffer)
@@ -170,7 +215,7 @@ bool CompilePixelShader(const std::string& code, D3DBlob** blob, const D3D_SHADE
                                             File::GetUserPath(D_DUMP_IDX).c_str(), num_failures++);
     std::ofstream file;
     File::OpenFStream(file, filename, std::ios_base::out);
-    file << code;
+    file << *hlsl;
     file.close();
 
     PanicAlert("Failed to compile pixel shader: %s\nDebug info (%s):\n%s", filename.c_str(),
@@ -204,16 +249,26 @@ ID3D11ComputeShader* CreateComputeShaderFromByteCode(const void* bytecode, size_
 // code->bytecode
 bool CompileComputeShader(const std::string& code, D3DBlob** blob, const D3D_SHADER_MACRO* pDefines)
 {
+  VideoCommon::SPIRVCompiler::CodeVector spv;
+  if (!VideoCommon::SPIRVCompiler::CompileComputeShader(&spv, APIType::D3D, code.c_str(),
+                                                        code.length()))
+  {
+    return false;
+  }
+  auto hlsl = SPVToHLSL(std::move(spv));
+  if (!hlsl)
+    return false;
+
   ID3D10Blob* shaderBuffer = nullptr;
   ID3D10Blob* errorBuffer = nullptr;
 
-#if defined(_DEBUG) || defined(DEBUGFAST)
+#if defined(_DEBUG) || defined(DEBUGFAST) || 1
   UINT flags = D3D10_SHADER_DEBUG;
 #else
   UINT flags = D3D10_SHADER_OPTIMIZATION_LEVEL3;
 #endif
   HRESULT hr =
-      PD3DCompile(code.c_str(), code.length(), nullptr, pDefines, nullptr, "main",
+      PD3DCompile(hlsl->c_str(), hlsl->length(), nullptr, pDefines, nullptr, "main",
                   D3D::ComputeShaderVersionString(), flags, 0, &shaderBuffer, &errorBuffer);
 
   if (errorBuffer)
@@ -229,7 +284,7 @@ bool CompileComputeShader(const std::string& code, D3DBlob** blob, const D3D_SHA
                                             File::GetUserPath(D_DUMP_IDX).c_str(), num_failures++);
     std::ofstream file;
     File::OpenFStream(file, filename, std::ios_base::out);
-    file << code;
+    file << *hlsl;
     file.close();
 
     PanicAlert("Failed to compile compute shader: %s\nDebug info (%s):\n%s", filename.c_str(),
@@ -299,6 +354,6 @@ ID3D11ComputeShader* CompileAndCreateComputeShader(const std::string& code)
   return nullptr;
 }
 
-}  // namespace
+}  // namespace D3D
 
 }  // namespace DX11
