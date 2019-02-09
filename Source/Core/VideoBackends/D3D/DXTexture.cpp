@@ -119,13 +119,17 @@ DXGI_FORMAT GetDSVFormatForHostFormat(AbstractTextureFormat format)
 }  // Anonymous namespace
 
 DXTexture::DXTexture(const TextureConfig& tex_config, ID3D11Texture2D* d3d_texture,
-                     ID3D11ShaderResourceView* d3d_srv)
-    : AbstractTexture(tex_config), m_d3d_texture(d3d_texture), m_d3d_srv(d3d_srv)
+                     ID3D11ShaderResourceView* d3d_srv, ID3D11UnorderedAccessView* d3d_uav)
+    : AbstractTexture(tex_config), m_d3d_texture(d3d_texture), m_d3d_srv(d3d_srv),
+      m_d3d_uav(d3d_uav)
 {
 }
 
 DXTexture::~DXTexture()
 {
+  if (m_d3d_uav)
+    m_d3d_uav->Release();
+
   if (m_d3d_srv)
   {
     if (D3D::stateman->UnsetTexture(m_d3d_srv) != 0)
@@ -156,24 +160,39 @@ std::unique_ptr<DXTexture> DXTexture::Create(const TextureConfig& config)
   {
     PanicAlert("Failed to create %ux%ux%u D3D backing texture", config.width, config.height,
                config.layers);
-    return false;
+    return nullptr;
   }
 
   ID3D11ShaderResourceView* d3d_srv;
-  CD3D11_SHADER_RESOURCE_VIEW_DESC srv_desc(d3d_texture,
-                                            config.IsMultisampled() ?
-                                                D3D11_SRV_DIMENSION_TEXTURE2DMSARRAY :
-                                                D3D11_SRV_DIMENSION_TEXTURE2DARRAY,
-                                            srv_format, 0, config.levels, 0, config.layers);
+  const CD3D11_SHADER_RESOURCE_VIEW_DESC srv_desc(d3d_texture,
+                                                  config.IsMultisampled() ?
+                                                      D3D11_SRV_DIMENSION_TEXTURE2DMSARRAY :
+                                                      D3D11_SRV_DIMENSION_TEXTURE2DARRAY,
+                                                  srv_format, 0, config.levels, 0, config.layers);
   hr = D3D::device->CreateShaderResourceView(d3d_texture, &srv_desc, &d3d_srv);
   if (FAILED(hr))
   {
     PanicAlert("Failed to create %ux%ux%u D3D SRV", config.width, config.height, config.layers);
     d3d_texture->Release();
-    return false;
+    return nullptr;
   }
 
-  return std::make_unique<DXTexture>(config, d3d_texture, d3d_srv);
+  ID3D11UnorderedAccessView* d3d_uav = nullptr;
+  if (config.IsComputeImage())
+  {
+    const CD3D11_UNORDERED_ACCESS_VIEW_DESC uav_desc(
+        d3d_texture, D3D11_UAV_DIMENSION_TEXTURE2DARRAY, srv_format, 0, 0, config.layers);
+    hr = D3D::device->CreateUnorderedAccessView(d3d_texture, &uav_desc, &d3d_uav);
+    if (FAILED(hr))
+    {
+      PanicAlert("Failed to create %ux%ux%u D3D UAV", config.width, config.height, config.layers);
+      d3d_uav->Release();
+      d3d_texture->Release();
+      return nullptr;
+    }
+  }
+
+  return std::make_unique<DXTexture>(config, d3d_texture, d3d_srv, d3d_uav);
 }
 
 void DXTexture::CopyRectangleFromTexture(const AbstractTexture* src,

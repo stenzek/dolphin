@@ -85,7 +85,7 @@ void Renderer::Create3DVisionTexture(int width, int height)
   m_3d_vision_texture = std::make_unique<DXTexture>(TextureConfig(width * 2, height + 1, 1, 1, 1,
                                                                   AbstractTextureFormat::RGBA8,
                                                                   AbstractTextureFlag_RenderTarget),
-                                                    texture, nullptr);
+                                                    texture, nullptr, nullptr);
   m_3d_vision_framebuffer =
       DXFramebuffer::Create(static_cast<DXTexture*>(m_3d_vision_texture.get()), nullptr);
 }
@@ -172,6 +172,14 @@ void Renderer::DrawIndexed(u32 base_index, u32 num_indices, u32 base_vertex)
 {
   D3D::stateman->Apply();
   D3D::context->DrawIndexed(num_indices, base_index, base_vertex);
+}
+
+void Renderer::DispatchComputeShader(const AbstractShader* shader, u32 groups_x, u32 groups_y,
+                                     u32 groups_z)
+{
+  D3D::stateman->SetComputeShader(static_cast<const DXShader*>(shader)->GetD3DComputeShader());
+  D3D::stateman->SyncComputeBindings();
+  D3D::context->Dispatch(groups_x, groups_y, groups_z);
 }
 
 void Renderer::BindBackbuffer(const ClearColor& clear_color)
@@ -289,6 +297,11 @@ void Renderer::SetTexture(u32 index, const AbstractTexture* texture)
 void Renderer::SetSamplerState(u32 index, const SamplerState& state)
 {
   D3D::stateman->SetSampler(index, m_state_cache.Get(state));
+}
+
+void Renderer::SetComputeImageTexture(AbstractTexture* texture, bool read, bool write)
+{
+  D3D::stateman->SetComputeUAV(texture ? static_cast<DXTexture*>(texture)->GetD3DUAV() : nullptr);
 }
 
 void Renderer::UnbindTexture(const AbstractTexture* texture)

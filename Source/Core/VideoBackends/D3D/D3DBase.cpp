@@ -259,7 +259,7 @@ static bool CreateSwapChainFramebuffer()
   s_swap_chain_texture = std::make_unique<DXTexture>(
       TextureConfig(desc.Width, desc.Height, desc.MipLevels, desc.ArraySize, desc.SampleDesc.Count,
                     AbstractTextureFormat::RGBA8, AbstractTextureFlag_RenderTarget),
-      texture, nullptr);
+      texture, nullptr, nullptr);
 
   ID3D11RenderTargetView* rtv;
   CD3D11_RENDER_TARGET_VIEW_DESC rtv_desc(texture, D3D11_RTV_DIMENSION_TEXTURE2DARRAY, desc.Format,

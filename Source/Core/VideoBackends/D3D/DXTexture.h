@@ -18,7 +18,7 @@ class DXTexture final : public AbstractTexture
 {
 public:
   explicit DXTexture(const TextureConfig& tex_config, ID3D11Texture2D* d3d_texture,
-                     ID3D11ShaderResourceView* d3d_srv);
+                     ID3D11ShaderResourceView* d3d_srv, ID3D11UnorderedAccessView* d3d_uav);
   ~DXTexture();
 
   static std::unique_ptr<DXTexture> Create(const TextureConfig& config);
@@ -34,10 +34,12 @@ public:
 
   ID3D11Texture2D* GetD3DTexture() const { return m_d3d_texture; }
   ID3D11ShaderResourceView* GetD3DSRV() const { return m_d3d_srv; }
+  ID3D11UnorderedAccessView* GetD3DUAV() const { return m_d3d_uav; }
 
 private:
   ID3D11Texture2D* m_d3d_texture;
   ID3D11ShaderResourceView* m_d3d_srv;
+  ID3D11UnorderedAccessView* m_d3d_uav;
 };
 
 class DXStagingTexture final : public AbstractStagingTexture

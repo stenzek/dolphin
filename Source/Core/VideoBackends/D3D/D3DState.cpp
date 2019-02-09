@@ -223,6 +223,79 @@ void StateManager::SetTextureByMask(u32 textureSlotMask, ID3D11ShaderResourceVie
     textureSlotMask &= ~(1 << index);
   }
 }
+
+void StateManager::SetComputeUAV(ID3D11UnorderedAccessView* uav)
+{
+  if (m_compute_image == uav)
+    return;
+
+  m_compute_image = uav;
+  D3D::context->CSSetUnorderedAccessViews(0, 1, &uav, nullptr);
+}
+
+void StateManager::SetComputeShader(ID3D11ComputeShader* shader)
+{
+  if (m_compute_shader == shader)
+    return;
+
+  m_compute_shader = shader;
+  D3D::context->CSSetShader(shader, nullptr, 0);
+}
+
+void StateManager::SyncComputeBindings()
+{
+  if (m_compute_constants != m_pending.pixelConstants[0])
+  {
+    m_compute_constants = m_pending.pixelConstants[0];
+    D3D::context->CSSetConstantBuffers(0, 1, &m_compute_constants);
+  }
+
+  for (u32 start = 0; start < static_cast<u32>(m_compute_textures.size());)
+  {
+    if (m_compute_textures[start] == m_pending.textures[start])
+    {
+      start++;
+      continue;
+    }
+
+    m_compute_textures[start] = m_pending.textures[start];
+
+    u32 end = start + 1;
+    for (; end < static_cast<u32>(m_compute_textures.size()); end++)
+    {
+      if (m_compute_textures[end] == m_pending.textures[end])
+        break;
+
+      m_compute_textures[end] = m_pending.textures[end];
+    }
+
+    D3D::context->CSSetShaderResources(start, end - start, &m_compute_textures[start]);
+    start = end;
+  }
+
+  for (u32 start = 0; start < static_cast<u32>(m_compute_samplers.size());)
+  {
+    if (m_compute_samplers[start] == m_pending.samplers[start])
+    {
+      start++;
+      continue;
+    }
+
+    m_compute_samplers[start] = m_pending.samplers[start];
+
+    u32 end = start + 1;
+    for (; end < static_cast<u32>(m_compute_samplers.size()); end++)
+    {
+      if (m_compute_samplers[end] == m_pending.samplers[end])
+        break;
+
+      m_compute_samplers[end] = m_pending.samplers[end];
+    }
+
+    D3D::context->CSSetSamplers(start, end - start, &m_compute_samplers[start]);
+    start = end;
+  }
+}
 }  // namespace D3D
 
 StateCache::~StateCache()
