@@ -197,6 +197,9 @@
     <ClCompile Include="FramebufferManager.cpp">
       <Filter>Base</Filter>
     </ClCompile>
+    <ClCompile Include="SPIRVCompiler.cpp">
+      <Filter>Shader Generators</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CommandProcessor.h" />
@@ -384,6 +387,9 @@
       <Filter>Base</Filter>
     </ClInclude>
     <ClInclude Include="TextureConverterShaderGen.h">
+      <Filter>Shader Generators</Filter>
+    </ClInclude>
+    <ClInclude Include="SPIRVCompiler.h">
       <Filter>Shader Generators</Filter>
     </ClInclude>
   </ItemGroup>

@@ -69,6 +69,7 @@
     <ClCompile Include="LightingShaderGen.cpp" />
     <ClCompile Include="ShaderCache.cpp" />
     <ClCompile Include="ShaderGenCommon.cpp" />
+    <ClCompile Include="SPIRVCompiler.cpp" />
     <ClCompile Include="UberShaderCommon.cpp" />
     <ClCompile Include="UberShaderPixel.cpp" />
     <ClCompile Include="Statistics.cpp" />
@@ -121,6 +122,7 @@
     <ClInclude Include="FramebufferShaderGen.h" />
     <ClInclude Include="GXPipelineTypes.h" />
     <ClInclude Include="ShaderCache.h" />
+    <ClInclude Include="SPIRVCompiler.h" />
     <ClInclude Include="UberShaderCommon.h" />
     <ClInclude Include="UberShaderPixel.h" />
     <ClInclude Include="HiresTextures.h" />
@@ -182,6 +184,9 @@
     </ProjectReference>
     <ProjectReference Include="$(CoreDir)Common\Common.vcxproj">
       <Project>{2e6c348c-c75c-4d94-8d1e-9c1fcbf3efe4}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\..\..\Externals\glslang\glslang.vcxproj">
+      <Project>{d178061b-84d3-44f9-beed-efd18d9033f0}</Project>
     </ProjectReference>
     <ProjectReference Include="..\..\..\Externals\imgui\imgui.vcxproj">
       <Project>{4c3b2264-ea73-4a7b-9cfe-65b0fd635ebb}</Project>
