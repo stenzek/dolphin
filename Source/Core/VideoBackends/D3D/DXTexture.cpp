@@ -413,22 +413,11 @@ std::unique_ptr<DXFramebuffer> DXFramebuffer::Create(DXTexture* color_attachment
   ID3D11RenderTargetView* integer_rtv = nullptr;
   if (color_attachment)
   {
-    D3D11_RENDER_TARGET_VIEW_DESC desc;
-    desc.Format = GetRTVFormatForHostFormat(color_attachment->GetFormat(), false);
-    if (color_attachment->IsMultisampled())
-    {
-      desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2DMSARRAY;
-      desc.Texture2DMSArray.ArraySize = color_attachment->GetLayers();
-      desc.Texture2DMSArray.FirstArraySlice = 0;
-    }
-    else
-    {
-      desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2DARRAY;
-      desc.Texture2DArray.ArraySize = color_attachment->GetLayers();
-      desc.Texture2DArray.FirstArraySlice = 0;
-      desc.Texture2DArray.MipSlice = 0;
-    }
-
+    CD3D11_RENDER_TARGET_VIEW_DESC desc(
+        color_attachment->IsMultisampled() ? D3D11_RTV_DIMENSION_TEXTURE2DMSARRAY :
+                                             D3D11_RTV_DIMENSION_TEXTURE2DARRAY,
+        GetRTVFormatForHostFormat(color_attachment->GetFormat(), false), 0, 0,
+        color_attachment->GetLayers());
     HRESULT hr =
         D3D::device->CreateRenderTargetView(color_attachment->GetD3DTexture(), &desc, &rtv);
     CHECK(SUCCEEDED(hr), "Create render target view for framebuffer");
@@ -447,22 +436,11 @@ std::unique_ptr<DXFramebuffer> DXFramebuffer::Create(DXTexture* color_attachment
   ID3D11DepthStencilView* dsv = nullptr;
   if (depth_attachment)
   {
-    D3D11_DEPTH_STENCIL_VIEW_DESC desc;
-    desc.Format = GetDSVFormatForHostFormat(depth_attachment->GetConfig().format);
-    if (depth_attachment->GetConfig().IsMultisampled())
-    {
-      desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2DMSARRAY;
-      desc.Texture2DMSArray.ArraySize = depth_attachment->GetConfig().layers;
-      desc.Texture2DMSArray.FirstArraySlice = 0;
-    }
-    else
-    {
-      desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2DARRAY;
-      desc.Texture2DArray.ArraySize = depth_attachment->GetConfig().layers;
-      desc.Texture2DArray.FirstArraySlice = 0;
-      desc.Texture2DArray.MipSlice = 0;
-    }
-
+    const CD3D11_DEPTH_STENCIL_VIEW_DESC desc(
+        depth_attachment->GetConfig().IsMultisampled() ? D3D11_DSV_DIMENSION_TEXTURE2DMSARRAY :
+                                                         D3D11_DSV_DIMENSION_TEXTURE2DARRAY,
+        GetDSVFormatForHostFormat(depth_attachment->GetFormat()), 0, 0,
+        depth_attachment->GetLayers(), 0);
     HRESULT hr =
         D3D::device->CreateDepthStencilView(depth_attachment->GetD3DTexture(), &desc, &dsv);
     CHECK(SUCCEEDED(hr), "Create depth stencil view for framebuffer");
