@@ -198,6 +198,10 @@ int main(int argc, char* argv[])
       s_platform->Stop();
   });
 
+#ifdef _WIN32
+  signal(SIGINT, signal_handler);
+  signal(SIGTERM, signal_handler);
+#else
   // Shut down cleanly on SIGINT and SIGTERM
   struct sigaction sa;
   sa.sa_handler = signal_handler;
@@ -205,6 +209,7 @@ int main(int argc, char* argv[])
   sa.sa_flags = SA_RESETHAND;
   sigaction(SIGINT, &sa, nullptr);
   sigaction(SIGTERM, &sa, nullptr);
+#endif
 
   DolphinAnalytics::Instance().ReportDolphinStart("nogui");
 
