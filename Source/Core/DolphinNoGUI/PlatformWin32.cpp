@@ -1,0 +1,278 @@
+// Copyright 2019 Dolphin Emulator Project
+// Licensed under GPLv2+
+// Refer to the license.txt file included.
+
+#include "DolphinNoGUI/Platform.h"
+
+#include "Common/MsgHandler.h"
+#include "Core/ConfigManager.h"
+#include "Core/Core.h"
+#include "Core/State.h"
+
+#include <Windows.h>
+#include <climits>
+#include <cstdio>
+
+#include "VideoCommon/RenderBase.h"
+#include "resource.h"
+
+namespace
+{
+class PlatformWin32 : public Platform
+{
+public:
+  ~PlatformWin32() override;
+
+  bool Init() override;
+  void SetTitle(const std::string& string) override;
+  void MainLoop() override;
+
+  WindowSystemInfo GetWindowSystemInfo() const;
+
+private:
+  static constexpr TCHAR WINDOW_CLASS_NAME[] = _T("DolphinNoGUI");
+
+  static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
+
+  bool RegisterRenderWindowClass();
+  bool CreateRenderWindow();
+  void UpdateWindowPosition();
+  void ProcessEvents();
+
+  HWND m_hwnd{};
+};
+
+PlatformWin32::~PlatformWin32()
+{
+  if (m_hwnd)
+    DestroyWindow(m_hwnd);
+}
+
+bool PlatformWin32::RegisterRenderWindowClass()
+{
+  WNDCLASSEX wc = {};
+  wc.cbSize = sizeof(WNDCLASSEX);
+  wc.style = 0;
+  wc.lpfnWndProc = WndProc;
+  wc.cbClsExtra = 0;
+  wc.cbWndExtra = 0;
+  wc.hInstance = GetModuleHandle(nullptr);
+  wc.hIcon = LoadIcon(NULL, IDI_ICON1);
+  wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+  wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+  wc.lpszMenuName = NULL;
+  wc.lpszClassName = WINDOW_CLASS_NAME;
+  wc.hIconSm = LoadIcon(NULL, IDI_ICON1);
+
+  if (!RegisterClassEx(&wc))
+  {
+    MessageBox(nullptr, _T("Window registration failed."), _T("Error"), MB_ICONERROR | MB_OK);
+    return false;
+  }
+
+  return true;
+}
+
+bool PlatformWin32::CreateRenderWindow()
+{
+  const auto& config = SConfig::GetInstance();
+  m_hwnd = CreateWindowEx(WS_EX_CLIENTEDGE, WINDOW_CLASS_NAME, _T("Dolphin"), WS_OVERLAPPEDWINDOW,
+                          config.iRenderWindowXPos < 0 ? CW_USEDEFAULT : config.iRenderWindowXPos,
+                          config.iRenderWindowYPos < 0 ? CW_USEDEFAULT : config.iRenderWindowYPos,
+                          config.iRenderWindowWidth, config.iRenderWindowHeight, nullptr, nullptr,
+                          GetModuleHandle(nullptr), this);
+  if (!m_hwnd)
+  {
+    MessageBox(nullptr, _T("CreateWindowEx failed."), _T("Error"), MB_ICONERROR | MB_OK);
+    return false;
+  }
+
+  ShowWindow(m_hwnd, SW_SHOW);
+  UpdateWindow(m_hwnd);
+  return true;
+}
+
+bool PlatformWin32::Init()
+{
+  if (!RegisterRenderWindowClass() || !CreateRenderWindow())
+    return false;
+
+  // TODO: Enter fullscreen if enabled.
+  if (SConfig::GetInstance().bFullscreen)
+  {
+    ProcessEvents();
+  }
+
+  UpdateWindowPosition();
+  return true;
+}
+
+void PlatformWin32::SetTitle(const std::string& string)
+{
+  SetWindowTextW(m_hwnd, UTF8ToUTF16(string).c_str());
+}
+
+void PlatformWin32::MainLoop()
+{
+  while (IsRunning())
+  {
+    UpdateRunningFlag();
+    Core::HostDispatchJobs();
+    ProcessEvents();
+    UpdateWindowPosition();
+
+    // TODO: Is this sleep appropriate?
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+}
+
+WindowSystemInfo PlatformWin32::GetWindowSystemInfo() const
+{
+  WindowSystemInfo wsi;
+  wsi.type = WindowSystemType::Windows;
+  wsi.render_surface = reinterpret_cast<void*>(m_hwnd);
+  return wsi;
+}
+
+void PlatformWin32::UpdateWindowPosition()
+{
+  if (m_window_fullscreen)
+    return;
+
+  RECT rc = {};
+  if (!GetWindowRect(m_hwnd, &rc))
+    return;
+
+  auto& config = SConfig::GetInstance();
+  config.iRenderWindowXPos = rc.left;
+  config.iRenderWindowYPos = rc.top;
+  config.iRenderWindowWidth = rc.right - rc.left;
+  config.iRenderWindowHeight = rc.bottom - rc.top;
+}
+
+void PlatformWin32::ProcessEvents()
+{
+  MSG msg;
+  while (PeekMessage(&msg, m_hwnd, 0, 0, PM_REMOVE))
+  {
+    TranslateMessage(&msg);
+    DispatchMessage(&msg);
+  }
+}
+
+LRESULT PlatformWin32::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+  PlatformWin32* platform = reinterpret_cast<PlatformWin32*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
+  switch (msg)
+  {
+  case WM_NCCREATE:
+  {
+    platform =
+        reinterpret_cast<PlatformWin32*>(reinterpret_cast<CREATESTRUCT*>(lParam)->lpCreateParams);
+    SetWindowLongPtr(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(platform));
+    return DefWindowProc(hwnd, msg, wParam, lParam);
+  }
+
+#if 0
+    case KeyPress:
+      key = XLookupKeysym((XKeyEvent*)&event, 0);
+      if (key == XK_Escape)
+      {
+        RequestShutdown();
+      }
+      else if (key == XK_F10)
+      {
+        if (Core::GetState() == Core::State::Running)
+        {
+          if (SConfig::GetInstance().bHideCursor)
+            XUndefineCursor(m_display, m_hwnd);
+          Core::SetState(Core::State::Paused);
+        }
+        else
+        {
+          if (SConfig::GetInstance().bHideCursor)
+            XDefineCursor(m_display, m_hwnd, m_blank_cursor);
+          Core::SetState(Core::State::Running);
+        }
+      }
+      else if ((key == XK_Return) && (event.xkey.state & Mod1Mask))
+      {
+        m_window_fullscreen = !m_window_fullscreen;
+        X11Utils::ToggleFullscreen(m_display, m_hwnd);
+#if defined(HAVE_XRANDR) && HAVE_XRANDR
+        m_xrr_config->ToggleDisplayMode(m_window_fullscreen);
+#endif
+        UpdateWindowPosition();
+      }
+      else if (key >= XK_F1 && key <= XK_F8)
+      {
+        int slot_number = key - XK_F1 + 1;
+        if (event.xkey.state & ShiftMask)
+          State::Save(slot_number);
+        else
+          State::Load(slot_number);
+      }
+      else if (key == XK_F9)
+        Core::SaveScreenShot();
+      else if (key == XK_F11)
+        State::LoadLastSaved();
+      else if (key == XK_F12)
+      {
+        if (event.xkey.state & ShiftMask)
+          State::UndoLoadState();
+        else
+          State::UndoSaveState();
+      }
+      break;
+    case FocusIn:
+    {
+      m_window_focus = true;
+      if (SConfig::GetInstance().bHideCursor && Core::GetState() != Core::State::Paused)
+        XDefineCursor(m_display, m_hwnd, m_blank_cursor);
+    }
+    break;
+    case FocusOut:
+    {
+      m_window_focus = false;
+      if (SConfig::GetInstance().bHideCursor)
+        XUndefineCursor(m_display, m_hwnd);
+    }
+    break;
+    case ClientMessage:
+    {
+      if ((unsigned long)event.xclient.data.l[0] ==
+          XInternAtom(m_display, "WM_DELETE_WINDOW", False))
+        Stop();
+    }
+    break;
+    case ConfigureNotify:
+    {
+      if (g_renderer)
+        g_renderer->ResizeSurface();
+    }
+    break;
+#endif
+
+  case WM_SIZE:
+  {
+    if (g_renderer)
+      g_renderer->ResizeSurface();
+  }
+  break;
+
+  case WM_CLOSE:
+    platform->RequestShutdown();
+    break;
+
+  default:
+    return DefWindowProc(hwnd, msg, wParam, lParam);
+  }
+
+  return 0;
+}
+}  // namespace
+
+std::unique_ptr<Platform> Platform::CreateWin32Platform()
+{
+  return std::make_unique<PlatformWin32>();
+}

@@ -6,7 +6,11 @@
 // Microsoft Visual C++ generated include file.
 // Used by DolphinNoGui.rc
 //
+#ifdef RC_INVOKED
 #define IDI_ICON1 101
+#else
+#define IDI_ICON1 MAKEINTRESOURCE(101)
+#endif
 
 // Next default values for new objects
 //

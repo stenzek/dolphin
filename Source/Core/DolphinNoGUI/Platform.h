@@ -35,6 +35,9 @@ public:
 #ifdef HAVE_X11
   static std::unique_ptr<Platform> CreateX11Platform();
 #endif
+#ifdef _WIN32
+  static std::unique_ptr<Platform> CreateWin32Platform();
+#endif
 
 protected:
   void UpdateRunningFlag();
