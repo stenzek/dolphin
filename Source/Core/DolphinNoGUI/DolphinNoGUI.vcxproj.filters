@@ -4,6 +4,7 @@
     <ClCompile Include="Platform.cpp" />
     <ClCompile Include="PlatformHeadless.cpp" />
     <ClCompile Include="MainNoGUI.cpp" />
+    <ClCompile Include="PlatformWin32.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Platform.h" />

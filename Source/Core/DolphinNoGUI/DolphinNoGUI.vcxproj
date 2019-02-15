@@ -41,6 +41,8 @@
       <AdditionalDependencies>avrt.lib;iphlpapi.lib;winmm.lib;setupapi.lib;opengl32.lib;glu32.lib;rpcrt4.lib;comctl32.lib;avcodec.lib;avformat.lib;avutil.lib;swresample.lib;swscale.lib;Shlwapi.lib;discord-rpc.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(ExternalsDir)ffmpeg\lib;$(IntDir)..\discord-rpc\bin;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalLibraryDirectories Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(ExternalsDir)ffmpeg\lib;$(IntDir)..\discord-rpc\bin;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <SubSystem Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Windows</SubSystem>
+      <SubSystem Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Windows</SubSystem>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -79,6 +81,7 @@
     <ClCompile Include="MainNoGUI.cpp" />
     <ClCompile Include="Platform.cpp" />
     <ClCompile Include="PlatformHeadless.cpp" />
+    <ClCompile Include="PlatformWin32.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
