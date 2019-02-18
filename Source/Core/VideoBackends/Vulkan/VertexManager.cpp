@@ -136,13 +136,16 @@ void VertexManager::DestroyTexelBufferViews()
   }
 }
 
-void VertexManager::ResetBuffer(u32 vertex_stride)
+void VertexManager::ResetBuffer(u32 vertex_data_size, u32 vertex_stride, u32 index_data_size)
 {
   // Attempt to allocate from buffers
   bool has_vbuffer_allocation =
-      m_vertex_stream_buffer->ReserveMemory(MAXVBUFFERSIZE, vertex_stride);
+      vertex_data_size > 0 ?
+          m_vertex_stream_buffer->ReserveMemory(vertex_data_size, vertex_stride) :
+          true;
   bool has_ibuffer_allocation =
-      m_index_stream_buffer->ReserveMemory(MAXIBUFFERSIZE * sizeof(u16), sizeof(u16));
+      index_data_size > 0 ? m_index_stream_buffer->ReserveMemory(index_data_size, sizeof(u16)) :
+                            true;
   if (!has_vbuffer_allocation || !has_ibuffer_allocation)
   {
     // Flush any pending commands first, so that we can wait on the fences
@@ -151,10 +154,14 @@ void VertexManager::ResetBuffer(u32 vertex_stride)
 
     // Attempt to allocate again, this may cause a fence wait
     if (!has_vbuffer_allocation)
-      has_vbuffer_allocation = m_vertex_stream_buffer->ReserveMemory(MAXVBUFFERSIZE, vertex_stride);
+    {
+      has_vbuffer_allocation =
+          m_vertex_stream_buffer->ReserveMemory(vertex_data_size, vertex_stride);
+    }
     if (!has_ibuffer_allocation)
-      has_ibuffer_allocation =
-          m_index_stream_buffer->ReserveMemory(MAXIBUFFERSIZE * sizeof(u16), sizeof(u16));
+    {
+      has_ibuffer_allocation = m_index_stream_buffer->ReserveMemory(index_data_size, sizeof(u16));
+    }
 
     // If we still failed, that means the allocation was too large and will never succeed, so panic
     if (!has_vbuffer_allocation || !has_ibuffer_allocation)
@@ -163,17 +170,17 @@ void VertexManager::ResetBuffer(u32 vertex_stride)
 
   // Update pointers
   m_base_buffer_pointer = m_vertex_stream_buffer->GetHostPointer();
-  m_end_buffer_pointer = m_vertex_stream_buffer->GetCurrentHostPointer() + MAXVBUFFERSIZE;
+  m_end_buffer_pointer = m_vertex_stream_buffer->GetCurrentHostPointer() +
+                         m_vertex_stream_buffer->GetCurrentFreeSpace();
   m_cur_buffer_pointer = m_vertex_stream_buffer->GetCurrentHostPointer();
-  IndexGenerator::Start(reinterpret_cast<u16*>(m_index_stream_buffer->GetCurrentHostPointer()));
+  IndexGenerator::Start(reinterpret_cast<u16*>(m_index_stream_buffer->GetCurrentHostPointer()),
+                        reinterpret_cast<u16*>(m_index_stream_buffer->GetCurrentHostPointer() +
+                                               m_index_stream_buffer->GetCurrentFreeSpace()));
 }
 
-void VertexManager::CommitBuffer(u32 num_vertices, u32 vertex_stride, u32 num_indices,
+void VertexManager::CommitBuffer(u32 vertex_data_size, u32 vertex_stride, u32 index_data_size,
                                  u32* out_base_vertex, u32* out_base_index)
 {
-  const u32 vertex_data_size = num_vertices * vertex_stride;
-  const u32 index_data_size = num_indices * sizeof(u16);
-
   *out_base_vertex =
       vertex_stride > 0 ? (m_vertex_stream_buffer->GetCurrentOffset() / vertex_stride) : 0;
   *out_base_index = m_index_stream_buffer->GetCurrentOffset() / sizeof(u16);

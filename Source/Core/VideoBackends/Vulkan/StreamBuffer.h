@@ -26,6 +26,7 @@ public:
   u8* GetCurrentHostPointer() const { return m_host_pointer + m_current_offset; }
   u32 GetCurrentSize() const { return m_size; }
   u32 GetCurrentOffset() const { return m_current_offset; }
+  u32 GetCurrentFreeSpace() const;
   bool ReserveMemory(u32 num_bytes, u32 alignment);
   void CommitMemory(u32 final_num_bytes);
 
@@ -43,7 +44,6 @@ private:
   u32 m_size;
   u32 m_current_offset = 0;
   u32 m_current_gpu_position = 0;
-  u32 m_last_allocation_size = 0;
 
   VkBuffer m_buffer = VK_NULL_HANDLE;
   VkDeviceMemory m_memory = VK_NULL_HANDLE;

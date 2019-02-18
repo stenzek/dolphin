@@ -127,6 +127,11 @@ void StreamBuffer::AllocMemory(u32 size)
   }
 }
 
+u32 StreamBuffer::GetFreeSize() const
+{
+  return m_free_iterator - m_iterator;
+}
+
 /* The usual way to stream data to the GPU.
  * Described here: https://www.opengl.org/wiki/Buffer_Object_Streaming#Unsynchronized_buffer_mapping
  * Just do unsync appends until the buffer is full.
@@ -163,6 +168,8 @@ public:
     glUnmapBuffer(m_buffertype);
     m_iterator += used_size;
   }
+
+  u32 GetFreeSize() const override { return m_size - m_iterator; }
 };
 
 /* A modified streaming way without reallocation
@@ -319,6 +326,7 @@ public:
   ~BufferSubData() { delete[] m_pointer; }
   std::pair<u8*, u32> Map(u32 size) override { return std::make_pair(m_pointer, 0); }
   void Unmap(u32 used_size) override { glBufferSubData(m_buffertype, 0, used_size, m_pointer); }
+  u32 GetFreeSize() const override { return m_size; }
   u8* m_pointer;
 };
 
@@ -342,6 +350,7 @@ public:
   {
     glBufferData(m_buffertype, used_size, m_pointer, GL_STREAM_DRAW);
   }
+  u32 GetFreeSize() const override { return m_size; }
 
   u8* m_pointer;
 };

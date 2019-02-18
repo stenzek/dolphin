@@ -156,24 +156,28 @@ GLuint VertexManager::GetIndexBufferHandle() const
   return m_index_buffer->m_buffer;
 }
 
-void VertexManager::ResetBuffer(u32 vertex_stride)
+void VertexManager::ResetBuffer(u32 vertex_data_size, u32 vertex_stride, u32 index_data_size)
 {
   CheckBufferBinding();
 
-  auto buffer = m_vertex_buffer->Map(MAXVBUFFERSIZE, vertex_stride);
-  m_cur_buffer_pointer = m_base_buffer_pointer = buffer.first;
-  m_end_buffer_pointer = buffer.first + MAXVBUFFERSIZE;
+  if (vertex_data_size > 0)
+  {
+    auto buffer = m_vertex_buffer->Map(vertex_data_size, vertex_stride);
+    m_cur_buffer_pointer = m_base_buffer_pointer = buffer.first;
+    m_end_buffer_pointer = buffer.first + m_vertex_buffer->GetFreeSize();
+  }
 
-  buffer = m_index_buffer->Map(MAXIBUFFERSIZE * sizeof(u16));
-  IndexGenerator::Start((u16*)buffer.first);
+  if (index_data_size > 0)
+  {
+    auto buffer = m_index_buffer->Map(index_data_size);
+    IndexGenerator::Start(reinterpret_cast<u16*>(buffer.first),
+                          reinterpret_cast<u16*>(buffer.first + m_index_buffer->GetFreeSize()));
+  }
 }
 
-void VertexManager::CommitBuffer(u32 num_vertices, u32 vertex_stride, u32 num_indices,
+void VertexManager::CommitBuffer(u32 vertex_data_size, u32 vertex_stride, u32 index_data_size,
                                  u32* out_base_vertex, u32* out_base_index)
 {
-  u32 vertex_data_size = num_vertices * vertex_stride;
-  u32 index_data_size = num_indices * sizeof(u16);
-
   *out_base_vertex = vertex_stride > 0 ? (m_vertex_buffer->GetCurrentOffset() / vertex_stride) : 0;
   *out_base_index = m_index_buffer->GetCurrentOffset() / sizeof(u16);
 

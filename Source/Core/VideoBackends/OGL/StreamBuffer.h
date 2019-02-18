@@ -33,6 +33,7 @@ public:
    */
   virtual std::pair<u8*, u32> Map(u32 size) = 0;
   virtual void Unmap(u32 used_size) = 0;
+  virtual u32 GetFreeSize() const;
 
   std::pair<u8*, u32> Map(u32 size, u32 stride)
   {

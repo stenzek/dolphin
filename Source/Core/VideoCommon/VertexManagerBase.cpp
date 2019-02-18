@@ -91,7 +91,7 @@ bool VertexManagerBase::Initialize()
   return true;
 }
 
-u32 VertexManagerBase::GetRemainingSize() const
+u32 VertexManagerBase::GetRemainingVertexSize() const
 {
   return static_cast<u32>(m_end_buffer_pointer - m_cur_buffer_pointer);
 }
@@ -104,7 +104,8 @@ DataReader VertexManagerBase::PrepareForAdditionalData(int primitive, u32 count,
   g_framebuffer_manager->FlushEFBPokes();
 
   // The SSE vertex loader can write up to 4 bytes past the end
-  u32 const needed_vertex_bytes = count * stride + 4;
+  const u32 needed_vertex_bytes = count * stride + 4;
+  const u32 needed_index_bytes = GetIndexCount(count, primitive) * sizeof(u16);
 
   // We can't merge different kinds of primitives, so we have to flush here
   PrimitiveType new_primitive_type = g_ActiveConfig.backend_info.bSupportsPrimitiveRestart ?
@@ -120,20 +121,11 @@ DataReader VertexManagerBase::PrepareForAdditionalData(int primitive, u32 count,
   }
 
   // Check for size in buffer, if the buffer gets full, call Flush()
-  if (!m_is_flushed &&
-      (count > IndexGenerator::GetRemainingIndices() || count > GetRemainingIndices(primitive) ||
-       needed_vertex_bytes > GetRemainingSize()))
+  if (needed_vertex_bytes > GetRemainingVertexSize() ||
+      needed_index_bytes > IndexGenerator::GetFreeBytes() ||
+      count > IndexGenerator::GetRemainingIndices())
   {
     Flush();
-
-    if (count > IndexGenerator::GetRemainingIndices())
-      ERROR_LOG(VIDEO, "Too little remaining index values. Use 32-bit or reset them on flush.");
-    if (count > GetRemainingIndices(primitive))
-      ERROR_LOG(VIDEO, "VertexManager: Buffer not large enough for all indices! "
-                       "Increase MAXIBUFFERSIZE or we need primitive breaking after all.");
-    if (needed_vertex_bytes > GetRemainingSize())
-      ERROR_LOG(VIDEO, "VertexManager: Buffer not large enough for all vertices! "
-                       "Increase MAXVBUFFERSIZE or we need primitive breaking after all.");
   }
 
   m_cull_all = cullall;
@@ -146,13 +138,16 @@ DataReader VertexManagerBase::PrepareForAdditionalData(int primitive, u32 count,
       // This buffer isn't getting sent to the GPU. Just allocate it on the cpu.
       m_cur_buffer_pointer = m_base_buffer_pointer = m_cpu_vertex_buffer.data();
       m_end_buffer_pointer = m_base_buffer_pointer + m_cpu_vertex_buffer.size();
-      IndexGenerator::Start(m_cpu_index_buffer.data());
+      IndexGenerator::Start(m_cpu_index_buffer.data(),
+                            m_cpu_index_buffer.data() + m_cpu_index_buffer.size());
     }
     else
     {
-      ResetBuffer(stride);
+      ResetBuffer(needed_vertex_bytes, stride, needed_index_bytes);
     }
 
+    ASSERT(GetRemainingVertexSize() >= needed_vertex_bytes &&
+           IndexGenerator::GetFreeBytes() >= needed_index_bytes);
     m_is_flushed = false;
   }
 
@@ -164,31 +159,29 @@ void VertexManagerBase::FlushData(u32 count, u32 stride)
   m_cur_buffer_pointer += count * stride;
 }
 
-u32 VertexManagerBase::GetRemainingIndices(int primitive)
+u32 VertexManagerBase::GetIndexCount(u32 vertex_count, int primitive)
 {
-  u32 index_len = MAXIBUFFERSIZE - IndexGenerator::GetIndexLen();
-
   if (g_Config.backend_info.bSupportsPrimitiveRestart)
   {
     switch (primitive)
     {
     case OpcodeDecoder::GX_DRAW_QUADS:
     case OpcodeDecoder::GX_DRAW_QUADS_2:
-      return index_len / 5 * 4;
+      return ((vertex_count / 4) * 5) + ((vertex_count % 4) * 4);
     case OpcodeDecoder::GX_DRAW_TRIANGLES:
-      return index_len / 4 * 3;
+      return (vertex_count / 3) * 4;
     case OpcodeDecoder::GX_DRAW_TRIANGLE_STRIP:
-      return index_len / 1 - 1;
+      return vertex_count + 1;
     case OpcodeDecoder::GX_DRAW_TRIANGLE_FAN:
-      return index_len / 6 * 4 + 1;
+      return ((vertex_count / 4) * 6) + ((vertex_count % 4) * 5);
 
     case OpcodeDecoder::GX_DRAW_LINES:
-      return index_len;
+      return vertex_count;
     case OpcodeDecoder::GX_DRAW_LINE_STRIP:
-      return index_len / 2 + 1;
+      return vertex_count * 2;
 
     case OpcodeDecoder::GX_DRAW_POINTS:
-      return index_len;
+      return vertex_count;
 
     default:
       return 0;
@@ -200,21 +193,21 @@ u32 VertexManagerBase::GetRemainingIndices(int primitive)
     {
     case OpcodeDecoder::GX_DRAW_QUADS:
     case OpcodeDecoder::GX_DRAW_QUADS_2:
-      return index_len / 6 * 4;
+      return ((vertex_count / 4) * 6) + ((vertex_count % 4) * 3);
     case OpcodeDecoder::GX_DRAW_TRIANGLES:
-      return index_len;
+      return vertex_count;
     case OpcodeDecoder::GX_DRAW_TRIANGLE_STRIP:
-      return index_len / 3 + 2;
+      return vertex_count * 3;
     case OpcodeDecoder::GX_DRAW_TRIANGLE_FAN:
-      return index_len / 3 + 2;
+      return vertex_count * 3;
 
     case OpcodeDecoder::GX_DRAW_LINES:
-      return index_len;
+      return vertex_count;
     case OpcodeDecoder::GX_DRAW_LINE_STRIP:
-      return index_len / 2 + 1;
+      return vertex_count * 2;
 
     case OpcodeDecoder::GX_DRAW_POINTS:
-      return index_len;
+      return vertex_count;
 
     default:
       return 0;
@@ -230,15 +223,16 @@ std::pair<size_t, size_t> VertexManagerBase::ResetFlushAspectRatioCount()
   return val;
 }
 
-void VertexManagerBase::ResetBuffer(u32 vertex_stride)
+void VertexManagerBase::ResetBuffer(u32 vertex_data_size, u32 vertex_stride, u32 index_data_size)
 {
   m_base_buffer_pointer = m_cpu_vertex_buffer.data();
   m_cur_buffer_pointer = m_cpu_vertex_buffer.data();
   m_end_buffer_pointer = m_base_buffer_pointer + m_cpu_vertex_buffer.size();
-  IndexGenerator::Start(m_cpu_index_buffer.data());
+  IndexGenerator::Start(m_cpu_index_buffer.data(),
+                        m_cpu_index_buffer.data() + m_cpu_index_buffer.size());
 }
 
-void VertexManagerBase::CommitBuffer(u32 num_vertices, u32 vertex_stride, u32 num_indices,
+void VertexManagerBase::CommitBuffer(u32 vertex_data_size, u32 vertex_stride, u32 index_data_size,
                                      u32* out_base_vertex, u32* out_base_index)
 {
   *out_base_vertex = 0;
@@ -280,18 +274,19 @@ void VertexManagerBase::UploadUtilityVertices(const void* vertices, u32 vertex_s
   ASSERT(m_is_flushed);
 
   // Copy into the buffers usually used for GX drawing.
-  ResetBuffer(std::max(vertex_stride, 1u));
+  const u32 vertex_data_size = vertex_stride * num_vertices;
+  const u32 index_data_size = num_indices * sizeof(u16);
+  ResetBuffer(vertex_data_size, vertex_data_size, index_data_size);
   if (vertices)
   {
-    const u32 copy_size = vertex_stride * num_vertices;
-    ASSERT((m_cur_buffer_pointer + copy_size) <= m_end_buffer_pointer);
-    std::memcpy(m_cur_buffer_pointer, vertices, copy_size);
-    m_cur_buffer_pointer += copy_size;
+    ASSERT((m_cur_buffer_pointer + vertex_data_size) <= m_end_buffer_pointer);
+    std::memcpy(m_cur_buffer_pointer, vertices, vertex_data_size);
+    m_cur_buffer_pointer += vertex_data_size;
   }
   if (indices)
     IndexGenerator::AddExternalIndices(indices, num_indices, num_vertices);
 
-  CommitBuffer(num_vertices, vertex_stride, num_indices, out_base_vertex, out_base_index);
+  CommitBuffer(vertex_data_size, vertex_stride, index_data_size, out_base_vertex, out_base_index);
 }
 
 u32 VertexManagerBase::GetTexelBufferElementSize(TexelBufferFormat buffer_format)
@@ -418,10 +413,11 @@ void VertexManagerBase::Flush()
     // Now the vertices can be flushed to the GPU. Everything following the CommitBuffer() call
     // must be careful to not upload any utility vertices, as the binding will be lost otherwise.
     const u32 num_indices = IndexGenerator::GetIndexLen();
+    const u32 index_data_size = num_indices * sizeof(u16);
+    const u32 vertex_stride = VertexLoaderManager::GetCurrentVertexFormat()->GetVertexStride();
+    const u32 vertex_data_size = IndexGenerator::GetNumVerts() * vertex_stride;
     u32 base_vertex, base_index;
-    CommitBuffer(IndexGenerator::GetNumVerts(),
-                 VertexLoaderManager::GetCurrentVertexFormat()->GetVertexStride(), num_indices,
-                 &base_vertex, &base_index);
+    CommitBuffer(vertex_data_size, vertex_stride, index_data_size, &base_vertex, &base_index);
 
     // Texture loading can cause palettes to be applied (-> uniforms -> draws).
     // Palette application does not use vertices, only a full-screen quad, so this is okay.

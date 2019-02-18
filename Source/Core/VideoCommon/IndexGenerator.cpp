@@ -13,8 +13,9 @@
 #include "VideoCommon/VideoConfig.h"
 
 // Init
-u16* IndexGenerator::index_buffer_current;
-u16* IndexGenerator::BASEIptr;
+u16* IndexGenerator::m_current_pointer;
+u16* IndexGenerator::m_start_pointer;
+u16* IndexGenerator::m_end_pointer;
 u32 IndexGenerator::base_index;
 
 static const u16 s_primitive_restart = UINT16_MAX;
@@ -44,23 +45,24 @@ void IndexGenerator::Init()
   primitive_table[OpcodeDecoder::GX_DRAW_POINTS] = &AddPoints;
 }
 
-void IndexGenerator::Start(u16* Indexptr)
+void IndexGenerator::Start(u16* start_ptr, u16* end_ptr)
 {
-  index_buffer_current = Indexptr;
-  BASEIptr = Indexptr;
+  m_current_pointer = start_ptr;
+  m_start_pointer = start_ptr;
+  m_end_pointer = end_ptr;
   base_index = 0;
 }
 
 void IndexGenerator::AddIndices(int primitive, u32 numVerts)
 {
-  index_buffer_current = primitive_table[primitive](index_buffer_current, numVerts, base_index);
+  m_current_pointer = primitive_table[primitive](m_current_pointer, numVerts, base_index);
   base_index += numVerts;
 }
 
 void IndexGenerator::AddExternalIndices(const u16* indices, u32 num_indices, u32 num_vertices)
 {
-  std::memcpy(index_buffer_current, indices, sizeof(u16) * num_indices);
-  index_buffer_current += num_indices;
+  std::memcpy(m_current_pointer, indices, sizeof(u16) * num_indices);
+  m_current_pointer += num_indices;
   base_index += num_vertices;
 }
 

@@ -48,9 +48,9 @@ public:
                          TexelBufferFormat palette_format, u32* out_palette_offset) override;
 
 protected:
-  void ResetBuffer(u32 vertex_stride) override;
-  void CommitBuffer(u32 num_vertices, u32 vertex_stride, u32 num_indices, u32* out_base_vertex,
-                    u32* out_base_index) override;
+  void ResetBuffer(u32 vertex_data_size, u32 vertex_stride, u32 index_data_size) override;
+  void CommitBuffer(u32 vertex_data_size, u32 vertex_stride, u32 index_data_size,
+                    u32* out_base_vertex, u32* out_base_index) override;
   void UploadUniforms() override;
 
 private:
@@ -58,11 +58,13 @@ private:
   static constexpr u32 BUFFER_SIZE =
       (VERTEX_STREAM_BUFFER_SIZE + INDEX_STREAM_BUFFER_SIZE) / BUFFER_COUNT;
 
-  bool MapTexelBuffer(u32 required_size, D3D11_MAPPED_SUBRESOURCE& sr);
+  bool MapBuffer(ID3D11Buffer* buffer, u32 buffer_size, u32& cursor, u32 required_size,
+                 D3D11_MAPPED_SUBRESOURCE& sr);
 
-  ID3D11Buffer* m_buffers[BUFFER_COUNT] = {};
-  u32 m_current_buffer = 0;
-  u32 m_buffer_cursor = 0;
+  ID3D11Buffer* m_vertex_buffer = nullptr;
+  ID3D11Buffer* m_index_buffer = nullptr;
+  u32 m_vertex_buffer_cursor = 0;
+  u32 m_index_buffer_cursor = 0;
 
   ID3D11Buffer* m_vertex_constant_buffer = nullptr;
   ID3D11Buffer* m_geometry_constant_buffer = nullptr;

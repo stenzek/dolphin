@@ -121,10 +121,10 @@ protected:
   static void InvalidateConstants();
 
   // Prepares the buffer for the next batch of vertices.
-  virtual void ResetBuffer(u32 vertex_stride);
+  virtual void ResetBuffer(u32 vertex_data_size, u32 vertex_stride, u32 index_data_size);
 
   // Commits/uploads the current batch of vertices.
-  virtual void CommitBuffer(u32 num_vertices, u32 vertex_stride, u32 num_indices,
+  virtual void CommitBuffer(u32 vertex_data_size, u32 vertex_stride, u32 index_data_size,
                             u32* out_base_vertex, u32* out_base_index);
 
   // Uploads uniform buffers for GX draws.
@@ -133,8 +133,10 @@ protected:
   // Issues the draw call for the current batch in the backend.
   virtual void DrawCurrentBatch(u32 base_index, u32 num_indices, u32 base_vertex);
 
-  u32 GetRemainingSize() const;
-  static u32 GetRemainingIndices(int primitive);
+  u32 GetRemainingVertexSize() const;
+
+  // Returns the upper bound of the number of indices required for the specified GX primitive type.
+  static u32 GetIndexCount(u32 vertex_count, int primitive);
 
   void CalculateZSlope(NativeVertexFormat* format);
   void LoadTextures();

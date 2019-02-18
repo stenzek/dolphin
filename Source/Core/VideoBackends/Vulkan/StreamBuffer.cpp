@@ -133,6 +133,14 @@ bool StreamBuffer::AllocateBuffer()
   return true;
 }
 
+u32 StreamBuffer::GetCurrentFreeSpace() const
+{
+  if (m_current_offset >= m_current_gpu_position)
+    return m_size - m_current_offset;
+  else
+    return m_current_gpu_position - m_current_offset;
+}
+
 bool StreamBuffer::ReserveMemory(u32 num_bytes, u32 alignment)
 {
   const u32 required_bytes = num_bytes + alignment;
@@ -155,7 +163,6 @@ bool StreamBuffer::ReserveMemory(u32 num_bytes, u32 alignment)
     {
       // Place at the current position, after the GPU position.
       m_current_offset = Common::AlignUp(m_current_offset, alignment);
-      m_last_allocation_size = num_bytes;
       return true;
     }
 
@@ -167,13 +174,10 @@ bool StreamBuffer::ReserveMemory(u32 num_bytes, u32 alignment)
     {
       // Reset offset to zero, since we're allocating behind the gpu now
       m_current_offset = 0;
-      m_last_allocation_size = num_bytes;
       return true;
     }
   }
-
-  // Is the GPU ahead of our current offset?
-  if (m_current_offset < m_current_gpu_position)
+  else
   {
     // We have from m_current_offset..m_current_gpu_position space to use.
     const u32 remaining_bytes = m_current_gpu_position - m_current_offset;
@@ -181,7 +185,6 @@ bool StreamBuffer::ReserveMemory(u32 num_bytes, u32 alignment)
     {
       // Place at the current position, since this is still behind the GPU.
       m_current_offset = Common::AlignUp(m_current_offset, alignment);
-      m_last_allocation_size = num_bytes;
       return true;
     }
   }
@@ -192,7 +195,6 @@ bool StreamBuffer::ReserveMemory(u32 num_bytes, u32 alignment)
     ASSERT(m_current_offset == m_current_gpu_position ||
            (m_current_offset + required_bytes) < m_current_gpu_position);
     m_current_offset = Common::AlignUp(m_current_offset, alignment);
-    m_last_allocation_size = num_bytes;
     return true;
   }
 
@@ -205,7 +207,7 @@ bool StreamBuffer::ReserveMemory(u32 num_bytes, u32 alignment)
 void StreamBuffer::CommitMemory(u32 final_num_bytes)
 {
   ASSERT((m_current_offset + final_num_bytes) <= m_size);
-  ASSERT(final_num_bytes <= m_last_allocation_size);
+  ASSERT(final_num_bytes <= GetCurrentFreeSpace());
 
   // For non-coherent mappings, flush the memory range
   if (!m_coherent_mapping)
