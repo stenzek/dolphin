@@ -6,6 +6,7 @@
 #include <array>
 
 #include "Common/BitSet.h"
+#include "Common/CommonFuncs.h"
 #include "Common/CommonTypes.h"
 #include "Common/Logging/Log.h"
 #include "Common/MsgHandler.h"
@@ -344,13 +345,15 @@ ID3D11SamplerState* StateCache::Get(SamplerState state)
                           D3D11_FILTER_MIN_MAG_MIP_POINT;
   }
 
-  static constexpr std::array<D3D11_TEXTURE_ADDRESS_MODE, 3> address_modes = {
-      {D3D11_TEXTURE_ADDRESS_CLAMP, D3D11_TEXTURE_ADDRESS_WRAP, D3D11_TEXTURE_ADDRESS_MIRROR}};
+  static constexpr std::array<D3D11_TEXTURE_ADDRESS_MODE, 4> address_modes = {
+      {D3D11_TEXTURE_ADDRESS_CLAMP, D3D11_TEXTURE_ADDRESS_WRAP, D3D11_TEXTURE_ADDRESS_MIRROR,
+       D3D11_TEXTURE_ADDRESS_BORDER}};
   sampdc.AddressU = address_modes[static_cast<u32>(state.wrap_u.Value())];
   sampdc.AddressV = address_modes[static_cast<u32>(state.wrap_v.Value())];
   sampdc.MaxLOD = state.max_lod / 16.f;
   sampdc.MinLOD = state.min_lod / 16.f;
   sampdc.MipLODBias = (s32)state.lod_bias / 256.f;
+  std::fill_n(sampdc.BorderColor, ArraySize(sampdc.BorderColor), 0.0f);
 
   if (state.anisotropic_filtering)
   {

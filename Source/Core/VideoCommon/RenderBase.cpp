@@ -99,9 +99,9 @@ bool Renderer::Initialize()
   if (!InitializeImGui())
     return false;
 
-  m_post_processor = std::make_unique<VideoCommon::PostProcessing>();
-  if (!m_post_processor->Initialize(m_backbuffer_format))
-    return false;
+  m_post_processor = std::make_unique<VideoCommon::PostProcessing::Instance>();
+  if (!m_post_processor->LoadConfig(g_ActiveConfig.sPostProcessingShader))
+    WARN_LOG(VIDEO, "Post processing shader failed to load, post-processing will be disabled");
 
   return true;
 }
@@ -395,11 +395,6 @@ void Renderer::CheckForConfigChanges()
   // Update texture cache settings with any changed options.
   g_texture_cache->OnConfigChanged(g_ActiveConfig);
 
-  // Check for post-processing shader changes. Done up here as it doesn't affect anything outside
-  // the post-processor. Note that options are applied every frame, so no need to check those.
-  if (m_post_processor->GetConfig()->GetShader() != g_ActiveConfig.sPostProcessingShader)
-    m_post_processor->RecompileShader();
-
   // Determine which (if any) settings have changed.
   ShaderHostConfig new_host_config = ShaderHostConfig::GetCurrent();
   u32 changed_bits = 0;
@@ -569,9 +564,14 @@ void Renderer::ScaleTexture(AbstractFramebuffer* dst_framebuffer,
                             const AbstractTexture* src_texture,
                             const MathUtil::Rectangle<int>& src_rect)
 {
-  ASSERT(dst_framebuffer->GetColorFormat() == AbstractTextureFormat::RGBA8);
-
-  BeginUtilityDrawing();
+  const AbstractPipeline* pipeline =
+      g_shader_cache->GetBlitPipeline(dst_framebuffer->GetColorFormat(),
+                                      dst_framebuffer->GetLayers(), dst_framebuffer->GetSamples());
+  if (!pipeline)
+  {
+    PanicAlert("Missing pipeline for texture scale/blit");
+    return;
+  }
 
   // The shader needs to know the source rectangle.
   const auto converted_src_rect = g_renderer->ConvertFramebufferRectangle(
@@ -596,14 +596,10 @@ void Renderer::ScaleTexture(AbstractFramebuffer* dst_framebuffer,
   }
 
   SetViewportAndScissor(ConvertFramebufferRectangle(dst_rect, dst_framebuffer));
-  SetPipeline(dst_framebuffer->GetLayers() > 1 ? g_shader_cache->GetRGBA8StereoCopyPipeline() :
-                                                 g_shader_cache->GetRGBA8CopyPipeline());
+  SetPipeline(pipeline);
   SetTexture(0, src_texture);
   SetSamplerState(0, RenderState::GetLinearSamplerState());
   Draw(0, 3);
-  EndUtilityDrawing();
-  if (dst_framebuffer->GetColorAttachment())
-    dst_framebuffer->GetColorAttachment()->FinishedRendering();
 }
 
 MathUtil::Rectangle<int>
@@ -1204,6 +1200,7 @@ void Renderer::Swap(u32 xfbAddr, u32 fbWidth, u32 fbStride, u32 fbHeight, const 
 
         DrawDebugText();
         OSD::DrawMessages();
+        m_post_processor->RenderConfigUI();
         ImGui::Render();
       }
 
@@ -1284,18 +1281,24 @@ void Renderer::Swap(u32 xfbAddr, u32 fbWidth, u32 fbStride, u32 fbHeight, const 
 void Renderer::RenderXFBToScreen(const AbstractTexture* texture, const EFBRectangle& rc)
 {
   const auto target_rc = GetTargetRectangle();
+  if (!m_post_processor->IsValid())
+  {
+    ScaleTexture(m_current_framebuffer, target_rc, texture, rc);
+    return;
+  }
+
   if (g_ActiveConfig.stereo_mode == StereoMode::SBS ||
       g_ActiveConfig.stereo_mode == StereoMode::TAB)
   {
     TargetRectangle left_rc, right_rc;
     std::tie(left_rc, right_rc) = ConvertStereoRectangle(target_rc);
 
-    m_post_processor->BlitFromTexture(left_rc, rc, texture, 0);
-    m_post_processor->BlitFromTexture(right_rc, rc, texture, 1);
+    m_post_processor->Apply(m_current_framebuffer, left_rc, texture, nullptr, rc, 0);
+    m_post_processor->Apply(m_current_framebuffer, right_rc, texture, nullptr, rc, 1);
   }
   else
   {
-    m_post_processor->BlitFromTexture(target_rc, rc, texture, 0);
+    m_post_processor->Apply(m_current_framebuffer, target_rc, texture, nullptr, rc, 0);
   }
 }
 
@@ -1337,6 +1340,7 @@ void Renderer::DumpCurrentFrame()
     source_rect = MathUtil::Rectangle<int>(0, 0, target_width, target_height);
     ScaleTexture(m_frame_dump_render_framebuffer.get(), source_rect, m_last_xfb_texture,
                  m_last_xfb_region);
+    m_frame_dump_render_texture->FinishedRendering();
   }
 
   // Index 0 was just sent to AVI dump. Swap with the second texture.

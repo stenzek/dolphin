@@ -980,16 +980,16 @@ void Renderer::ClearScreen(const EFBRectangle& rc, bool colorEnable, bool alphaE
 void Renderer::RenderXFBToScreen(const AbstractTexture* texture, const EFBRectangle& rc)
 {
   // Quad-buffered stereo is annoying on GL.
-  if (g_ActiveConfig.stereo_mode != StereoMode::QuadBuffer)
+  if (g_ActiveConfig.stereo_mode != StereoMode::QuadBuffer || !m_post_processor->IsValid())
     return ::Renderer::RenderXFBToScreen(texture, rc);
 
   const auto target_rc = GetTargetRectangle();
 
   glDrawBuffer(GL_BACK_LEFT);
-  m_post_processor->BlitFromTexture(target_rc, rc, texture, 0);
+  m_post_processor->Apply(m_current_framebuffer, target_rc, texture, nullptr, rc, 0);
 
   glDrawBuffer(GL_BACK_RIGHT);
-  m_post_processor->BlitFromTexture(target_rc, rc, texture, 1);
+  m_post_processor->Apply(m_current_framebuffer, target_rc, texture, nullptr, rc, 1);
 
   glDrawBuffer(GL_BACK);
 }

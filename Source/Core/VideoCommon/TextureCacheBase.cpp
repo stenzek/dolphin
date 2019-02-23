@@ -297,9 +297,12 @@ void TextureCacheBase::ScaleTextureCacheEntryTo(TextureCacheBase::TCacheEntry* e
   }
 
   // No need to convert the coordinates here since they'll be the same.
+  g_renderer->BeginUtilityDrawing();
   g_renderer->ScaleTexture(new_texture->framebuffer.get(),
                            new_texture->texture->GetConfig().GetRect(), entry->texture.get(),
                            entry->texture->GetConfig().GetRect());
+  new_texture->texture->FinishedRendering();
+  g_renderer->EndUtilityDrawing();
   entry->texture.swap(new_texture->texture);
   entry->framebuffer.swap(new_texture->framebuffer);
 

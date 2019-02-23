@@ -94,12 +94,9 @@ public:
   GetEFBCopyToVRAMPipeline(const TextureConversionShaderGen::TCShaderUid& uid);
   const AbstractPipeline* GetEFBCopyToRAMPipeline(const EFBCopyParams& uid);
 
-  // RGBA8 framebuffer copy pipelines
-  const AbstractPipeline* GetRGBA8CopyPipeline() const { return m_copy_rgba8_pipeline.get(); }
-  const AbstractPipeline* GetRGBA8StereoCopyPipeline() const
-  {
-    return m_rgba8_stereo_copy_pipeline.get();
-  }
+  // Framebuffer copy/blitting pipelines
+  const AbstractPipeline* GetBlitPipeline(AbstractTextureFormat dst_format, u32 dst_layers,
+                                          u32 dst_samples);
 
   // Palette texture conversion pipelines
   const AbstractPipeline* GetPaletteConversionPipeline(TLUTFormat format);
@@ -220,8 +217,8 @@ private:
   std::map<EFBCopyParams, std::unique_ptr<AbstractPipeline>> m_efb_copy_to_ram_pipelines;
 
   // Copy pipeline for RGBA8 textures
-  std::unique_ptr<AbstractPipeline> m_copy_rgba8_pipeline;
-  std::unique_ptr<AbstractPipeline> m_rgba8_stereo_copy_pipeline;
+  std::map<std::tuple<AbstractTextureFormat, u32, u32>, std::unique_ptr<AbstractPipeline>>
+      m_blit_pipelines;
 
   // Palette conversion pipelines
   std::array<std::unique_ptr<AbstractPipeline>, NUM_PALETTE_CONVERSION_SHADERS>

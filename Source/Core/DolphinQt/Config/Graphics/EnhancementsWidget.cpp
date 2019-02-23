@@ -19,7 +19,6 @@
 #include "DolphinQt/Config/Graphics/GraphicsChoice.h"
 #include "DolphinQt/Config/Graphics/GraphicsSlider.h"
 #include "DolphinQt/Config/Graphics/GraphicsWindow.h"
-#include "DolphinQt/Config/Graphics/PostProcessingConfigWindow.h"
 #include "DolphinQt/Settings.h"
 
 #include "UICommon/VideoUtils.h"
@@ -138,64 +137,8 @@ void EnhancementsWidget::ConnectWidgets()
   connect(m_pp_effect, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
           [this](int) { SaveSettings(); });
   connect(m_3d_mode, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
-          [this] {
-            m_block_save = true;
-            LoadPPShaders();
-            m_block_save = false;
-
-            SaveSettings();
-          });
-  connect(m_configure_pp_effect, &QPushButton::pressed, this,
-          &EnhancementsWidget::ConfigurePostProcessingShader);
-}
-
-void EnhancementsWidget::LoadPPShaders()
-{
-  const bool anaglyph = g_Config.stereo_mode == StereoMode::Anaglyph;
-  std::vector<std::string> shaders = anaglyph ?
-                                         VideoCommon::PostProcessing::GetAnaglyphShaderList() :
-                                         VideoCommon::PostProcessing::GetShaderList();
-
-  m_pp_effect->clear();
-
-  if (!anaglyph)
-    m_pp_effect->addItem(tr("(off)"));
-
-  auto selected_shader = Config::Get(Config::GFX_ENHANCE_POST_SHADER);
-
-  bool found = false;
-
-  for (const auto& shader : shaders)
-  {
-    m_pp_effect->addItem(QString::fromStdString(shader));
-    if (selected_shader == shader)
-    {
-      m_pp_effect->setCurrentIndex(m_pp_effect->count() - 1);
-      found = true;
-    }
-  }
-
-  if (anaglyph && !found)
-    m_pp_effect->setCurrentIndex(m_pp_effect->findText(QStringLiteral("dubois")));
-
-  const bool supports_postprocessing = g_Config.backend_info.bSupportsPostProcessing;
-  m_pp_effect->setEnabled(supports_postprocessing);
-
-  m_pp_effect->setToolTip(supports_postprocessing ?
-                              QStringLiteral("") :
-                              tr("%1 doesn't support this feature.")
-                                  .arg(tr(g_video_backend->GetDisplayName().c_str())));
-
-  VideoCommon::PostProcessingConfiguration pp_shader;
-  if (selected_shader != "(off)" && supports_postprocessing)
-  {
-    pp_shader.LoadShader(selected_shader);
-    m_configure_pp_effect->setEnabled(pp_shader.HasOptions());
-  }
-  else
-  {
-    m_configure_pp_effect->setEnabled(false);
-  }
+          [this] { SaveSettings(); });
+  connect(m_configure_pp_effect, &QPushButton::pressed, [] {});
 }
 
 void EnhancementsWidget::LoadSettings()
@@ -213,9 +156,6 @@ void EnhancementsWidget::LoadSettings()
   m_aa_combo->setCurrentText(
       QString::fromStdString(std::to_string(aa_selection) + "x " + (ssaa ? "SSAA" : "MSAA")));
   m_aa_combo->setEnabled(m_aa_combo->count() > 1);
-
-  // Post Processing Shader
-  LoadPPShaders();
 
   // Stereoscopy
   bool supports_stereoscopy = g_Config.backend_info.bSupportsGeometryShaders;
@@ -265,17 +205,6 @@ void EnhancementsWidget::SaveSettings()
                                "(off)" :
                                m_pp_effect->currentText().toStdString());
 
-  VideoCommon::PostProcessingConfiguration pp_shader;
-  if (Config::Get(Config::GFX_ENHANCE_POST_SHADER) != "(off)")
-  {
-    pp_shader.LoadShader(Config::Get(Config::GFX_ENHANCE_POST_SHADER));
-    m_configure_pp_effect->setEnabled(pp_shader.HasOptions());
-  }
-  else
-  {
-    m_configure_pp_effect->setEnabled(false);
-  }
-
   LoadSettings();
 }
 
@@ -298,9 +227,6 @@ void EnhancementsWidget::AddDescriptions()
       "Enables anisotropic filtering, which enhances the visual quality of textures that "
       "are at oblique viewing angles.\n\nMight cause issues in a small "
       "number of games.\n\nIf unsure, select 1x.");
-
-  static const char TR_POSTPROCESSING_DESCRIPTION[] = QT_TR_NOOP(
-      "Applies a post-processing effect after rendering a frame.\n\nIf unsure, select (off).");
 
   static const char TR_SCALED_EFB_COPY_DESCRIPTION[] =
       QT_TR_NOOP("Greatly increases the quality of textures generated using render-to-texture "
@@ -359,7 +285,6 @@ void EnhancementsWidget::AddDescriptions()
   AddDescription(m_ir_combo, TR_INTERNAL_RESOLUTION_DESCRIPTION);
   AddDescription(m_aa_combo, TR_ANTIALIAS_DESCRIPTION);
   AddDescription(m_af_combo, TR_ANISOTROPIC_FILTERING_DESCRIPTION);
-  AddDescription(m_pp_effect, TR_POSTPROCESSING_DESCRIPTION);
   AddDescription(m_scaled_efb_copy, TR_SCALED_EFB_COPY_DESCRIPTION);
   AddDescription(m_per_pixel_lighting, TR_PER_PIXEL_LIGHTING_DESCRIPTION);
   AddDescription(m_widescreen_hack, TR_WIDESCREEN_HACK_DESCRIPTION);
@@ -372,10 +297,4 @@ void EnhancementsWidget::AddDescriptions()
   AddDescription(m_3d_depth, TR_3D_DEPTH_DESCRIPTION);
   AddDescription(m_3d_convergence, TR_3D_CONVERGENCE_DESCRIPTION);
   AddDescription(m_3d_swap_eyes, TR_3D_SWAP_EYES_DESCRIPTION);
-}
-
-void EnhancementsWidget::ConfigurePostProcessingShader()
-{
-  const std::string shader = Config::Get(Config::GFX_ENHANCE_POST_SHADER);
-  PostProcessingConfigWindow(this, shader).exec();
 }

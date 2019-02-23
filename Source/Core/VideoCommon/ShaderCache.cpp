@@ -1058,6 +1058,29 @@ const AbstractPipeline* ShaderCache::GetEFBCopyToRAMPipeline(const EFBCopyParams
   return iiter.first->second.get();
 }
 
+const AbstractPipeline* ShaderCache::GetBlitPipeline(AbstractTextureFormat dst_format,
+                                                     u32 dst_layers, u32 dst_samples)
+{
+  const auto key = std::tie(dst_format, dst_layers, dst_samples);
+  auto iter = m_blit_pipelines.find(key);
+  if (iter != m_blit_pipelines.end())
+    return iter->second.get();
+
+  AbstractPipelineConfig config;
+  config.vertex_format = nullptr;
+  config.vertex_shader = m_texture_copy_vertex_shader.get();
+  config.geometry_shader = dst_layers > 1 ? m_texcoord_geometry_shader.get() : nullptr;
+  config.pixel_shader = m_texture_copy_pixel_shader.get();
+  config.rasterization_state = RenderState::GetNoCullRasterizationState(PrimitiveType::Triangles);
+  config.depth_state = RenderState::GetNoDepthTestingDepthState();
+  config.blending_state = RenderState::GetNoBlendingBlendState();
+  config.framebuffer_state = RenderState::GetColorFramebufferState(dst_format);
+  config.framebuffer_state.samples = dst_samples;
+  config.usage = AbstractPipelineUsage::Utility;
+  auto iiter = m_blit_pipelines.emplace(key, g_renderer->CreatePipeline(config));
+  return iiter.first->second.get();
+}
+
 bool ShaderCache::CompileSharedPipelines()
 {
   m_screen_quad_vertex_shader = g_renderer->CreateShaderFromSource(
@@ -1087,32 +1110,17 @@ bool ShaderCache::CompileSharedPipelines()
   if (!m_texture_copy_pixel_shader || !m_color_pixel_shader)
     return false;
 
-  AbstractPipelineConfig config;
-  config.vertex_format = nullptr;
-  config.vertex_shader = m_texture_copy_vertex_shader.get();
-  config.geometry_shader = nullptr;
-  config.pixel_shader = m_texture_copy_pixel_shader.get();
-  config.rasterization_state = RenderState::GetNoCullRasterizationState(PrimitiveType::Triangles);
-  config.depth_state = RenderState::GetNoDepthTestingDepthState();
-  config.blending_state = RenderState::GetNoBlendingBlendState();
-  config.framebuffer_state = RenderState::GetRGBA8FramebufferState();
-  config.usage = AbstractPipelineUsage::Utility;
-  m_copy_rgba8_pipeline = g_renderer->CreatePipeline(config);
-  if (!m_copy_rgba8_pipeline)
-    return false;
-
-  if (UseGeometryShaderForEFBCopies())
-  {
-    config.geometry_shader = m_texcoord_geometry_shader.get();
-    m_rgba8_stereo_copy_pipeline = g_renderer->CreatePipeline(config);
-    if (!m_rgba8_stereo_copy_pipeline)
-      return false;
-  }
-
   if (m_host_config.backend_palette_conversion)
   {
+    AbstractPipelineConfig config;
+    config.vertex_format = nullptr;
     config.vertex_shader = m_screen_quad_vertex_shader.get();
     config.geometry_shader = nullptr;
+    config.rasterization_state = RenderState::GetNoCullRasterizationState(PrimitiveType::Triangles);
+    config.depth_state = RenderState::GetNoDepthTestingDepthState();
+    config.blending_state = RenderState::GetNoBlendingBlendState();
+    config.framebuffer_state = RenderState::GetRGBA8FramebufferState();
+    config.usage = AbstractPipelineUsage::Utility;
 
     for (size_t i = 0; i < NUM_PALETTE_CONVERSION_SHADERS; i++)
     {

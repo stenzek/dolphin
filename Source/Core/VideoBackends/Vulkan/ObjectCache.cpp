@@ -305,7 +305,7 @@ VkSampler ObjectCache::GetSampler(const SamplerState& info)
       {VK_SAMPLER_MIPMAP_MODE_NEAREST, VK_SAMPLER_MIPMAP_MODE_LINEAR}};
   static constexpr std::array<VkSamplerAddressMode, 4> address_modes = {
       {VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, VK_SAMPLER_ADDRESS_MODE_REPEAT,
-       VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT}};
+       VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER}};
 
   VkSamplerCreateInfo create_info = {
       VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,               // VkStructureType         sType

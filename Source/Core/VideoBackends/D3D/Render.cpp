@@ -374,7 +374,7 @@ void Renderer::WaitForGPUIdle()
 
 void Renderer::RenderXFBToScreen(const AbstractTexture* texture, const EFBRectangle& rc)
 {
-  if (g_ActiveConfig.stereo_mode != StereoMode::Nvidia3DVision)
+  if (g_ActiveConfig.stereo_mode != StereoMode::Nvidia3DVision || !m_post_processor->IsValid())
     return ::Renderer::RenderXFBToScreen(texture, rc);
 
   if (!m_3d_vision_texture)
@@ -384,11 +384,12 @@ void Renderer::RenderXFBToScreen(const AbstractTexture* texture, const EFBRectan
   SetAndClearFramebuffer(m_3d_vision_framebuffer.get());
 
   const auto target_rc = GetTargetRectangle();
-  m_post_processor->BlitFromTexture(target_rc, rc, texture, 0);
-  m_post_processor->BlitFromTexture(
+  m_post_processor->Apply(m_current_framebuffer, target_rc, texture, nullptr, rc, 0);
+  m_post_processor->Apply(
+      m_current_framebuffer,
       MathUtil::Rectangle<int>(target_rc.left + m_backbuffer_width, target_rc.top,
                                target_rc.right + m_backbuffer_width, target_rc.bottom),
-      rc, texture, 1);
+      texture, nullptr, rc, 1);
 
   // Copy the left eye to the backbuffer, if Nvidia 3D Vision is enabled it should
   // recognize the signature and automatically include the right eye frame.

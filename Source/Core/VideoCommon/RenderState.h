@@ -104,7 +104,8 @@ union SamplerState
   {
     Clamp,
     Repeat,
-    MirroredRepeat
+    MirroredRepeat,
+    Border
   };
 
   void Generate(const BPMemory& bp, u32 index);
