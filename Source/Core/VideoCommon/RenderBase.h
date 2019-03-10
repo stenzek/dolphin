@@ -201,7 +201,6 @@ public:
                    float Gamma = 1.0f);
 
   virtual u32 AccessEFB(EFBAccessType type, u32 x, u32 y, u32 poke_data);
-  virtual void PokeEFB(EFBAccessType type, const EfbPokeData* points, size_t num_points);
 
   virtual u16 BBoxRead(int index) = 0;
   virtual void BBoxWrite(int index, u16 value) = 0;

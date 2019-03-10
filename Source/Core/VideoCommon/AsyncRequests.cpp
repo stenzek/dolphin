@@ -29,34 +29,6 @@ void AsyncRequests::PullEventsInternal()
   {
     Event e = m_queue.front();
 
-    // try to merge as many efb pokes as possible
-    // it's a bit hacky, but some games render a complete frame in this way
-    if ((e.type == Event::EFB_POKE_COLOR || e.type == Event::EFB_POKE_Z))
-    {
-      m_merged_efb_pokes.clear();
-      Event first_event = m_queue.front();
-      const auto t = first_event.type == Event::EFB_POKE_COLOR ? EFBAccessType::PokeColor :
-                                                                 EFBAccessType::PokeZ;
-
-      do
-      {
-        e = m_queue.front();
-
-        EfbPokeData d;
-        d.data = e.efb_poke.data;
-        d.x = e.efb_poke.x;
-        d.y = e.efb_poke.y;
-        m_merged_efb_pokes.push_back(d);
-
-        m_queue.pop();
-      } while (!m_queue.empty() && m_queue.front().type == first_event.type);
-
-      lock.unlock();
-      g_renderer->PokeEFB(t, m_merged_efb_pokes.data(), m_merged_efb_pokes.size());
-      lock.lock();
-      continue;
-    }
-
     lock.unlock();
     HandleEvent(e);
     lock.lock();
@@ -119,16 +91,14 @@ void AsyncRequests::HandleEvent(const AsyncRequests::Event& e)
   case Event::EFB_POKE_COLOR:
   {
     INCSTAT(stats.thisFrame.numEFBPokes);
-    EfbPokeData poke = {e.efb_poke.x, e.efb_poke.y, e.efb_poke.data};
-    g_renderer->PokeEFB(EFBAccessType::PokeColor, &poke, 1);
+    g_renderer->AccessEFB(EFBAccessType::PokeColor, e.efb_poke.x, e.efb_poke.y, e.efb_poke.data);
   }
   break;
 
   case Event::EFB_POKE_Z:
   {
     INCSTAT(stats.thisFrame.numEFBPokes);
-    EfbPokeData poke = {e.efb_poke.x, e.efb_poke.y, e.efb_poke.data};
-    g_renderer->PokeEFB(EFBAccessType::PokeZ, &poke, 1);
+    g_renderer->AccessEFB(EFBAccessType::PokeZ, e.efb_poke.x, e.efb_poke.y, e.efb_poke.data);
   }
   break;
 

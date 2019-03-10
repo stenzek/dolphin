@@ -163,43 +163,37 @@ void Renderer::ReinterpretPixelData(EFBReinterpretType convtype)
 
 u32 Renderer::AccessEFB(EFBAccessType type, u32 x, u32 y, u32 poke_data)
 {
-  if (type == EFBAccessType::PeekColor)
+  switch (type)
+  {
+  case EFBAccessType::PeekColor:
   {
     u32 color = g_framebuffer_manager->PeekEFBColor(x, y);
 
     // a little-endian value is expected to be returned
     color = ((color & 0xFF00FF00) | ((color >> 16) & 0xFF) | ((color << 16) & 0xFF0000));
 
-    // check what to do with the alpha channel (GX_PokeAlphaRead)
-    PixelEngine::UPEAlphaReadReg alpha_read_mode = PixelEngine::GetAlphaReadMode();
-
     if (bpmem.zcontrol.pixel_format == PEControl::RGBA6_Z24)
-    {
       color = RGBA8ToRGBA6ToRGBA8(color);
-    }
     else if (bpmem.zcontrol.pixel_format == PEControl::RGB565_Z16)
-    {
       color = RGBA8ToRGB565ToRGBA8(color);
-    }
-    if (bpmem.zcontrol.pixel_format != PEControl::RGBA6_Z24)
-    {
-      color |= 0xFF000000;
-    }
 
-    if (alpha_read_mode.ReadMode == 2)
+    if (bpmem.zcontrol.pixel_format != PEControl::RGBA6_Z24)
+      color |= 0xFF000000;
+
+    // check what to do with the alpha channel (GX_PokeAlphaRead)
+    switch (PixelEngine::GetAlphaReadMode().ReadMode)
     {
-      return color;  // GX_READ_NONE
-    }
-    else if (alpha_read_mode.ReadMode == 1)
-    {
-      return color | 0xFF000000;  // GX_READ_FF
-    }
-    else /*if(alpha_read_mode.ReadMode == 0)*/
-    {
-      return color & 0x00FFFFFF;  // GX_READ_00
+    case 2:  // GX_READ_NONE
+      return color;
+    case 1:  // GX_READ_FF
+      return color | 0xFF000000;
+    case 0:
+    default:  // GX_READ_00
+      return color & 0x00FFFFFF;
     }
   }
-  else  // if (type == EFBAccessType::PeekZ)
+
+  case EFBAccessType::PeekZ:
   {
     // Depth buffer is inverted for improved precision near far plane
     float depth = g_framebuffer_manager->PeekEFBDepth(x, y);
@@ -219,35 +213,28 @@ u32 Renderer::AccessEFB(EFBAccessType type, u32 x, u32 y, u32 poke_data)
 
     return ret;
   }
-}
 
-void Renderer::PokeEFB(EFBAccessType type, const EfbPokeData* points, size_t num_points)
-{
-  if (type == EFBAccessType::PokeColor)
+  case EFBAccessType::PokeColor:
   {
-    for (size_t i = 0; i < num_points; i++)
-    {
-      // Convert to expected format (BGRA->RGBA)
-      // TODO: Check alpha, depending on mode?
-      const EfbPokeData& point = points[i];
-      u32 color = ((point.data & 0xFF00FF00) | ((point.data >> 16) & 0xFF) |
-                   ((point.data << 16) & 0xFF0000));
-      g_framebuffer_manager->PokeEFBColor(point.x, point.y, color);
-    }
+    // Convert to expected format (BGRA->RGBA)
+    const u32 color =
+        ((poke_data & 0xFF00FF00) | ((poke_data >> 16) & 0xFF) | ((poke_data << 16) & 0xFF0000));
+    g_framebuffer_manager->PokeEFBColor(x, y, color);
   }
-  else  // if (type == EFBAccessType::PokeZ)
-  {
-    for (size_t i = 0; i < num_points; i++)
-    {
-      // Convert to floating-point depth.
-      const EfbPokeData& point = points[i];
-      float depth = float(point.data & 0xFFFFFF) / 16777216.0f;
-      if (!g_ActiveConfig.backend_info.bSupportsReversedDepthRange)
-        depth = 1.0f - depth;
+  break;
 
-      g_framebuffer_manager->PokeEFBDepth(point.x, point.y, depth);
-    }
+  case EFBAccessType::PokeZ:
+  {
+    // Convert to floating-point depth.
+    float depth = float(poke_data & 0xFFFFFF) / 16777216.0f;
+    if (!g_ActiveConfig.backend_info.bSupportsReversedDepthRange)
+      depth = 1.0f - depth;
+    g_framebuffer_manager->PokeEFBDepth(x, y, depth);
   }
+  break;
+  }
+
+  return 0;
 }
 
 void Renderer::RenderToXFB(u32 xfbAddr, const EFBRectangle& sourceRc, u32 fbStride, u32 fbHeight,
