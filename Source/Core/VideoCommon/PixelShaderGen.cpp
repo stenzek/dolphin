@@ -860,20 +860,21 @@ ShaderCode GeneratePixelShaderCode(APIType ApiType, const ShaderHostConfig& host
 
   if (uid_data->bounding_box)
   {
+    out.Write("int scaled_x = iround(rawpos.x * " I_EFBSCALE ".x);\n"
+              "int scaled_y = iround(rawpos.y * " I_EFBSCALE ".y);\n");
     if (ApiType == APIType::D3D)
     {
-      out.Write(
-          "\tif(bbox_data[0] > int(rawpos.x)) InterlockedMin(bbox_data[0], int(rawpos.x));\n"
-          "\tif(bbox_data[1] < int(rawpos.x)) InterlockedMax(bbox_data[1], int(rawpos.x));\n"
-          "\tif(bbox_data[2] > int(rawpos.y)) InterlockedMin(bbox_data[2], int(rawpos.y));\n"
-          "\tif(bbox_data[3] < int(rawpos.y)) InterlockedMax(bbox_data[3], int(rawpos.y));\n");
+      out.Write("\tif(bbox_data[0] > scaled_x) InterlockedMin(bbox_data[0], scaled_x);\n"
+                "\tif(bbox_data[1] < scaled_x) InterlockedMax(bbox_data[1], scaled_x);\n"
+                "\tif(bbox_data[2] > scaled_y) InterlockedMin(bbox_data[2], scaled_y);\n"
+                "\tif(bbox_data[3] < scaled_y) InterlockedMax(bbox_data[3], scaled_y);\n");
     }
     else
     {
-      out.Write("\tif(bbox_left > int(rawpos.x)) atomicMin(bbox_left, int(rawpos.x));\n"
-                "\tif(bbox_right < int(rawpos.x)) atomicMax(bbox_right, int(rawpos.x));\n"
-                "\tif(bbox_top > int(rawpos.y)) atomicMin(bbox_top, int(rawpos.y));\n"
-                "\tif(bbox_bottom < int(rawpos.y)) atomicMax(bbox_bottom, int(rawpos.y));\n");
+      out.Write("\tif(bbox_left > scaled_x) atomicMin(bbox_left, scaled_x);\n"
+                "\tif(bbox_right < scaled_x) atomicMax(bbox_right, scaled_x);\n"
+                "\tif(bbox_top > scaled_y) atomicMin(bbox_top, scaled_y);\n"
+                "\tif(bbox_bottom < scaled_y) atomicMax(bbox_bottom, scaled_y);\n");
     }
   }
 

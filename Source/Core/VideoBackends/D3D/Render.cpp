@@ -327,17 +327,6 @@ u16 Renderer::BBoxRead(int index)
   // Here we get the min/max value of the truncated position of the upscaled framebuffer.
   // So we have to correct them to the unscaled EFB sizes.
   int value = BBox::Get(index);
-
-  if (index < 2)
-  {
-    // left/right
-    value = value * EFB_WIDTH / m_target_width;
-  }
-  else
-  {
-    // up/down
-    value = value * EFB_HEIGHT / m_target_height;
-  }
   if (index & 1)
     value++;  // fix max values to describe the outer border
 
@@ -346,17 +335,9 @@ u16 Renderer::BBoxRead(int index)
 
 void Renderer::BBoxWrite(int index, u16 _value)
 {
-  int value = _value;  // u16 isn't enough to multiply by the efb width
+  int value = static_cast<u32>(_value);  // u16 isn't enough to multiply by the efb width
   if (index & 1)
     value--;
-  if (index < 2)
-  {
-    value = value * m_target_width / EFB_WIDTH;
-  }
-  else
-  {
-    value = value * m_target_height / EFB_HEIGHT;
-  }
 
   BBox::Set(index, value);
 }

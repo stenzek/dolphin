@@ -846,15 +846,9 @@ u16 Renderer::BBoxRead(int index)
   // So we have to correct them to the unscaled EFB sizes.
   int value = BoundingBox::Get(swapped_index);
 
-  if (index < 2)
-  {
-    // left/right
-    value = value * EFB_WIDTH / m_target_width;
-  }
-  else
+  if (index >= 2)
   {
     // up/down -- we have to swap up and down
-    value = value * EFB_HEIGHT / m_target_height;
     value = EFB_HEIGHT - value - 1;
   }
   if (index & 1)
@@ -865,18 +859,14 @@ u16 Renderer::BBoxRead(int index)
 
 void Renderer::BBoxWrite(int index, u16 _value)
 {
-  int value = _value;  // u16 isn't enough to multiply by the efb width
+  int value = static_cast<u32>(_value);  // u16 isn't enough to multiply by the efb width
   if (index & 1)
     value--;
-  if (index < 2)
-  {
-    value = value * m_target_width / EFB_WIDTH;
-  }
-  else
+
+  if (index >= 2)
   {
     index ^= 1;  // swap 2 and 3 for top/bottom
     value = EFB_HEIGHT - value - 1;
-    value = value * m_target_height / EFB_HEIGHT;
   }
 
   BoundingBox::Set(index, value);
