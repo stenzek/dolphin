@@ -38,11 +38,10 @@ protected:
 
   bool CreateWindowSurface();
   void DestroyWindowSurface();
-  void DetectMode(bool has_handle);
+  void DetectMode();
   void DestroyContext();
 
-  void* m_host_display = nullptr;
-  void* m_host_window = nullptr;
+  WindowSystemInfo m_wsi = {};
 
   EGLConfig m_config;
   bool m_supports_surfaceless = false;
