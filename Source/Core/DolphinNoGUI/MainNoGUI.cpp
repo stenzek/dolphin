@@ -121,6 +121,9 @@ static std::unique_ptr<Platform> GetPlatform(const optparse::Values& options)
     return Platform::CreateX11Platform();
 #endif
 
+  if (platform_name == "fbdev" || platform_name.empty())
+    return Platform::CreateFBDevPlatform();
+
   if (platform_name == "headless" || platform_name.empty())
     return Platform::CreateHeadlessPlatform();
 
@@ -134,7 +137,7 @@ int main(int argc, char* argv[])
       .action("store")
       .help("Window platform to use [%choices]")
       .choices({
-        "headless"
+        "headless", "fbdev"
 #if HAVE_X11
             ,
             "x11"

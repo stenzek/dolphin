@@ -35,6 +35,7 @@ public:
 #ifdef HAVE_X11
   static std::unique_ptr<Platform> CreateX11Platform();
 #endif
+  static std::unique_ptr<Platform> CreateFBDevPlatform();
 
 protected:
   void UpdateRunningFlag();
