@@ -19,32 +19,15 @@ struct SCPFifoStruct
   // fifo registers
   volatile u32 CPBase;
   volatile u32 CPEnd;
-  u32 CPHiWatermark;
-  u32 CPLoWatermark;
+  volatile u32 CPHiWatermark;
+  volatile u32 CPLoWatermark;
   volatile u32 CPReadWriteDistance;
   volatile u32 CPWritePointer;
   volatile u32 CPReadPointer;
   volatile u32 CPBreakpoint;
-  volatile u32 SafeCPReadPointer;
-
-  volatile u32 bFF_GPLinkEnable;
-  volatile u32 bFF_GPReadEnable;
-  volatile u32 bFF_BPEnable;
-  volatile u32 bFF_BPInt;
-  volatile u32 bFF_Breakpoint;
-
-  volatile u32 bFF_LoWatermarkInt;
-  volatile u32 bFF_HiWatermarkInt;
-
-  volatile u32 bFF_LoWatermark;
-  volatile u32 bFF_HiWatermark;
 
   void DoState(PointerWrap& p);
 };
-
-// This one is shared between gfx thread and emulator thread.
-// It is only used by the Fifo and by the CommandProcessor.
-extern SCPFifoStruct fifo;
 
 // internal hardware addresses
 enum
@@ -123,8 +106,8 @@ union UCPCtrlReg
   {
     u16 GPReadEnable : 1;
     u16 BPEnable : 1;
-    u16 FifoOverflowIntEnable : 1;
-    u16 FifoUnderflowIntEnable : 1;
+    u16 OverflowIntEnable : 1;
+    u16 UnderflowIntEnable : 1;
     u16 GPLinkEnable : 1;
     u16 BPInt : 1;
     u16 : 10;
@@ -155,18 +138,27 @@ void DoState(PointerWrap& p);
 
 void RegisterMMIO(MMIO::Mapping* mmio, u32 base);
 
-void SetCPStatusFromGPU();
-void SetCPStatusFromCPU();
 void GatherPipeBursted();
-void UpdateInterrupts(u64 userdata);
-void UpdateInterruptsFromVideoBackend(u64 userdata);
 
+// Checking whether we can run, due to breakpoints and R/W distance.
+bool AtBreakpoint();
+bool CanReadFromFifo();
+
+// Reading from memory/fifo -> video buffer.
+u32 ReadDataFromFifo(u8* dst_ptr, u32 maximum_copy_size);
+
+// Updates overflow/underflow/idle flags.
+// Call after reading from FIFO/processing commands.
+void UpdateBreakpointFlag();
+void UpdateOverflowUnderflowFlags();
+void UpdateStatusFlags();
+void UpdateInterrupts();
 bool IsInterruptWaiting();
 
-void SetCpClearRegister();
-void SetCpControlRegister();
-void SetCpStatusRegister();
+// For FIFO recorder.
+u32 GetCPBaseRegister();
+u32 GetCPEndRegister();
+u32 GetCPReadWriteDistance();
 
 void HandleUnknownOpcode(u8 cmd_byte, void* buffer, bool preprocess);
-
 }  // namespace CommandProcessor

@@ -845,8 +845,8 @@ void Renderer::CheckFifoRecording()
       RecordVideoMemory();
     }
 
-    FifoRecorder::GetInstance().EndFrame(CommandProcessor::fifo.CPBase,
-                                         CommandProcessor::fifo.CPEnd);
+    FifoRecorder::GetInstance().EndFrame(CommandProcessor::GetCPBaseRegister(),
+                                         CommandProcessor::GetCPEndRegister());
   }
 }
 

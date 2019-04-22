@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstring>
 
+#include "Common/Logging/Log.h"
 #include "Common/ChunkFile.h"
 #include "Common/CommonTypes.h"
 #include "Common/Swap.h"
@@ -74,6 +75,25 @@ void UpdateGatherPipe()
   u8* cur_mem = Memory::GetPointer(ProcessorInterface::Fifo_CPUWritePointer);
   for (processed = 0; pipe_count >= GATHER_PIPE_SIZE; processed += GATHER_PIPE_SIZE)
   {
+#if 1
+    WARN_LOG(
+        VIDEO,
+        "GP burst -> %08x: %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x "
+        "%02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x",
+        ProcessorInterface::Fifo_CPUWritePointer, s_gather_pipe[processed + 0],
+        s_gather_pipe[processed + 1], s_gather_pipe[processed + 2], s_gather_pipe[processed + 3],
+        s_gather_pipe[processed + 4], s_gather_pipe[processed + 5], s_gather_pipe[processed + 6],
+        s_gather_pipe[processed + 7], s_gather_pipe[processed + 8], s_gather_pipe[processed + 9],
+        s_gather_pipe[processed + 10], s_gather_pipe[processed + 11], s_gather_pipe[processed + 12],
+        s_gather_pipe[processed + 13], s_gather_pipe[processed + 14], s_gather_pipe[processed + 15],
+        s_gather_pipe[processed + 16], s_gather_pipe[processed + 17], s_gather_pipe[processed + 18],
+        s_gather_pipe[processed + 19], s_gather_pipe[processed + 20], s_gather_pipe[processed + 21],
+        s_gather_pipe[processed + 22], s_gather_pipe[processed + 23], s_gather_pipe[processed + 24],
+        s_gather_pipe[processed + 25], s_gather_pipe[processed + 26], s_gather_pipe[processed + 27],
+        s_gather_pipe[processed + 28], s_gather_pipe[processed + 29], s_gather_pipe[processed + 30],
+        s_gather_pipe[processed + 31]);
+#endif
+
     // copy the GatherPipe
     memcpy(cur_mem, s_gather_pipe + processed, GATHER_PIPE_SIZE);
     pipe_count -= GATHER_PIPE_SIZE;
