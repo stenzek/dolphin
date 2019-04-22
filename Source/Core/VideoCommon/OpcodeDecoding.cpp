@@ -80,6 +80,7 @@ void Init()
   s_bFifoErrorSeen = false;
 }
 
+#if 0
 static int GetPrimitiveCountForVertices(int primitive, int num_vertices)
 {
   switch (primitive)
@@ -108,9 +109,11 @@ static int GetPrimitiveCountForVertices(int primitive, int num_vertices)
     return 0;
   }
 }
+#endif
 
 static u32 FakeRasterizationCycles(int primitive, int num_vertices)
 {
+#if 0
   // No rasterization is performed if cull all is set.
   if (bpmem.genMode.cullmode == GenMode::CULL_ALL)
     return 0;
@@ -123,6 +126,9 @@ static u32 FakeRasterizationCycles(int primitive, int num_vertices)
   // the shading stage (BP) will be running in parallel. If we ever have a way of efficiently
   // estimating the shading cost, this should be taken into account.
   return GetPrimitiveCountForVertices(primitive, num_vertices) * (8 * 3);
+#else
+  return 0;
+#endif
 }
 
 template <bool is_preprocess>

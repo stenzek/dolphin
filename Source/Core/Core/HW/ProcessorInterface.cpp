@@ -180,6 +180,9 @@ void SetInterrupt(u32 cause_mask, bool set)
 {
   DEBUG_ASSERT_MSG(POWERPC, Core::IsCPUThread(), "SetInterrupt from wrong thread");
 
+  if (set)
+    WARN_LOG(VIDEO, "SetInterrupt %08X", cause_mask);
+
   if (set && !(m_InterruptCause & cause_mask))
   {
     DEBUG_LOG(PROCESSORINTERFACE, "Setting Interrupt %s (set)", Debug_GetInterruptName(cause_mask));
