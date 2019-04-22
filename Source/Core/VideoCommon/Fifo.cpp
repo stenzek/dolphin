@@ -487,7 +487,7 @@ static int RunGpuOnCpu(int ticks)
   s_sync_ticks.store(available_ticks);
 
   // If the GPU is idle, drop the handler.
-  if (available_ticks >= 0)
+  if (!CommandProcessor::CanReadFromFifo())
     return -1;
 
   // Always wait at least for GPU_TIME_SLOT_SIZE cycles.

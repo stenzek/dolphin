@@ -356,9 +356,19 @@ void GatherPipeBursted()
   // If this write will exceed the high watermark, run the GPU before incrementing the distance.
   // This way, the interrupt only fires when there is a true overflow, and not just because the
   // last GPU sync was a while ago.
-  if (fifo.OverflowInterruptEnable && !fifo.OverflowFlag &&
-      fifo.CPReadWriteDistance >= fifo.CPHiWatermark)
+  if (fifo.CPReadWriteDistance >= fifo.CPHiWatermark)
+  {
     Fifo::SyncGPUForRegisterAccess(true);
+  }
+
+  // check for overflows..
+  if (fifo.OverflowInterruptEnable && fifo.CPReadWriteDistance >= fifo.CPHiWatermark &&
+      !fifo.OverflowFlag)
+  {
+    fifo.OverflowFlag = true;
+  }
+
+  SetCPStatusFromCPU();
 
   Fifo::RunGpu();
 
@@ -432,8 +442,11 @@ void SetCPStatusFromGPU()
   }
 
   // overflow & underflow check
-  fifo.OverflowFlag |= (fifo.CPReadWriteDistance > fifo.CPHiWatermark);
-  fifo.UnderflowFlag |= (fifo.CPReadWriteDistance < fifo.CPLoWatermark);
+  if (fifo.UnderflowInterruptEnable && fifo.CPReadWriteDistance < fifo.CPLoWatermark &&
+      !fifo.UnderflowFlag)
+  {
+    fifo.UnderflowFlag = true;
+  }
 
   bool bpInt = fifo.BreakpointFlag && fifo.BreakpointInterruptEnable;
   bool ovfInt = fifo.OverflowFlag && fifo.OverflowInterruptEnable;
@@ -461,10 +474,6 @@ void SetCPStatusFromGPU()
 
 void SetCPStatusFromCPU()
 {
-  // overflow & underflow check
-  fifo.OverflowFlag |= (fifo.CPReadWriteDistance > fifo.CPHiWatermark);
-  fifo.UnderflowFlag |= (fifo.CPReadWriteDistance < fifo.CPLoWatermark);
-
   bool bpInt = fifo.BreakpointFlag && fifo.BreakpointInterruptEnable;
   bool ovfInt = fifo.OverflowFlag && fifo.OverflowInterruptEnable;
   bool undfInt = fifo.UnderflowFlag && fifo.UnderflowInterruptEnable;
@@ -494,7 +503,7 @@ void SetCpStatusRegister()
 {
   // Here always there is one fifo attached to the GPU
   m_CPStatusReg.Breakpoint = fifo.BreakpointFlag;
-  m_CPStatusReg.ReadIdle = !CanReadFromFifo();
+  m_CPStatusReg.ReadIdle = !CanReadFromFifo() && !AtBreakpoint();
   m_CPStatusReg.CommandIdle = !CanReadFromFifo();
   m_CPStatusReg.Underflow = fifo.UnderflowFlag;
   m_CPStatusReg.Overflow = fifo.OverflowFlag;
@@ -546,8 +555,6 @@ void SetCpClearRegister()
               fifo.CPReadWriteDistance);
     fifo.UnderflowFlag = false;
   }
-
-  SetCPStatusFromCPU();
 }
 
 void HandleUnknownOpcode(u8 cmd_byte, void* buffer, bool preprocess)
