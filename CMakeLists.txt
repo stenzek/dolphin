@@ -453,6 +453,7 @@ if(ENABLE_WAYLAND)
   else()
     message(WARNING "Wayland support enabled, but the Wayland or XKB libraries are missing. This build will not support Wayland.")
   endif()
+  add_subdirectory(Externals/wayland-protocols)
 endif()
 
 if(ENCODE_FRAMEDUMPS)
