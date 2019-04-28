@@ -30,6 +30,9 @@
 #ifdef CIFACE_USE_PIPES
 #include "InputCommon/ControllerInterface/Pipes/Pipes.h"
 #endif
+#ifdef CIFACE_USE_WAYLAND
+#include "InputCommon/ControllerInterface/Wayland/Wayland.h"
+#endif
 
 ControllerInterface g_controller_interface;
 
@@ -66,6 +69,9 @@ void ControllerInterface::Initialize(const WindowSystemInfo& wsi)
   ciface::evdev::Init();
 #endif
 #ifdef CIFACE_USE_PIPES
+// nothing needed
+#endif
+#ifdef CIFACE_USE_WAYLAND
 // nothing needed
 #endif
 
@@ -121,6 +127,10 @@ void ControllerInterface::RefreshDevices()
 #endif
 #ifdef CIFACE_USE_PIPES
   ciface::Pipes::PopulateDevices();
+#endif
+#ifdef CIFACE_USE_WAYLAND
+  if (m_wsi.type == WindowSystemType::Wayland)
+    ciface::Wayland::PopulateDevices(m_wsi);
 #endif
 
   m_is_populating_devices = false;

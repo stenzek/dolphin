@@ -29,6 +29,9 @@
 #if defined(USE_PIPES)
 #define CIFACE_USE_PIPES
 #endif
+#if defined(HAVE_WAYLAND)
+#define CIFACE_USE_WAYLAND
+#endif
 
 //
 // ControllerInterface
