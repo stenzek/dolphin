@@ -8,6 +8,12 @@ if(ENABLE_X11 AND X11_FOUND)
   target_sources(dolphin-nogui PRIVATE PlatformX11.cpp)
 endif()
 
+if(ENABLE_WAYLAND AND WAYLAND_FOUND)
+  target_include_directories(dolphin-nogui PRIVATE ${WAYLAND_INCLUDE_DIR})
+  target_link_libraries(dolphin-nogui PRIVATE ${WAYLAND_LIBRARIES})
+  target_sources(dolphin-nogui PRIVATE PlatformWayland.cpp)
+endif()
+
 set_target_properties(dolphin-nogui PROPERTIES OUTPUT_NAME dolphin-emu-nogui)
 
 target_link_libraries(dolphin-nogui
