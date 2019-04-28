@@ -1,5 +1,6 @@
 set(SRCS
   xdg-shell-client-protocol.c
+  zxdg-decoration-unstable-v1-client-protocol.c
 )
 
 add_library(wayland-protocols "${SRCS}")

@@ -17,6 +17,7 @@
 
 #include <wayland-client-protocol.h>
 #include "xdg-shell-client-protocol.h"
+#include "zxdg-decoration-unstable-v1-client-protocol.h"
 
 #include "UICommon/X11Utils.h"
 #include "VideoCommon/RenderBase.h"
@@ -54,6 +55,8 @@ private:
   wl_region* m_region = nullptr;
   xdg_surface* m_xdg_surface = nullptr;
   xdg_toplevel* m_xdg_toplevel = nullptr;
+  zxdg_decoration_manager_v1* m_decoration_manager = nullptr;
+  zxdg_toplevel_decoration_v1* m_toplevel_decoration = nullptr;
 
   int m_surface_width = 0;
   int m_surface_height = 0;
@@ -92,6 +95,11 @@ void PlatformWayland::GlobalRegistryHandler(void* data, wl_registry* registry, u
   {
     platform->m_xdg_wm_base = static_cast<xdg_wm_base*>(
         wl_registry_bind(platform->m_registry, id, &xdg_wm_base_interface, 1));
+  }
+  else if (std::strcmp(interface, zxdg_decoration_manager_v1_interface.name) == 0)
+  {
+    platform->m_decoration_manager = static_cast<zxdg_decoration_manager_v1*>(
+        wl_registry_bind(platform->m_registry, id, &zxdg_decoration_manager_v1_interface, 1));
   }
 }
 
@@ -186,6 +194,15 @@ bool PlatformWayland::Init()
                                   Config::Get(Config::MAIN_RENDER_WINDOW_YPOS),
                                   Config::Get(Config::MAIN_RENDER_WINDOW_WIDTH),
                                   Config::Get(Config::MAIN_RENDER_WINDOW_HEIGHT));
+
+  if (m_decoration_manager)
+  {
+    m_toplevel_decoration =
+        zxdg_decoration_manager_v1_get_toplevel_decoration(m_decoration_manager, m_xdg_toplevel);
+    if (m_toplevel_decoration)
+      zxdg_toplevel_decoration_v1_set_mode(m_toplevel_decoration,
+                                           ZXDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE);
+  }
 
   return true;
 }
