@@ -9,8 +9,8 @@ if(ENABLE_X11 AND X11_FOUND)
 endif()
 
 if(ENABLE_WAYLAND AND WAYLAND_FOUND)
-  target_include_directories(dolphin-nogui PRIVATE ${WAYLAND_INCLUDE_DIR})
-  target_link_libraries(dolphin-nogui PRIVATE ${WAYLAND_LIBRARIES})
+  target_include_directories(dolphin-nogui PRIVATE ${WAYLAND_INCLUDE_DIR} ${CMAKE_SOURCE_DIR}/Externals/wayland-protocols)
+  target_link_libraries(dolphin-nogui PRIVATE ${WAYLAND_LIBRARIES} wayland-protocols)
   target_sources(dolphin-nogui PRIVATE PlatformWayland.cpp)
 endif()
 
