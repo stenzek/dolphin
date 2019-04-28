@@ -34,8 +34,8 @@ struct WindowSystemInfo
   void* render_surface = nullptr;
 
   // Dimensions of the render surface, if this is determined by the frontend.
-  unsigned int render_surface_width = 640;
-  unsigned int render_surface_height = 480;
+  int render_surface_width = 640;
+  int render_surface_height = 480;
 
   // Scale of the render surface. For hidpi systems, this will be >1.
   float render_surface_scale = 1.0f;

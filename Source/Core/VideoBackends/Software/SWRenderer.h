@@ -42,6 +42,7 @@ public:
   u16 BBoxRead(int index) override;
   void BBoxWrite(int index, u16 value) override;
 
+  void BindBackbuffer(const ClearColor& clear_color = {}) override;
   void RenderXFBToScreen(const AbstractTexture* texture,
                          const MathUtil::Rectangle<int>& rc) override;
 
@@ -55,6 +56,8 @@ public:
                     const MathUtil::Rectangle<int>& src_rect) override;
 
 private:
+  void CheckForSurfaceResize();
+
   std::unique_ptr<SWOGLWindow> m_window;
 };
 }  // namespace SW

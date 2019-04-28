@@ -5,6 +5,7 @@
 #include <QApplication>
 #include <QCloseEvent>
 #include <QDateTime>
+#include <QDesktopWidget>
 #include <QDir>
 #include <QDragEnterEvent>
 #include <QDropEvent>
@@ -13,6 +14,7 @@
 #include <QIcon>
 #include <QMimeData>
 #include <QProgressDialog>
+#include <QScreen>
 #include <QStackedWidget>
 #include <QVBoxLayout>
 #include <QWindow>
@@ -150,28 +152,39 @@ static WindowSystemType GetWindowSystemType()
   return WindowSystemType::Headless;
 }
 
-static WindowSystemInfo GetWindowSystemInfo(QWindow* window)
+static WindowSystemInfo GetWindowSystemInfo(QWidget* widget)
 {
   WindowSystemInfo wsi;
   wsi.type = GetWindowSystemType();
+  if (!widget)
+  {
+    wsi.render_surface = nullptr;
+    wsi.render_surface_scale = 1.0f;
+    wsi.render_surface_width = 0;
+    wsi.render_surface_height = 0;
+    return wsi;
+  }
 
-  // Our Win32 Qt external doesn't have the private API.
 #if defined(WIN32) || defined(__APPLE__)
-  wsi.render_surface = window ? reinterpret_cast<void*>(window->winId()) : nullptr;
+  // Our Win32 Qt external doesn't have the private API.
+  wsi.render_surface = reinterpret_cast<void*>(widget->windowHandle()->winId());
 #else
   QPlatformNativeInterface* pni = QGuiApplication::platformNativeInterface();
-  wsi.display_connection = pni->nativeResourceForWindow("display", window);
+  wsi.display_connection = pni->nativeResourceForWindow("display", widget->windowHandle());
   if (wsi.type == WindowSystemType::Wayland)
-    wsi.render_surface = window ? pni->nativeResourceForWindow("surface", window) : nullptr;
+  {
+    wsi.render_surface = pni->nativeResourceForWindow("surface", widget->windowHandle());
+  }
   else
-    wsi.render_surface = window ? reinterpret_cast<void*>(window->winId()) : nullptr;
+  {
+    wsi.render_surface = reinterpret_cast<void*>(widget->windowHandle()->winId());
+  }
 #endif
-  wsi.render_surface_scale = window ? static_cast<float>(window->devicePixelRatio()) : 1.0f;
-  wsi.render_surface_width =
-      window ? static_cast<int>(window->size().width() * window->devicePixelRatio()) : 0;
-  wsi.render_surface_height =
-      window ? static_cast<int>(window->size().height() * window->devicePixelRatio()) : 0;
-
+  wsi.render_surface_scale =
+      static_cast<float>(QGuiApplication::screens()[QApplication::desktop()->screenNumber(widget)]
+                             ->devicePixelRatio());
+  wsi.render_surface_width = static_cast<int>(widget->size().width() * wsi.render_surface_scale);
+  wsi.render_surface_height = static_cast<int>(widget->size().height() * wsi.render_surface_scale);
   return wsi;
 }
 
@@ -291,7 +304,7 @@ void MainWindow::InitControllers()
   if (g_controller_interface.IsInit())
     return;
 
-  g_controller_interface.Initialize(GetWindowSystemInfo(windowHandle()));
+  g_controller_interface.Initialize(GetWindowSystemInfo(this));
   Pad::Initialize();
   Keyboard::Initialize();
   Wiimote::Initialize(Wiimote::InitializeMode::DO_NOT_WAIT_FOR_WIIMOTES);
@@ -929,8 +942,7 @@ void MainWindow::StartGame(std::unique_ptr<BootParameters>&& parameters)
   ShowRenderWidget();
 
   // Boot up, show an error if it fails to load the game.
-  if (!BootManager::BootCore(std::move(parameters),
-                             GetWindowSystemInfo(m_render_widget->windowHandle())))
+  if (!BootManager::BootCore(std::move(parameters), GetWindowSystemInfo(m_render_widget)))
   {
     ModalMessageBox::critical(this, tr("Error"), tr("Failed to init core"), QMessageBox::Ok);
     HideRenderWidget();
@@ -1045,7 +1057,7 @@ void MainWindow::HideRenderWidget(bool reinit)
     // The controller interface will still be registered to the old render widget, if the core
     // has booted. Therefore, we should re-bind it to the main window for now. When the core
     // is next started, it will be swapped back to the new render widget.
-    g_controller_interface.ChangeWindow(GetWindowSystemInfo(windowHandle()).render_surface);
+    g_controller_interface.ChangeWindow(GetWindowSystemInfo(this).render_surface);
   }
 }
 

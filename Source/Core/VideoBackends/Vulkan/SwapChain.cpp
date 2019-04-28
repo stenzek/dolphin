@@ -25,8 +25,7 @@
 namespace Vulkan
 {
 SwapChain::SwapChain(const WindowSystemInfo& wsi, VkSurfaceKHR surface, bool vsync)
-    : m_wsi(wsi), m_surface(surface), m_vsync_enabled(vsync), m_width(wsi.render_surface_width),
-      m_height(wsi.render_surface_height)
+    : m_wsi(wsi), m_surface(surface), m_vsync_enabled(vsync)
 {
 }
 
@@ -288,8 +287,8 @@ bool SwapChain::CreateSwapChain()
   VkExtent2D size = surface_capabilities.currentExtent;
   if (size.width == UINT32_MAX)
   {
-    size.width = m_width;
-    size.height = m_height;
+    size.width = static_cast<u32>(m_wsi.render_surface_width);
+    size.height = static_cast<u32>(m_wsi.render_surface_height);
   }
   size.width = MathUtil::Clamp(size.width, surface_capabilities.minImageExtent.width,
                                surface_capabilities.maxImageExtent.width);
@@ -453,9 +452,11 @@ VkResult SwapChain::AcquireNextImage()
   return res;
 }
 
-bool SwapChain::ResizeSwapChain()
+bool SwapChain::ResizeSwapChain(int window_width, int window_height)
 {
   DestroySwapChainImages();
+  m_wsi.render_surface_width = window_width;
+  m_wsi.render_surface_height = window_height;
   if (!CreateSwapChain() || !SetupSwapChainImages())
   {
     PanicAlert("Failed to re-configure swap chain images, this is fatal (for now)");
@@ -488,7 +489,7 @@ bool SwapChain::SetVSync(bool enabled)
   return RecreateSwapChain();
 }
 
-bool SwapChain::RecreateSurface(void* native_handle)
+bool SwapChain::RecreateSurface(void* native_handle, int window_width, int window_height)
 {
   // Destroy the old swap chain, images, and surface.
   DestroySwapChainImages();
@@ -497,6 +498,8 @@ bool SwapChain::RecreateSurface(void* native_handle)
 
   // Re-create the surface with the new native handle
   m_wsi.render_surface = native_handle;
+  m_wsi.render_surface_width = window_width;
+  m_wsi.render_surface_height = window_height;
   m_surface = CreateVulkanSurface(g_vulkan_context->GetVulkanInstance(), m_wsi);
   if (m_surface == VK_NULL_HANDLE)
     return false;

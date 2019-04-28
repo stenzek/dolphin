@@ -16,6 +16,16 @@ EGLDisplay GLContextEGLWayland::OpenEGLDisplay()
   return eglGetDisplay(reinterpret_cast<EGLNativeDisplayType>(m_wsi.display_connection));
 }
 
+void GLContextEGLWayland::UpdateDimensions(int window_width, int window_height)
+{
+  wl_egl_window_resize(reinterpret_cast<wl_egl_window*>(m_native_window), window_width,
+                       window_height, 0, 0);
+
+  // The actual surface update appears to be asynchronous, so we can't use eglQuerySurface() here.
+  m_backbuffer_width = window_width;
+  m_backbuffer_height = window_height;
+}
+
 EGLNativeWindowType GLContextEGLWayland::GetEGLNativeWindow(EGLConfig config)
 {
   wl_egl_window* window =
