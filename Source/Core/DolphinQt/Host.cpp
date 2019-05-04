@@ -48,7 +48,7 @@ void Host::SetRenderHandle(void* handle, int width, int height)
   {
     g_renderer->ChangeSurface(handle, width, height);
     if (g_controller_interface.IsInit())
-      g_controller_interface.ChangeWindow(handle);
+      g_controller_interface.ChangeWindow(handle, width, height);
   }
 }
 
@@ -85,6 +85,8 @@ void Host::ResizeSurface(int new_width, int new_height)
 {
   if (g_renderer)
     g_renderer->ResizeSurface(new_width, new_height);
+  if (g_controller_interface.IsInit())
+    g_controller_interface.OnWindowResized(new_width, new_height);
 }
 
 void Host_Message(HostMessageID id)
