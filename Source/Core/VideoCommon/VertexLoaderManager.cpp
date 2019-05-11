@@ -286,6 +286,9 @@ void UpdateCyclesPerVertex()
 int RunVertices(int vtx_attr_group, int primitive, int count, DataReader src, bool is_preprocess,
                 u32& cycles)
 {
+  if (!count)
+    return 0;
+
   VertexLoaderBase* loader = RefreshLoader(vtx_attr_group, is_preprocess);
 
   int size = count * loader->m_VertexSize;
