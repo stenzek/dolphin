@@ -25,7 +25,6 @@
 #include "VideoCommon/VertexLoaderManager.h"
 #include "VideoCommon/VertexManagerBase.h"
 #include "VideoCommon/VertexShaderManager.h"
-#include "VideoCommon/XFMemory.h"
 
 namespace VertexLoaderManager
 {
@@ -35,7 +34,6 @@ float position_cache[3][4];
 // So only index 1 - 3 are used.
 u32 position_matrix_index[4];
 
-static u32 s_cycles_per_vertex;
 static NativeVertexFormatMap s_native_vertex_map;
 static NativeVertexFormat* s_current_vtx_fmt;
 u32 g_current_components;
@@ -55,7 +53,6 @@ void Init()
   for (auto& map_entry : g_preprocess_cp_state.vertex_loaders)
     map_entry = nullptr;
   SETSTAT(stats.numVertexLoaders, 0);
-  UpdateCyclesPerVertex();
 }
 
 void Clear()
@@ -250,41 +247,7 @@ static VertexLoaderBase* RefreshLoader(int vtx_attr_group, bool preprocess = fal
   return loader;
 }
 
-void UpdateCyclesPerVertex()
-{
-  // Note: These timings do not consider the post-transform vertex cache. These counts are verified
-  // on hardware based on the result of GX_ReadClksPerVtx().
-
-  // Base cost - 4 GPU cycles per vertex.
-  s_cycles_per_vertex = 4;
-
-  // Each enabled color adds a cycle.
-  // Note: This is the colors written to the next stage, not in the vertex format.
-  s_cycles_per_vertex += xfmem.numChan.numColorChans;
-
-  // Each enabled texgen adds 3 cycles.
-  s_cycles_per_vertex += xfmem.numTexGen.numTexGens;
-
-  // TODO: Confirm that lighting for both channels is computed in parallel.
-  LitChannel combined;
-  combined.hex = xfmem.color[0].hex | xfmem.color[0].hex | xfmem.color[1].hex | xfmem.alpha[1].hex;
-  if (combined.enablelighting)
-  {
-    // The first enabled light only takes a single cycle. The following lights take 8 cycles each.
-    u32 enabled_light_count =
-        Common::CountSetBits(combined.lightMask0_3 | (combined.lightMask4_7 << 4));
-    if (enabled_light_count > 1)
-      s_cycles_per_vertex += 1 + (enabled_light_count - 1) * 8;
-    else if (enabled_light_count > 0)
-      s_cycles_per_vertex++;
-  }
-
-  // 3 GPU cycles per CPU cycle.
-  s_cycles_per_vertex *= 3;
-}
-
-int RunVertices(int vtx_attr_group, int primitive, int count, DataReader src, bool is_preprocess,
-                u32& cycles)
+int RunVertices(int vtx_attr_group, int primitive, int count, DataReader src, bool is_preprocess)
 {
   if (!count)
     return 0;
@@ -324,9 +287,6 @@ int RunVertices(int vtx_attr_group, int primitive, int count, DataReader src, bo
 
   ADDSTAT(stats.thisFrame.numPrims, count);
   INCSTAT(stats.thisFrame.numPrimitiveJoins);
-
-  cycles += count * s_cycles_per_vertex;
-
   return size;
 }
 
