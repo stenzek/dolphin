@@ -50,4 +50,7 @@ void EmulatorState(bool running);
 bool AtBreakpoint();
 void ResetVideoBuffer();
 
+void StallGPUThread();
+void UnstallGPUThread();
+
 }  // namespace Fifo

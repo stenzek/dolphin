@@ -38,7 +38,15 @@ struct SCPFifoStruct
   volatile u32 UnderflowFlag;
   volatile u32 OverflowFlag;
 
+  //volatile u32 BreakpointInterruptFlag;
+  volatile u32 UnderflowInterruptFlag;
+  volatile u32 OverflowInterruptFlag;
+
   void DoState(PointerWrap& p);
+
+  // Checking whether we can run, due to breakpoints and R/W distance.
+  bool CanRead() const;
+  bool AtBreakpoint() const;
 };
 
 // This one is shared between gfx thread and emulator thread.
@@ -153,10 +161,6 @@ void Init();
 void DoState(PointerWrap& p);
 
 void RegisterMMIO(MMIO::Mapping* mmio, u32 base);
-
-// Checking whether we can run, due to breakpoints and R/W distance.
-bool AtBreakpoint();
-bool CanReadFromFifo();
 
 void SetCPStatusFromGPU();
 void SetCPStatusFromCPU();

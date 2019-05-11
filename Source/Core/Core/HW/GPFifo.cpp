@@ -78,6 +78,20 @@ void UpdateGatherPipe()
     memcpy(cur_mem, s_gather_pipe + processed, GATHER_PIPE_SIZE);
     pipe_count -= GATHER_PIPE_SIZE;
 
+#if 0
+    {
+      std::string str;
+      for (int i = 0; i < 32; i++)
+      {
+        static const char hex[] = "0123456789ABCDEF";
+        str += hex[cur_mem[i] >> 4];
+        str += hex[cur_mem[i] & 0x0F];
+        str += " ";
+      }
+      WARN_LOG(VIDEO, "FIFO GP Write: %08X %s", ProcessorInterface::Fifo_CPUWritePointer, str.c_str());
+    }
+#endif
+
     // increase the CPUWritePointer
     if (ProcessorInterface::Fifo_CPUWritePointer == ProcessorInterface::Fifo_CPUEnd)
     {
