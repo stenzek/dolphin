@@ -232,7 +232,7 @@ u8* Run(DataReader src, u32* cycles, bool in_display_list)
         src.Skip(bytes);
 
         // 4 GPU ticks per vertex, 3 CPU ticks per GPU tick
-        totalCycles += num_vertices * 4 * 3 + 6;
+        totalCycles += 6;
       }
       else
       {
