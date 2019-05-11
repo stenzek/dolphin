@@ -235,20 +235,16 @@ void RegisterMMIO(MMIO::Mapping* mmio, u32 base)
 
   mmio->Register(base | CTRL_REGISTER, MMIO::DirectRead<u16>(&m_CPCtrlReg.Hex),
                  MMIO::ComplexWrite<u16>([](u32, u16 val) {
-                   Fifo::SyncGPUForRegisterAccess(true);
                    UCPCtrlReg tmp(val);
                    m_CPCtrlReg.Hex = tmp.Hex;
                    SetCpControlRegister();
-                   Fifo::RunGpu();
                  }));
 
   mmio->Register(base | CLEAR_REGISTER, MMIO::DirectRead<u16>(&m_CPClearReg.Hex),
                  MMIO::ComplexWrite<u16>([](u32, u16 val) {
-                   Fifo::SyncGPUForRegisterAccess(true);
                    UCPClearReg tmp(val);
                    m_CPClearReg.Hex = tmp.Hex;
                    SetCpClearRegister();
-                   Fifo::RunGpu();
                  }));
 
   mmio->Register(base | PERF_SELECT, MMIO::InvalidRead<u16>(), MMIO::Nop<u16>());
@@ -518,21 +514,31 @@ void SetCpStatusRegister()
 
 void SetCpControlRegister()
 {
-  fifo.BreakpointInterruptEnable = m_CPCtrlReg.BPInt;
+  // In dual-core mode, set ReadEnable before syncing. This will force the video thread to break out
+  // of the main loop, stopping processing any further commands, which in turn reduces the latency
+  // when we do sync.
+  if (fifo.ReadEnable && !m_CPCtrlReg.ReadEnable)
+    fifo.ReadEnable = false;
+
+  // Only force sync when registers read by the GPU thread are modified.
+  if (fifo.BreakpointEnable != m_CPCtrlReg.BPEnable ||
+      fifo.BreakpointInterruptEnable != m_CPCtrlReg.BPInt ||
+      fifo.OverflowInterruptEnable != m_CPCtrlReg.OverflowIntEnable ||
+      fifo.UnderflowInterruptEnable != m_CPCtrlReg.UnderflowIntEnable ||
+      fifo.ReadEnable != m_CPCtrlReg.ReadEnable)
+  {
+    Fifo::SyncGPUForRegisterAccess(true);
+  }
+
   fifo.BreakpointEnable = m_CPCtrlReg.BPEnable;
+  fifo.BreakpointInterruptEnable = m_CPCtrlReg.BPInt;
   fifo.OverflowInterruptEnable = m_CPCtrlReg.OverflowIntEnable;
   fifo.UnderflowInterruptEnable = m_CPCtrlReg.UnderflowIntEnable;
+  fifo.ReadEnable = m_CPCtrlReg.ReadEnable;
   fifo.GPLinkEnable = m_CPCtrlReg.GPLinkEnable;
 
-  if (fifo.ReadEnable && !m_CPCtrlReg.ReadEnable)
-  {
-    fifo.ReadEnable = m_CPCtrlReg.ReadEnable;
-    Fifo::FlushGpu();
-  }
-  else
-  {
-    fifo.ReadEnable = m_CPCtrlReg.ReadEnable;
-  }
+  if (CanReadFromFifo())
+    Fifo::RunGpu();
 
   DEBUG_LOG(COMMANDPROCESSOR, "\t GPREAD %s | BP %s | Int %s | OvF %s | UndF %s | LINK %s",
             fifo.ReadEnable ? "ON" : "OFF", fifo.BreakpointEnable ? "ON" : "OFF",
@@ -543,6 +549,9 @@ void SetCpControlRegister()
 
 void SetCpClearRegister()
 {
+  if (m_CPClearReg.ClearFifoOverflow || m_CPClearReg.ClearFifoUnderflow)
+    Fifo::SyncGPUForRegisterAccess(true);
+
   if (m_CPClearReg.ClearFifoOverflow != 0)
   {
     DEBUG_LOG(COMMANDPROCESSOR, "Cleared overflow interrupt at %08X %u", fifo.CPReadPointer,
