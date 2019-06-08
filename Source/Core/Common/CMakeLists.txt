@@ -279,3 +279,7 @@ if(UNIX)
 elseif(WIN32)
   target_link_libraries(common PRIVATE "-INCLUDE:enableCompatPatches")
 endif()
+
+if(ENABLE_PRECOMPILED_HEADERS)
+  target_precompiled_header(common PCH.h)
+endif()

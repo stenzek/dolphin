@@ -28,6 +28,7 @@ option(USE_SHARED_ENET "Use shared libenet if found rather than Dolphin's soon-t
 option(USE_UPNP "Enables UPnP port mapping support" ON)
 option(ENABLE_NOGUI "Enable NoGUI frontend" ON)
 option(ENABLE_QT "Enable Qt (Default)" ON)
+option(ENABLE_PRECOMPILED_HEADERS "Use precompiled headers if supported by compiler" ON)
 option(ENABLE_LTO "Enables Link Time Optimization" OFF)
 option(ENABLE_GENERIC "Enables generic build that should run on any little-endian host" OFF)
 option(ENABLE_HEADLESS "Enables running Dolphin as a headless variant" OFF)

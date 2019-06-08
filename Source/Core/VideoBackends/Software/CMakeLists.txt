@@ -39,3 +39,7 @@ PUBLIC
   common
   videocommon
 )
+
+if(ENABLE_PRECOMPILED_HEADERS)
+  target_precompiled_header(videosoftware PCH.h)
+endif()

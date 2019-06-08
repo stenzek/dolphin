@@ -60,3 +60,7 @@ SYSTEM PRIVATE
   ${CMAKE_SOURCE_DIR}/Externals/glslang/glslang/Public
   ${CMAKE_SOURCE_DIR}/Externals/glslang/SPIRV
 )
+
+if(ENABLE_PRECOMPILED_HEADERS)
+  target_precompiled_header(videovulkan PCH.h)
+endif()

@@ -445,3 +445,7 @@ endif()
 if(USE_DISCORD_PRESENCE)
   target_compile_definitions(dolphin-emu PRIVATE -DUSE_DISCORD_PRESENCE)
 endif()
+
+if(ENABLE_PRECOMPILED_HEADERS)
+  target_precompiled_header(dolphin-emu PCH.h)
+endif()

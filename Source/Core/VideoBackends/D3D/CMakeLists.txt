@@ -29,3 +29,7 @@ PUBLIC
   videocommon
   videod3dcommon
 )
+
+if(ENABLE_PRECOMPILED_HEADERS)
+  target_precompiled_header(videod3d PCH.h)
+endif()

@@ -66,3 +66,7 @@ if(USE_DISCORD_PRESENCE)
   target_compile_definitions(uicommon PRIVATE -DUSE_DISCORD_PRESENCE)
   target_link_libraries(uicommon PRIVATE discord-rpc)
 endif()
+
+if(ENABLE_PRECOMPILED_HEADERS)
+  target_precompiled_header(uicommon PCH.h)
+endif()

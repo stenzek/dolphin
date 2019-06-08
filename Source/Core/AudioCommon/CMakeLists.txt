@@ -87,3 +87,7 @@ if(WIN32)
 endif()
 
 target_link_libraries(audiocommon PRIVATE cubeb SoundTouch FreeSurround)
+
+if(ENABLE_PRECOMPILED_HEADERS)
+  target_precompiled_header(audiocommon PCH.h)
+endif()

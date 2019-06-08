@@ -129,8 +129,6 @@ add_library(videocommon
 )
 
 target_link_libraries(videocommon
-PUBLIC
-  core
 PRIVATE
   png
   xxhash
@@ -166,4 +164,8 @@ if(FFmpeg_FOUND)
     FFmpeg::avutil
     FFmpeg::swscale
   )
+endif()
+
+if(ENABLE_PRECOMPILED_HEADERS)
+  target_precompiled_header(videocommon PCH.h)
 endif()

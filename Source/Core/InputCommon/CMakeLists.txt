@@ -170,3 +170,7 @@ if(ENABLE_SDL)
     message(STATUS "SDL NOT found, disabling SDL input")
   endif()
 endif()
+
+if(ENABLE_PRECOMPILED_HEADERS)
+  target_precompiled_header(inputcommon PCH.h)
+endif()

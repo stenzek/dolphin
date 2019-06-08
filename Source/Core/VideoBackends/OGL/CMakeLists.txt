@@ -33,3 +33,7 @@ PUBLIC
 PRIVATE
   ${X11_LIBRARIES}
 )
+
+if(ENABLE_PRECOMPILED_HEADERS)
+  target_precompiled_header(videoogl PCH.h)
+endif()

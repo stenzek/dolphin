@@ -49,3 +49,7 @@ target_link_libraries(discio
 PRIVATE
   ZLIB::ZLIB
 )
+
+if(ENABLE_PRECOMPILED_HEADERS)
+  target_precompiled_header(discio PCH.h)
+endif()

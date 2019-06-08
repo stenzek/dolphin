@@ -25,3 +25,6 @@ endif()
 set(CPACK_PACKAGE_EXECUTABLES ${CPACK_PACKAGE_EXECUTABLES} dolphin-nogui)
 install(TARGETS dolphin-nogui RUNTIME DESTINATION ${bindir})
 
+if(ENABLE_PRECOMPILED_HEADERS)
+  target_precompiled_header(dolphin-nogui PCH.h)
+endif()

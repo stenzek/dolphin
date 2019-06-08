@@ -663,3 +663,7 @@ if(UNIX)
     MemoryWatcher.h
   )
 endif()
+
+if(ENABLE_PRECOMPILED_HEADERS)
+  target_precompiled_header(core PCH.h)
+endif()
