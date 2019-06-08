@@ -27,8 +27,8 @@ function(check_and_add_flag var flag)
     message(FATAL_ERROR "check_and_add_flag called with incorrect arguments: ${ARGN}")
   endif()
 
-  set(is_c "$<COMPILE_LANGUAGE:C>")
-  set(is_cxx "$<COMPILE_LANGUAGE:CXX>")
+  set(is_c "$<OR:$<COMPILE_LANGUAGE:C>,$<COMPILE_LANGUAGE:CPCH>>")
+  set(is_cxx "$<OR:$<COMPILE_LANGUAGE:CXX>,$<COMPILE_LANGUAGE:CXXPCH>>")
 
   # The Visual Studio generators don't support COMPILE_LANGUAGE
   # So we fail all the C flags and only actually test CXX ones

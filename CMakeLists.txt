@@ -7,7 +7,10 @@ set(CMAKE_OSX_ARCHITECTURES "x86_64")
 # This is inserted into the Info.plist as well.
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.10.0" CACHE STRING "")
 
-project(dolphin-emu)
+list(APPEND CMAKE_MODULE_PATH
+  ${CMAKE_SOURCE_DIR}/Externals/CMakePCHCompiler
+)
+project(dolphin-emu C CXX CXXPCH)
 
 # Name of the Dolphin distributor. If you redistribute Dolphin builds (forks,
 # unofficial builds) please consider identifying your distribution with a
