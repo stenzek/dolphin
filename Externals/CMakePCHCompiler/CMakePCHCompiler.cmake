@@ -119,7 +119,14 @@ function(target_precompiled_header) # target [...] header
 			set_target_properties(${pch_target} PROPERTIES LINK_LIBRARIES "${target_libraries}")
 		endif()
 
+		# This should be sufficient for ensuring the pch builds before the target, but see below.
 		add_dependencies(${target} ${pch_target})
+
+		# Grab the sources for this target, we want to create a per-source dependency on the precompiled header.
+		# This is required for ninja, otherwise it tries to build the pch in parallel with the target itself.
+		# Annoyingly we have to set the dependent filename in the MSVC branch below, because we can't use a
+		# generator expression for the OBJECT_DEPENDS property.
+		get_property(target_sources TARGET ${target} PROPERTY SOURCES)
 
 		# add precompiled header insertion flags to regular target
 		if(MSVC)
@@ -131,8 +138,10 @@ function(target_precompiled_header) # target [...] header
 				)
 			target_sources(${target} PRIVATE $<TARGET_OBJECTS:${pch_target}>)
 			set(flags "/Yu${abs_header}")
+			set_property(SOURCE ${target_sources} APPEND PROPERTY OBJECT_DEPENDS "${target_dir_header}.obj")
 		else()
 			set(flags -include ${target_dir_header})
+			set_property(SOURCE ${target_sources} APPEND PROPERTY OBJECT_DEPENDS "${target_dir_header}.o")
 		endif()
 
 		if(CMAKE_VERSION VERSION_LESS 3.3)
