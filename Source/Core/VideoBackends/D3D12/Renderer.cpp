@@ -166,7 +166,7 @@ void Renderer::ClearScreen(const MathUtil::Rectangle<int>& rc, bool color_enable
           ->TransitionToState(D3D12_RESOURCE_STATE_DEPTH_WRITE);
 
       // D3D does not support reversed depth ranges.
-      const float clear_depth = 1.0f - static_cast<float>(z & 0xFFFFFF) / 16777216.0f;
+      const float clear_depth = 1.0f - static_cast<float>(z & 0xFFFFFF) / 16777215.0f;
       g_dx_context->GetCommandList()->ClearDepthStencilView(
           static_cast<const DXFramebuffer*>(m_current_framebuffer)->GetDSVDescriptor().cpu_handle,
           D3D12_CLEAR_FLAG_DEPTH, clear_depth, 0, 1, &d3d_clear_rc);

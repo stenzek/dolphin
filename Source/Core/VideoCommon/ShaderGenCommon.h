@@ -164,8 +164,8 @@ union ShaderHostConfig
     u32 backend_clip_control : 1;
     u32 backend_ssaa : 1;
     u32 backend_atomics : 1;
-    u32 backend_depth_clamp : 1;
     u32 backend_reversed_depth_range : 1;
+    u32 backend_unrestricted_depth_range : 1;
     u32 backend_bitfield : 1;
     u32 backend_dynamic_sampler_indexing : 1;
     u32 backend_shader_framebuffer_fetch : 1;
@@ -223,12 +223,6 @@ inline void GenerateVSOutputMembers(T& object, APIType api_type, u32 texgens,
     DefineOutputMember(object, api_type, qualifier, "float3", "WorldPos", -1, "TEXCOORD",
                        texgens + 2);
   }
-
-  if (host_config.backend_geometry_shaders)
-  {
-    DefineOutputMember(object, api_type, qualifier, "float", "clipDist", 0, "SV_ClipDistance", 0);
-    DefineOutputMember(object, api_type, qualifier, "float", "clipDist", 1, "SV_ClipDistance", 1);
-  }
 }
 
 template <class T>
@@ -249,12 +243,6 @@ inline void AssignVSOutputMembers(T& object, const char* a, const char* b, u32 t
   {
     object.Write("\t%s.Normal = %s.Normal;\n", a, b);
     object.Write("\t%s.WorldPos = %s.WorldPos;\n", a, b);
-  }
-
-  if (host_config.backend_geometry_shaders)
-  {
-    object.Write("\t%s.clipDist0 = %s.clipDist0;\n", a, b);
-    object.Write("\t%s.clipDist1 = %s.clipDist1;\n", a, b);
   }
 }
 

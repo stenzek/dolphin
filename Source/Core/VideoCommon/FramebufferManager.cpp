@@ -120,13 +120,7 @@ AbstractTextureFormat FramebufferManager::GetEFBColorFormat()
 
 AbstractTextureFormat FramebufferManager::GetEFBDepthFormat()
 {
-  // 32-bit depth clears are broken in the Adreno Vulkan driver, and have no effect.
-  // To work around this, we use a D24_S8 buffer instead, which results in a loss of accuracy.
-  // We still resolve this to a R32F texture, as there is no 24-bit format.
-  if (DriverDetails::HasBug(DriverDetails::BUG_BROKEN_D32F_CLEAR))
-    return AbstractTextureFormat::D24_S8;
-  else
-    return AbstractTextureFormat::D32F;
+  return AbstractTextureFormat::D24_S8;
 }
 
 static u32 CalculateEFBLayers()
@@ -494,29 +488,36 @@ bool FramebufferManager::CreateReadbackFramebuffer()
 {
   // Since we can't partially copy from a depth buffer directly to the staging texture in D3D, we
   // use an intermediate buffer to avoid copying the whole texture.
-  if ((IsUsingTiledEFBCache() && !g_ActiveConfig.backend_info.bSupportsPartialDepthCopies) ||
-      g_renderer->GetEFBScale() != 1)
+  if (g_renderer->GetEFBScale() != 1)
   {
     const TextureConfig color_config(IsUsingTiledEFBCache() ? m_efb_cache_tile_size : EFB_WIDTH,
                                      IsUsingTiledEFBCache() ? m_efb_cache_tile_size : EFB_HEIGHT, 1,
                                      1, 1, GetEFBColorFormat(), AbstractTextureFlag_RenderTarget);
-    const TextureConfig depth_config(
-        color_config.width, color_config.height, 1, 1, 1,
-        AbstractTexture::GetColorFormatForDepthFormat(GetEFBDepthFormat()),
-        AbstractTextureFlag_RenderTarget);
 
     m_efb_color_cache.texture = g_renderer->CreateTexture(color_config);
-    m_efb_depth_cache.texture = g_renderer->CreateTexture(depth_config);
-    if (!m_efb_color_cache.texture || !m_efb_depth_cache.texture)
+    if (!m_efb_color_cache.texture)
       return false;
 
     m_efb_color_cache.framebuffer =
         g_renderer->CreateFramebuffer(m_efb_color_cache.texture.get(), nullptr);
-    m_efb_depth_cache.framebuffer =
-        g_renderer->CreateFramebuffer(m_efb_depth_cache.texture.get(), nullptr);
-    if (!m_efb_color_cache.framebuffer || !m_efb_depth_cache.framebuffer)
+    if (!m_efb_color_cache.framebuffer)
       return false;
   }
+
+  const TextureConfig depth_config(
+      IsUsingTiledEFBCache() ? m_efb_cache_tile_size : EFB_WIDTH,
+      IsUsingTiledEFBCache() ? m_efb_cache_tile_size : EFB_HEIGHT, 1, 1, 1,
+      AbstractTexture::GetColorFormatForDepthFormat(GetEFBDepthFormat()),
+      AbstractTextureFlag_RenderTarget);
+
+  m_efb_depth_cache.texture = g_renderer->CreateTexture(depth_config);
+  if (!m_efb_depth_cache.texture)
+    return false;
+
+  m_efb_depth_cache.framebuffer =
+      g_renderer->CreateFramebuffer(m_efb_depth_cache.texture.get(), nullptr);
+  if (!m_efb_depth_cache.framebuffer)
+    return false;
 
   // Staging texture use the full EFB dimensions, as this is the buffer for the whole cache.
   m_efb_color_cache.readback_texture = g_renderer->CreateStagingTexture(
@@ -562,8 +563,7 @@ void FramebufferManager::PopulateEFBCache(bool depth, u32 tile_index)
 
   // Force the path through the intermediate texture, as we can't do an image copy from a depth
   // buffer directly to a staging texture (must be the whole resource).
-  const bool force_intermediate_copy =
-      depth && !g_ActiveConfig.backend_info.bSupportsPartialDepthCopies && IsUsingTiledEFBCache();
+  const bool force_intermediate_copy = depth;
 
   // Issue a copy from framebuffer -> copy texture if we have >1xIR or MSAA on.
   EFBCacheData& data = depth ? m_efb_depth_cache : m_efb_color_cache;
@@ -637,7 +637,7 @@ void FramebufferManager::ClearEFB(const MathUtil::Rectangle<int>& rc, bool clear
                         static_cast<float>((color >> 8) & 0xFF) / 255.0f,
                         static_cast<float>((color >> 0) & 0xFF) / 255.0f,
                         static_cast<float>((color >> 24) & 0xFF) / 255.0f},
-                       static_cast<float>(z & 0xFFFFFF) / 16777216.0f};
+                       static_cast<float>(z & 0xFFFFFF) / 16777215.0f};
   if (!g_ActiveConfig.backend_info.bSupportsReversedDepthRange)
     uniforms.clear_depth = 1.0f - uniforms.clear_depth;
   g_vertex_manager->UploadUtilityUniforms(&uniforms, sizeof(uniforms));

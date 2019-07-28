@@ -157,7 +157,7 @@ ShaderCode GeneratePixelShader(APIType api_type, const UidData* uid_data)
     if (!g_ActiveConfig.backend_info.bSupportsReversedDepthRange)
       out.Write("texcol.x = 1.0 - texcol.x;\n");
 
-    out.Write("  int depth = int(texcol.x * 16777216.0);\n"
+    out.Write("  int depth = int(texcol.x * 16777215.0);\n"
 
               // Convert to Z24 format
               "  int4 workspace;\n"

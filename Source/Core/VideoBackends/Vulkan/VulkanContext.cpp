@@ -274,13 +274,13 @@ void VulkanContext::PopulateBackendInfo(VideoConfig* config)
   config->backend_info.bSupportsBackgroundCompiling = true;        // Assumed support.
   config->backend_info.bSupportsCopyToVram = true;                 // Assumed support.
   config->backend_info.bSupportsReversedDepthRange = true;         // Assumed support.
+  config->backend_info.bSupportsUnrestrictedDepthRange = true;     // Assumed support.
   config->backend_info.bSupportsDualSourceBlend = false;           // Dependent on features.
   config->backend_info.bSupportsGeometryShaders = false;           // Dependent on features.
   config->backend_info.bSupportsGSInstancing = false;              // Dependent on features.
   config->backend_info.bSupportsBBox = false;                      // Dependent on features.
   config->backend_info.bSupportsFragmentStoresAndAtomics = false;  // Dependent on features.
   config->backend_info.bSupportsSSAA = false;                      // Dependent on features.
-  config->backend_info.bSupportsDepthClamp = false;                // Dependent on features.
   config->backend_info.bSupportsST3CTextures = false;              // Dependent on features.
   config->backend_info.bSupportsBPTCTextures = false;              // Dependent on features.
   config->backend_info.bSupportsLogicOp = false;                   // Dependent on features.
@@ -320,10 +320,6 @@ void VulkanContext::PopulateBackendInfoFeatures(VideoConfig* config, VkPhysicalD
     config->backend_info.bSupportsGeometryShaders = VK_FALSE;
     config->backend_info.bSupportsGSInstancing = VK_FALSE;
   }
-
-  // Depth clamping implies shaderClipDistance and depthClamp
-  config->backend_info.bSupportsDepthClamp =
-      (features.depthClamp == VK_TRUE && features.shaderClipDistance == VK_TRUE);
 
   // textureCompressionBC implies BC1 through BC7, which is a superset of DXT1/3/5, which we need.
   const bool supports_bc = features.textureCompressionBC == VK_TRUE;
@@ -468,6 +464,9 @@ bool VulkanContext::SelectDeviceExtensions(ExtensionList* extension_list, bool e
 
   if (enable_surface && !SupportsExtension(VK_KHR_SWAPCHAIN_EXTENSION_NAME, true))
     return false;
+
+  if (!SupportsExtension(VK_EXT_DEPTH_RANGE_UNRESTRICTED_EXTENSION_NAME, false))
+    WARN_LOG(VIDEO, "Missing VK_EXT_depth_range_unrestricted");
 
   return true;
 }

@@ -1059,9 +1059,9 @@ ShaderCode GenPixelShader(APIType ApiType, const ShaderHostConfig& host_config,
   if (host_config.fast_depth_calc)
   {
     if (!host_config.backend_reversed_depth_range)
-      out.Write("  int zCoord = int((1.0 - rawpos.z) * 16777216.0);\n");
+      out.Write("  int zCoord = int((1.0 - rawpos.z) * 16777215.0);\n");
     else
-      out.Write("  int zCoord = int(rawpos.z * 16777216.0);\n");
+      out.Write("  int zCoord = int(rawpos.z * 16777215.0);\n");
     out.Write("  zCoord = clamp(zCoord, 0, 0xFFFFFF);\n"
               "\n");
   }
@@ -1114,9 +1114,9 @@ ShaderCode GenPixelShader(APIType ApiType, const ShaderHostConfig& host_config,
     out.Write("  // If early depth isn't enabled, we write to the zbuffer here\n");
     out.Write("  int zbuffer_zCoord = bpmem_late_ztest ? zCoord : early_zCoord;\n");
     if (!host_config.backend_reversed_depth_range)
-      out.Write("  depth = 1.0 - float(zbuffer_zCoord) / 16777216.0;\n");
+      out.Write("  depth = 1.0 - float(zbuffer_zCoord) / 16777215.0;\n");
     else
-      out.Write("  depth = float(zbuffer_zCoord) / 16777216.0;\n");
+      out.Write("  depth = float(zbuffer_zCoord) / 16777215.0;\n");
   }
 
   out.Write("  // Alpha Test\n"
@@ -1169,12 +1169,12 @@ ShaderCode GenPixelShader(APIType ApiType, const ShaderHostConfig& host_config,
             BitfieldExtract("bpmem_fogParam3", FogParam3().proj).c_str());
   out.Write("      // perspective\n"
             "      // ze = A/(B - (Zs >> B_SHF)\n"
-            "      ze = (" I_FOGF ".x * 16777216.0) / float(" I_FOGI ".y - (zCoord >> " I_FOGI
+            "      ze = (" I_FOGF ".x * 16777215.0) / float(" I_FOGI ".y - (zCoord >> " I_FOGI
             ".w));\n"
             "    } else {\n"
             "      // orthographic\n"
             "      // ze = a*Zs    (here, no B_SHF)\n"
-            "      ze = " I_FOGF ".z * float(zCoord) / 16777216.0;\n"
+            "      ze = " I_FOGF ".z * float(zCoord) / 16777215.0;\n"
             "    }\n"
             "\n"
             "    if (bool(%s)) {\n",

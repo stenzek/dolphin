@@ -200,7 +200,7 @@ VkFormat VKTexture::GetVkFormatForHostTextureFormat(AbstractTextureFormat format
     return VK_FORMAT_D16_UNORM;
 
   case AbstractTextureFormat::D24_S8:
-    return VK_FORMAT_D24_UNORM_S8_UINT;
+    return VK_FORMAT_X8_D24_UNORM_PACK32;
 
   case AbstractTextureFormat::R32F:
     return VK_FORMAT_R32_SFLOAT;
@@ -224,10 +224,10 @@ VkImageAspectFlags VKTexture::GetImageAspectForFormat(AbstractTextureFormat form
 {
   switch (format)
   {
-  case AbstractTextureFormat::D24_S8:
   case AbstractTextureFormat::D32F_S8:
     return VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
 
+  case AbstractTextureFormat::D24_S8:
   case AbstractTextureFormat::D16:
   case AbstractTextureFormat::D32F:
     return VK_IMAGE_ASPECT_DEPTH_BIT;

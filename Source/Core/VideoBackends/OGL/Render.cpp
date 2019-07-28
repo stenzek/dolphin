@@ -457,9 +457,6 @@ Renderer::Renderer(std::unique_ptr<GLContext> main_gl_context, float backbuffer_
   g_Config.backend_info.bSupportsBindingLayout =
       GLExtensions::Supports("GL_ARB_shading_language_420pack");
 
-  // Clip distance support is useless without a method to clamp the depth range
-  g_Config.backend_info.bSupportsDepthClamp = GLExtensions::Supports("GL_ARB_depth_clamp");
-
   // Desktop OpenGL supports bitfield manulipation and dynamic sampler indexing if it supports
   // shader5. OpenGL ES 3.1 supports it implicitly without an extension
   g_Config.backend_info.bSupportsBitfield = GLExtensions::Supports("GL_ARB_gpu_shader5");
@@ -493,6 +490,8 @@ Renderer::Renderer(std::unique_ptr<GLContext> main_gl_context, float backbuffer_
       GLExtensions::Supports("GL_EXT_texture_compression_s3tc");
   g_Config.backend_info.bSupportsBPTCTextures =
       GLExtensions::Supports("GL_ARB_texture_compression_bptc");
+  g_Config.backend_info.bSupportsUnrestrictedDepthRange =
+      GLExtensions::Supports("GL_NV_depth_buffer_float");
 
   if (m_main_gl_context->IsGLES())
   {
@@ -510,10 +509,6 @@ Renderer::Renderer(std::unique_ptr<GLContext> main_gl_context, float backbuffer_
 
     supports_glsl_cache = true;
     g_ogl_config.bSupportsGLSync = true;
-
-    // TODO: Implement support for GL_EXT_clip_cull_distance when there is an extension for
-    // depth clamping.
-    g_Config.backend_info.bSupportsDepthClamp = false;
 
     // GLES does not support logic op.
     g_Config.backend_info.bSupportsLogicOp = false;
@@ -762,7 +757,8 @@ Renderer::Renderer(std::unique_ptr<GLContext> main_gl_context, float backbuffer_
            g_ActiveConfig.backend_info.bSupportsGSInstancing ? "" : "GSInstancing ",
            g_ActiveConfig.backend_info.bSupportsClipControl ? "" : "ClipControl ",
            g_ogl_config.bSupportsCopySubImage ? "" : "CopyImageSubData ",
-           g_ActiveConfig.backend_info.bSupportsDepthClamp ? "" : "DepthClamp ");
+           g_ActiveConfig.backend_info.bSupportsUnrestrictedDepthRange ? "" :
+                                                                         "UnrestrictedDepthRange ");
 
   // Handle VSync on/off
   if (!DriverDetails::HasBug(DriverDetails::BUG_BROKEN_VSYNC))
@@ -770,13 +766,6 @@ Renderer::Renderer(std::unique_ptr<GLContext> main_gl_context, float backbuffer_
 
   if (g_ActiveConfig.backend_info.bSupportsClipControl)
     glClipControl(GL_LOWER_LEFT, GL_ZERO_TO_ONE);
-
-  if (g_ActiveConfig.backend_info.bSupportsDepthClamp)
-  {
-    glEnable(GL_CLIP_DISTANCE0);
-    glEnable(GL_CLIP_DISTANCE1);
-    glEnable(GL_DEPTH_CLAMP);
-  }
 
   glPixelStorei(GL_UNPACK_ALIGNMENT, 4);  // 4-byte pixel alignment
 
@@ -896,7 +885,10 @@ void Renderer::SetViewport(float x, float y, float width, float height, float ne
     glViewport(iceilf(x), iceilf(y), iceilf(width), iceilf(height));
   }
 
-  glDepthRangef(near_depth, far_depth);
+  if (g_ActiveConfig.backend_info.bSupportsUnrestrictedDepthRange)
+    glDepthRangedNV(near_depth, far_depth);
+  else
+    glDepthRangef(near_depth, far_depth);
 }
 
 void Renderer::Draw(u32 base_vertex, u32 num_vertices)
@@ -953,7 +945,10 @@ void Renderer::ClearScreen(const MathUtil::Rectangle<int>& rc, bool colorEnable,
   if (zEnable)
   {
     glDepthMask(zEnable ? GL_TRUE : GL_FALSE);
-    glClearDepthf(float(z & 0xFFFFFF) / 16777216.0f);
+    if (g_ActiveConfig.backend_info.bSupportsUnrestrictedDepthRange)
+      glClearDepthdNV(float(z & 0xFFFFFF) / 16777215.0f);
+    else
+      glClearDepthf(float(z & 0xFFFFFF) / 16777215.0f);
     clear_mask |= GL_DEPTH_BUFFER_BIT;
   }
 
@@ -1107,26 +1102,6 @@ void Renderer::CheckForSurfaceResize()
   m_backbuffer_width = m_main_gl_context->GetBackBufferWidth();
   m_backbuffer_height = m_main_gl_context->GetBackBufferHeight();
   m_system_framebuffer->UpdateDimensions(m_backbuffer_width, m_backbuffer_height);
-}
-
-void Renderer::BeginUtilityDrawing()
-{
-  ::Renderer::BeginUtilityDrawing();
-  if (g_ActiveConfig.backend_info.bSupportsDepthClamp)
-  {
-    glDisable(GL_CLIP_DISTANCE0);
-    glDisable(GL_CLIP_DISTANCE1);
-  }
-}
-
-void Renderer::EndUtilityDrawing()
-{
-  ::Renderer::EndUtilityDrawing();
-  if (g_ActiveConfig.backend_info.bSupportsDepthClamp)
-  {
-    glEnable(GL_CLIP_DISTANCE0);
-    glEnable(GL_CLIP_DISTANCE1);
-  }
 }
 
 void Renderer::ApplyRasterizationState(const RasterizationState state)

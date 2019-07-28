@@ -858,12 +858,6 @@ bool SharedContextAsyncShaderCompiler::WorkerThreadInitWorkerThread(void* param)
     glEnable(GL_PROGRAM_POINT_SIZE);
   if (g_ActiveConfig.backend_info.bSupportsClipControl)
     glClipControl(GL_LOWER_LEFT, GL_ZERO_TO_ONE);
-  if (g_ActiveConfig.backend_info.bSupportsDepthClamp)
-  {
-    glEnable(GL_CLIP_DISTANCE0);
-    glEnable(GL_CLIP_DISTANCE1);
-    glEnable(GL_DEPTH_CLAMP);
-  }
   if (g_ActiveConfig.backend_info.bSupportsPrimitiveRestart)
     GLUtil::EnablePrimitiveRestart(context);
 

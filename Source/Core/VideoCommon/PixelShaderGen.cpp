@@ -873,9 +873,9 @@ ShaderCode GeneratePixelShaderCode(APIType ApiType, const ShaderHostConfig& host
   else
   {
     if (!host_config.backend_reversed_depth_range)
-      out.Write("\tint zCoord = int((1.0 - rawpos.z) * 16777216.0);\n");
+      out.Write("\tint zCoord = int((1.0 - rawpos.z) * 16777215.0);\n");
     else
-      out.Write("\tint zCoord = int(rawpos.z * 16777216.0);\n");
+      out.Write("\tint zCoord = int(rawpos.z * 16777215.0);\n");
   }
   out.Write("\tzCoord = clamp(zCoord, 0, 0xFFFFFF);\n");
 
@@ -887,9 +887,9 @@ ShaderCode GeneratePixelShaderCode(APIType ApiType, const ShaderHostConfig& host
   if (uid_data->per_pixel_depth && uid_data->early_ztest)
   {
     if (!host_config.backend_reversed_depth_range)
-      out.Write("\tdepth = 1.0 - float(zCoord) / 16777216.0;\n");
+      out.Write("\tdepth = 1.0 - float(zCoord) / 16777215.0;\n");
     else
-      out.Write("\tdepth = float(zCoord) / 16777216.0;\n");
+      out.Write("\tdepth = float(zCoord) / 16777215.0;\n");
   }
 
   // Note: depth texture output is only written to depth buffer if late depth test is used
@@ -908,9 +908,9 @@ ShaderCode GeneratePixelShaderCode(APIType ApiType, const ShaderHostConfig& host
   if (uid_data->per_pixel_depth && uid_data->late_ztest)
   {
     if (!host_config.backend_reversed_depth_range)
-      out.Write("\tdepth = 1.0 - float(zCoord) / 16777216.0;\n");
+      out.Write("\tdepth = 1.0 - float(zCoord) / 16777215.0;\n");
     else
-      out.Write("\tdepth = float(zCoord) / 16777216.0;\n");
+      out.Write("\tdepth = float(zCoord) / 16777215.0;\n");
   }
 
   // No dithering for RGB8 mode
@@ -1472,14 +1472,14 @@ static void WriteFog(ShaderCode& out, const pixel_shader_uid_data* uid_data)
     // renderer)
     //       Maybe we want to use "ze = (A << B_SHF)/((B << B_SHF) - Zs)" instead?
     //       That's equivalent, but keeps the lower bits of Zs.
-    out.Write("\tfloat ze = (" I_FOGF ".x * 16777216.0) / float(" I_FOGI ".y - (zCoord >> " I_FOGI
+    out.Write("\tfloat ze = (" I_FOGF ".x * 16777215.0) / float(" I_FOGI ".y - (zCoord >> " I_FOGI
               ".w));\n");
   }
   else
   {
     // orthographic
     // ze = a*Zs    (here, no B_SHF)
-    out.Write("\tfloat ze = " I_FOGF ".x * float(zCoord) / 16777216.0;\n");
+    out.Write("\tfloat ze = " I_FOGF ".x * float(zCoord) / 16777215.0;\n");
   }
 
   // x_adjust = sqrt((x-center)^2 + k^2)/k

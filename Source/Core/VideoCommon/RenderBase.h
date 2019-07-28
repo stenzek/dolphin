@@ -237,7 +237,6 @@ public:
   // This is called when the surface is resized (WX) or the window changes (Android).
   void ChangeSurface(void* new_surface_handle);
   void ResizeSurface();
-  bool UseVertexDepthRange() const;
   void DoState(PointerWrap& p);
 
   virtual std::unique_ptr<VideoCommon::AsyncShaderCompiler> CreateAsyncShaderCompiler();

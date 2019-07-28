@@ -414,25 +414,6 @@ ShaderCode GenerateVertexShaderCode(APIType api_type, const ShaderHostConfig& ho
       out.Write("o.colors_1 = rawcolor1;\n");
   }
 
-  // If we can disable the incorrect depth clipping planes using depth clamping, then we can do
-  // our own depth clipping and calculate the depth range before the perspective divide if
-  // necessary.
-  if (host_config.backend_depth_clamp)
-  {
-    // Since we're adjusting z for the depth range before the perspective divide, we have to do our
-    // own clipping. We want to clip so that -w <= z <= 0, which matches the console -1..0 range.
-    // We adjust our depth value for clipping purposes to match the perspective projection in the
-    // software backend, which is a hack to fix Sonic Adventure and Unleashed games.
-    out.Write("float clipDepth = o.pos.z * (1.0 - 1e-7);\n");
-    out.Write("float clipDist0 = clipDepth + o.pos.w;\n");  // Near: z < -w
-    out.Write("float clipDist1 = -clipDepth;\n");           // Far: z > 0
-    if (host_config.backend_geometry_shaders)
-    {
-      out.Write("o.clipDist0 = clipDist0;\n");
-      out.Write("o.clipDist1 = clipDist1;\n");
-    }
-  }
-
   // Write the true depth value. If the game uses depth textures, then the pixel shader will
   // override it with the correct values if not then early z culling will improve speed.
   // There are two different ways to do this, when the depth range is oversized, we process
@@ -511,12 +492,6 @@ ShaderCode GenerateVertexShaderCode(APIType api_type, const ShaderHostConfig& ho
       }
       out.Write("colors_0 = o.colors_0;\n");
       out.Write("colors_1 = o.colors_1;\n");
-    }
-
-    if (host_config.backend_depth_clamp)
-    {
-      out.Write("gl_ClipDistance[0] = clipDist0;\n");
-      out.Write("gl_ClipDistance[1] = clipDist1;\n");
     }
 
     // Vulkan NDC space has Y pointing down (right-handed NDC space).

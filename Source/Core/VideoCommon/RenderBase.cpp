@@ -209,19 +209,15 @@ u32 Renderer::AccessEFB(EFBAccessType type, u32 x, u32 y, u32 poke_data)
   else  // if (type == EFBAccessType::PeekZ)
   {
     // Depth buffer is inverted for improved precision near far plane
-    float depth = g_framebuffer_manager->PeekEFBDepth(x, y);
+    float f_depth = g_framebuffer_manager->PeekEFBDepth(x, y);
     if (!g_ActiveConfig.backend_info.bSupportsReversedDepthRange)
-      depth = 1.0f - depth;
+      f_depth = 1.0f - f_depth;
 
-    u32 ret = 0;
+    u32 ret = static_cast<u32>(f_depth * 16777215.0f);
     if (bpmem.zcontrol.pixel_format == PEControl::RGB565_Z16)
     {
       // if Z is in 16 bit format you must return a 16 bit integer
-      ret = std::clamp<u32>(static_cast<u32>(depth * 65536.0f), 0, 0xFFFF);
-    }
-    else
-    {
-      ret = std::clamp<u32>(static_cast<u32>(depth * 16777216.0f), 0, 0xFFFFFF);
+      ret = ret >> 8;
     }
 
     return ret;
@@ -248,7 +244,7 @@ void Renderer::PokeEFB(EFBAccessType type, const EfbPokeData* points, size_t num
     {
       // Convert to floating-point depth.
       const EfbPokeData& point = points[i];
-      float depth = float(point.data & 0xFFFFFF) / 16777216.0f;
+      float depth = float(point.data & 0xFFFFFF) / 16777215.0f;
       if (!g_ActiveConfig.backend_info.bSupportsReversedDepthRange)
         depth = 1.0f - depth;
 
@@ -1664,25 +1660,6 @@ void Renderer::DumpFrameToImage(const FrameDumpConfig& config)
   std::string filename = GetFrameDumpNextImageFileName();
   TextureToPng(config.data, config.stride, filename, config.width, config.height, false);
   m_frame_dump_image_counter++;
-}
-
-bool Renderer::UseVertexDepthRange() const
-{
-  // We can't compute the depth range in the vertex shader if we don't support depth clamp.
-  if (!g_ActiveConfig.backend_info.bSupportsDepthClamp)
-    return false;
-
-  // We need a full depth range if a ztexture is used.
-  if (bpmem.ztex2.type != ZTEXTURE_DISABLE && !bpmem.zcontrol.early_ztest)
-    return true;
-
-  // If an inverted depth range is unsupported, we also need to check if the range is inverted.
-  if (!g_ActiveConfig.backend_info.bSupportsReversedDepthRange && xfmem.viewport.zRange < 0.0f)
-    return true;
-
-  // If an oversized depth range or a ztexture is used, we need to calculate the depth range
-  // in the vertex shader.
-  return fabs(xfmem.viewport.zRange) > 16777215.0f || fabs(xfmem.viewport.farZ) > 16777215.0f;
 }
 
 void Renderer::DoState(PointerWrap& p)

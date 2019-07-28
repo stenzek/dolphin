@@ -129,9 +129,6 @@ public:
   u16 BBoxRead(int index) override;
   void BBoxWrite(int index, u16 value) override;
 
-  void BeginUtilityDrawing() override;
-  void EndUtilityDrawing() override;
-
   void Flush() override;
   void WaitForGPUIdle() override;
   void RenderXFBToScreen(const MathUtil::Rectangle<int>& target_rc,

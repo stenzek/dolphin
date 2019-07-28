@@ -63,8 +63,8 @@ void VideoBackend::FillBackendInfo()
   g_Config.backend_info.bSupportsClipControl = true;
   g_Config.backend_info.bSupportsSSAA = true;
   g_Config.backend_info.bSupportsFragmentStoresAndAtomics = true;
-  g_Config.backend_info.bSupportsDepthClamp = true;
   g_Config.backend_info.bSupportsReversedDepthRange = false;
+  g_Config.backend_info.bSupportsUnrestrictedDepthRange = false;
   g_Config.backend_info.bSupportsComputeShaders = true;
   g_Config.backend_info.bSupportsLogicOp = true;
   g_Config.backend_info.bSupportsMultithreading = true;
