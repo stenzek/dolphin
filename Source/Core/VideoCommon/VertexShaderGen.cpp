@@ -185,6 +185,13 @@ ShaderCode GenerateVertexShaderCode(APIType api_type, const ShaderHostConfig& ho
     out.Write("  float4 rawpos : POSITION) {\n");
   }
 
+  if (!(uid_data->components & VB_HAS_NRM0))
+    out.Write("float3 rawnorm0 = float3(0.0, 0.0, 0.0);\n");
+  if (!(uid_data->components & VB_HAS_NRM1))
+    out.Write("float3 rawnorm1 = float3(1.0, 1.0, 1.0);\n");
+  if (!(uid_data->components & VB_HAS_NRM2))
+    out.Write("float3 rawnorm2 = float3(1.0, 1.0, 1.0);\n");
+
   out.Write("VS_OUTPUT o;\n");
 
   // transforms
@@ -195,43 +202,29 @@ ShaderCode GenerateVertexShaderCode(APIType api_type, const ShaderHostConfig& ho
               "[posidx], rawpos), dot(" I_TRANSFORMMATRICES
               "[posidx+1], rawpos), dot(" I_TRANSFORMMATRICES "[posidx+2], rawpos), 1);\n");
 
-    if (uid_data->components & VB_HAS_NRMALL)
-    {
-      out.Write("int normidx = posidx & 31;\n");
-      out.Write("float3 N0 = " I_NORMALMATRICES "[normidx].xyz, N1 = " I_NORMALMATRICES
-                "[normidx+1].xyz, N2 = " I_NORMALMATRICES "[normidx+2].xyz;\n");
-    }
+    out.Write("int normidx = posidx & 31;\n");
+    out.Write("float3 N0 = " I_NORMALMATRICES "[normidx].xyz, N1 = " I_NORMALMATRICES
+              "[normidx+1].xyz, N2 = " I_NORMALMATRICES "[normidx+2].xyz;\n");
 
-    if (uid_data->components & VB_HAS_NRM0)
-      out.Write("float3 _norm0 = normalize(float3(dot(N0, rawnorm0), dot(N1, rawnorm0), dot(N2, "
-                "rawnorm0)));\n");
-    if (uid_data->components & VB_HAS_NRM1)
-      out.Write(
-          "float3 _norm1 = float3(dot(N0, rawnorm1), dot(N1, rawnorm1), dot(N2, rawnorm1));\n");
-    if (uid_data->components & VB_HAS_NRM2)
-      out.Write(
-          "float3 _norm2 = float3(dot(N0, rawnorm2), dot(N1, rawnorm2), dot(N2, rawnorm2));\n");
+    out.Write("float3 _norm0 = normalize(float3(dot(N0, rawnorm0), dot(N1, rawnorm0), dot(N2, "
+              "rawnorm0)));\n");
+    out.Write("float3 _norm1 = float3(dot(N0, rawnorm1), dot(N1, rawnorm1), dot(N2, rawnorm1));\n");
+    out.Write("float3 _norm2 = float3(dot(N0, rawnorm2), dot(N1, rawnorm2), dot(N2, rawnorm2));\n");
   }
   else
   {
     out.Write("float4 pos = float4(dot(" I_POSNORMALMATRIX "[0], rawpos), dot(" I_POSNORMALMATRIX
               "[1], rawpos), dot(" I_POSNORMALMATRIX "[2], rawpos), 1.0);\n");
-    if (uid_data->components & VB_HAS_NRM0)
-      out.Write("float3 _norm0 = normalize(float3(dot(" I_POSNORMALMATRIX
-                "[3].xyz, rawnorm0), dot(" I_POSNORMALMATRIX
-                "[4].xyz, rawnorm0), dot(" I_POSNORMALMATRIX "[5].xyz, rawnorm0)));\n");
-    if (uid_data->components & VB_HAS_NRM1)
-      out.Write("float3 _norm1 = float3(dot(" I_POSNORMALMATRIX
-                "[3].xyz, rawnorm1), dot(" I_POSNORMALMATRIX
-                "[4].xyz, rawnorm1), dot(" I_POSNORMALMATRIX "[5].xyz, rawnorm1));\n");
-    if (uid_data->components & VB_HAS_NRM2)
-      out.Write("float3 _norm2 = float3(dot(" I_POSNORMALMATRIX
-                "[3].xyz, rawnorm2), dot(" I_POSNORMALMATRIX
-                "[4].xyz, rawnorm2), dot(" I_POSNORMALMATRIX "[5].xyz, rawnorm2));\n");
+    out.Write("float3 _norm0 = normalize(float3(dot(" I_POSNORMALMATRIX
+              "[3].xyz, rawnorm0), dot(" I_POSNORMALMATRIX
+              "[4].xyz, rawnorm0), dot(" I_POSNORMALMATRIX "[5].xyz, rawnorm0)));\n");
+    out.Write("float3 _norm1 = float3(dot(" I_POSNORMALMATRIX
+              "[3].xyz, rawnorm1), dot(" I_POSNORMALMATRIX
+              "[4].xyz, rawnorm1), dot(" I_POSNORMALMATRIX "[5].xyz, rawnorm1));\n");
+    out.Write("float3 _norm2 = float3(dot(" I_POSNORMALMATRIX
+              "[3].xyz, rawnorm2), dot(" I_POSNORMALMATRIX
+              "[4].xyz, rawnorm2), dot(" I_POSNORMALMATRIX "[5].xyz, rawnorm2));\n");
   }
-
-  if (!(uid_data->components & VB_HAS_NRM0))
-    out.Write("float3 _norm0 = float3(0.0, 0.0, 0.0);\n");
 
   out.Write("o.pos = float4(dot(" I_PROJECTION "[0], pos), dot(" I_PROJECTION
             "[1], pos), dot(" I_PROJECTION "[2], pos), dot(" I_PROJECTION "[3], pos));\n");
@@ -295,22 +288,11 @@ ShaderCode GenerateVertexShaderCode(APIType api_type, const ShaderHostConfig& ho
     {
     case XF_TEXGEN_EMBOSS_MAP:  // calculate tex coords into bump map
 
-      if (uid_data->components & (VB_HAS_NRM1 | VB_HAS_NRM2))
-      {
-        // transform the light dir into tangent space
-        out.Write("ldir = normalize(" LIGHT_POS ".xyz - pos.xyz);\n",
-                  LIGHT_POS_PARAMS(texinfo.embosslightshift));
-        out.Write(
-            "o.tex%d.xyz = o.tex%d.xyz + float3(dot(ldir, _norm1), dot(ldir, _norm2), 0.0);\n", i,
-            texinfo.embosssourceshift);
-      }
-      else
-      {
-        // The following assert was triggered in House of the Dead Overkill and Star Wars Rogue
-        // Squadron 2
-        // ASSERT(0); // should have normals
-        out.Write("o.tex%d.xyz = o.tex%d.xyz;\n", i, texinfo.embosssourceshift);
-      }
+      // transform the light dir into tangent space
+      out.Write("ldir = normalize(" LIGHT_POS ".xyz - pos.xyz);\n",
+                LIGHT_POS_PARAMS(texinfo.embosslightshift));
+      out.Write("o.tex%d.xyz = o.tex%d.xyz + float3(dot(ldir, _norm1), dot(ldir, _norm2), 0.0);\n",
+                i, texinfo.embosssourceshift);
 
       break;
     case XF_TEXGEN_COLOR_STRGBC0:

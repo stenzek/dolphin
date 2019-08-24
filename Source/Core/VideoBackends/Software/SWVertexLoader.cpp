@@ -71,6 +71,9 @@ void SWVertexLoader::DrawCurrentBatch(u32 base_index, u32 num_indices, u32 base_
 
     // Super Mario Sunshine requires those to be zero for those debug boxes.
     m_vertex.color = {};
+    m_vertex.normal[1] = {1.0f, 0.0f, 0.0f};
+    m_vertex.normal[2] = {0.0f, 1.0f, 0.0f};
+    m_vertex.normal[0] = {0.0f, 0.0f, 1.0f};
 
     // parse the videocommon format to our own struct format (m_vertex)
     SetFormat(g_main_cp_state.last_id, primitiveType);
