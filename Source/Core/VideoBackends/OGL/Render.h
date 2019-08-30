@@ -173,10 +173,34 @@ private:
   std::unique_ptr<OGLFramebuffer> m_system_framebuffer;
   std::array<const OGLTexture*, 8> m_bound_textures{};
   AbstractTexture* m_bound_image_texture = nullptr;
-  RasterizationState m_current_rasterization_state;
-  DepthState m_current_depth_state;
-  BlendingState m_current_blend_state;
   GLuint m_shared_read_framebuffer = 0;
   GLuint m_shared_draw_framebuffer = 0;
+
+  struct GLState
+  {
+    bool cull_face_enabled = false;
+    bool depth_test_enabled = false;
+    bool depth_mask_enabled = false;
+    bool blend_enabled = false;
+    bool logic_op_enabled = false;
+    bool color_mask_enable = true;
+    bool alpha_mask_enable = true;
+
+    GLenum cull_face = GL_BACK;
+    GLenum depth_func = GL_LESS;
+    GLenum blend_func = GL_FUNC_ADD;
+    GLenum blend_func_alpha = GL_FUNC_ADD;
+    GLenum blend_src_factor_rgb = GL_ONE;
+    GLenum blend_dst_factor_rgb = GL_ONE;
+    GLenum blend_src_factor_alpha = GL_ONE;
+    GLenum blend_dst_factor_alpha = GL_ONE;
+    GLenum logic_op = GL_COPY;
+  };
+
+  // Current state.
+  GLState m_current_state;
+
+  // Broken dual-source blending, see DriverDetails.cpp.
+  bool m_has_broken_dual_source_blending = false;
 };
 }  // namespace OGL
