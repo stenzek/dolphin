@@ -38,7 +38,6 @@ struct SHADER
 
   void SetProgramVariables();
   void SetProgramBindings(bool is_compute);
-  void Bind() const;
   void DestroyShaders();
 };
 
@@ -73,7 +72,6 @@ public:
   static bool IsValidVertexFormatBound();
   static void InvalidateVertexFormat();
   static void InvalidateVertexFormatIfBound(GLuint vao);
-  static void InvalidateLastProgram();
 
   static bool CompileComputeShader(SHADER& shader, std::string_view code);
   static GLuint CompileSingleShader(GLenum type, std::string_view code);

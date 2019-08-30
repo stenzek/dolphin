@@ -149,7 +149,19 @@ public:
   bool IsGLES() const { return m_main_gl_context->IsGLES(); }
 
   // Invalidates a cached texture binding. Required for texel buffers when they borrow the units.
-  void InvalidateTextureBinding(u32 index) { m_bound_textures[index] = nullptr; }
+  void InvalidateTextureBinding(u32 index)
+  {
+    m_current_state.textures[index] = nullptr;
+    m_pending_state.textures[index] = nullptr;
+    m_dirty_state &= ~(GLState::DirtyTexture0 << index);
+  }
+
+  // Overwrites the current program, use when compiling shaders.
+  void OverrideCurrentProgram(GLuint id)
+  {
+    m_current_state.program = id;
+    m_dirty_state |= GLState::DirtyProgram;
+  }
 
   // The shared framebuffer exists for copying textures when extensions are not available. It is
   // slower, but the only way to do these things otherwise.
@@ -162,29 +174,56 @@ public:
   void RestoreFramebufferBinding();
 
 private:
+  static constexpr u32 NUM_TEXTURE_UNITS = 8;
+
   void CheckForSurfaceChange();
   void CheckForSurfaceResize();
 
-  void ApplyRasterizationState(const RasterizationState state);
-  void ApplyDepthState(const DepthState state);
-  void ApplyBlendingState(const BlendingState state);
+  void SetRasterizationState(const RasterizationState state);
+  void SetDepthState(const DepthState state);
+  void SetBlendingState(const BlendingState state);
+  void ApplyState();
 
   std::unique_ptr<GLContext> m_main_gl_context;
   std::unique_ptr<OGLFramebuffer> m_system_framebuffer;
-  std::array<const OGLTexture*, 8> m_bound_textures{};
   AbstractTexture* m_bound_image_texture = nullptr;
   GLuint m_shared_read_framebuffer = 0;
   GLuint m_shared_draw_framebuffer = 0;
 
+  // TODO: VAO, framebuffer, move state to pipeline object
   struct GLState
   {
+    enum DirtyBit : u64
+    {
+      DirtyCullFaceEnabled = UINT64_C(1) << 0,
+      DirtyDepthTestEnabled = UINT64_C(1) << 1,
+      DirtyDepthFunc = UINT64_C(1) << 2,
+      DirtyDepthMask = UINT64_C(1) << 3,
+      DirtyColorAlphaMask = UINT64_C(1) << 4,
+      DirtyClipDistanceEnabled = UINT64_C(1) << 5,
+      DirtyCullFace = UINT64_C(1) << 6,
+      DirtyBlendEnabled = UINT64_C(1) << 7,
+      DirtyBlendFunc = UINT64_C(1) << 8,
+      DirtyBlendFactor = UINT64_C(1) << 9,
+      DirtyLogicOpEnabled = UINT64_C(1) << 10,
+      DirtyLogicOp = UINT64_C(1) << 11,
+      DirtyFramebuffer = UINT64_C(1) << 12,
+      DirtyViewport = UINT64_C(1) << 13,
+      DirtyDepthRange = UINT64_C(1) << 14,
+      DirtyScissor = UINT64_C(1) << 15,
+      DirtyTexture0 = UINT64_C(1) << 16,
+      DirtySampler0 = UINT64_C(1) << 24,
+      DirtyProgram = UINT64_C(1) << 32
+    };
+
     bool cull_face_enabled = false;
     bool depth_test_enabled = false;
-    bool depth_mask_enabled = false;
+    bool depth_mask = false;
     bool blend_enabled = false;
     bool logic_op_enabled = false;
-    bool color_mask_enable = true;
-    bool alpha_mask_enable = true;
+    bool color_mask = true;
+    bool alpha_mask = true;
+    bool clip_distance_enabled = false;
 
     GLenum cull_face = GL_BACK;
     GLenum depth_func = GL_LESS;
@@ -195,10 +234,60 @@ private:
     GLenum blend_src_factor_alpha = GL_ONE;
     GLenum blend_dst_factor_alpha = GL_ONE;
     GLenum logic_op = GL_COPY;
+
+    GLuint framebuffer = 0;
+    GLuint program = 0;
+
+    struct Viewport
+    {
+      float x;
+      float y;
+      float width;
+      float height;
+
+      bool operator==(const Viewport& rhs) const
+      {
+        return std::memcmp(this, &rhs, sizeof(*this)) == 0;
+      }
+      bool operator!=(const Viewport& rhs) const
+      {
+        return std::memcmp(this, &rhs, sizeof(*this)) != 0;
+      }
+    } viewport = {0.0f, 0.0f, 1.0f, 1.0f};
+    static_assert(std::is_pod_v<Viewport>);
+
+    float near_depth = 0.0f;
+    float far_depth = 1.0f;
+
+    struct Scissor
+    {
+      int x;
+      int y;
+      int width;
+      int height;
+
+      bool operator==(const Scissor& rhs) const
+      {
+        return std::memcmp(this, &rhs, sizeof(*this)) == 0;
+      }
+      bool operator!=(const Scissor& rhs) const
+      {
+        return std::memcmp(this, &rhs, sizeof(*this)) != 0;
+      }
+    } scissor = {0, 0, 1, 1};
+    static_assert(std::is_pod_v<Scissor>);
+
+    std::array<const OGLTexture*, NUM_TEXTURE_UNITS> textures{};
+    std::array<GLuint, NUM_TEXTURE_UNITS> samplers{};
   };
 
   // Current state.
   GLState m_current_state;
+  GLState m_pending_state;
+  u64 m_dirty_state = 0;
+
+  // Debug output enabled?
+  bool m_debug_output_enabled = false;
 
   // Broken dual-source blending, see DriverDetails.cpp.
   bool m_has_broken_dual_source_blending = false;

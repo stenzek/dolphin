@@ -43,7 +43,6 @@ GLuint ProgramShaderCache::s_last_VAO = 0;
 static std::unique_ptr<StreamBuffer> s_buffer;
 static int num_failures = 0;
 
-static GLuint CurrentProgram = 0;
 ProgramShaderCache::PipelineProgramMap ProgramShaderCache::s_pipeline_programs;
 std::mutex ProgramShaderCache::s_pipeline_program_lock;
 static std::string s_glsl_header;
@@ -81,13 +80,6 @@ static std::string GetGLSLVersionString()
 
 void SHADER::SetProgramVariables()
 {
-  if (g_ActiveConfig.backend_info.bSupportsBindingLayout)
-    return;
-
-  // To set uniform blocks/uniforms, the program must be active. We restore the
-  // current binding at the end of this method to maintain the invariant.
-  glUseProgram(glprogid);
-
   // Bind UBO and texture samplers
   GLint PSBlock_id = glGetUniformBlockIndex(glprogid, "PSBlock");
   GLint VSBlock_id = glGetUniformBlockIndex(glprogid, "VSBlock");
@@ -112,9 +104,6 @@ void SHADER::SetProgramVariables()
     if (loc >= 0)
       glUniform1i(loc, a);
   }
-
-  // Restore previous program binding.
-  glUseProgram(CurrentProgram);
 }
 
 void SHADER::SetProgramBindings(bool is_compute)
@@ -146,16 +135,6 @@ void SHADER::SetProgramBindings(bool is_compute)
   {
     std::string attrib_name = StringFromFormat("rawtex%d", i);
     glBindAttribLocation(glprogid, SHADER_TEXTURE0_ATTRIB + i, attrib_name.c_str());
-  }
-}
-
-void SHADER::Bind() const
-{
-  if (CurrentProgram != glprogid)
-  {
-    INCSTAT(g_stats.this_frame.num_shader_changes);
-    glUseProgram(glprogid);
-    CurrentProgram = glprogid;
   }
 }
 
@@ -292,7 +271,13 @@ bool ProgramShaderCache::CompileComputeShader(SHADER& shader, std::string_view c
     return false;
   }
 
-  shader.SetProgramVariables();
+  if (!g_ActiveConfig.backend_info.bSupportsBindingLayout)
+  {
+    glUseProgram(shader.glprogid);
+    Renderer::GetInstance()->OverrideCurrentProgram(shader.glprogid);
+    shader.SetProgramVariables();
+  }
+
   return true;
 }
 
@@ -439,8 +424,6 @@ void ProgramShaderCache::Init()
 
   CreateHeader();
   CreateAttributelessVAO();
-
-  CurrentProgram = 0;
 }
 
 void ProgramShaderCache::Shutdown()
@@ -501,11 +484,6 @@ void ProgramShaderCache::InvalidateVertexFormatIfBound(GLuint vao)
 {
   if (s_last_VAO == vao)
     s_last_VAO = 0;
-}
-
-void ProgramShaderCache::InvalidateLastProgram()
-{
-  CurrentProgram = 0;
 }
 
 PipelineProgram* ProgramShaderCache::GetPipelineProgram(const GLVertexFormat* vertex_format,
@@ -609,7 +587,12 @@ PipelineProgram* ProgramShaderCache::GetPipelineProgram(const GLVertexFormat* ve
 
   // Set program variables on the shader which will be returned.
   // This is only needed for drivers which don't support binding layout.
-  prog->shader.SetProgramVariables();
+  if (g_ActiveConfig.backend_info.bSupportsBindingLayout)
+  {
+    glUseProgram(prog->shader.glprogid);
+    Renderer::GetInstance()->OverrideCurrentProgram(prog->shader.glprogid);
+    prog->shader.SetProgramVariables();
+  }
 
   // If this is a shared context, ensure we sync before we return the program to
   // the main thread. If we don't do this, some driver can lock up (e.g. AMD).
@@ -857,6 +840,7 @@ bool SharedContextAsyncShaderCompiler::WorkerThreadInitWorkerThread(void* param)
   s_is_shared_context = true;
 
   // Make the state match the main context to have a better chance of avoiding recompiles.
+  glFrontFace(GL_CW);
   if (!context->IsGLES())
     glEnable(GL_PROGRAM_POINT_SIZE);
   if (g_ActiveConfig.backend_info.bSupportsClipControl)

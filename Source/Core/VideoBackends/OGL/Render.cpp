@@ -44,6 +44,7 @@
 #include "VideoCommon/PostProcessing.h"
 #include "VideoCommon/RenderState.h"
 #include "VideoCommon/ShaderGenCommon.h"
+#include "VideoCommon/Statistics.h"
 #include "VideoCommon/VertexShaderManager.h"
 #include "VideoCommon/VideoBackendBase.h"
 #include "VideoCommon/VideoConfig.h"
@@ -699,14 +700,13 @@ Renderer::Renderer(std::unique_ptr<GLContext> main_gl_context, float backbuffer_
       glDebugMessageControlARB(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, true);
       glDebugMessageCallbackARB(ErrorCallback, nullptr);
     }
-    if (LogManager::GetInstance()->IsEnabled(LogTypes::HOST_GPU, LogTypes::LERROR))
-    {
+
+    m_debug_output_enabled =
+        LogManager::GetInstance()->IsEnabled(LogTypes::HOST_GPU, LogTypes::LERROR);
+    if (m_debug_output_enabled)
       glEnable(GL_DEBUG_OUTPUT);
-    }
     else
-    {
       glDisable(GL_DEBUG_OUTPUT);
-    }
   }
 
   int samples;
@@ -768,15 +768,13 @@ Renderer::Renderer(std::unique_ptr<GLContext> main_gl_context, float backbuffer_
   m_has_broken_dual_source_blending =
       DriverDetails::HasBug(DriverDetails::BUG_BROKEN_DUAL_SOURCE_BLENDING);
 
+  glFrontFace(GL_CW);
+
   if (g_ActiveConfig.backend_info.bSupportsClipControl)
     glClipControl(GL_LOWER_LEFT, GL_ZERO_TO_ONE);
 
   if (g_ActiveConfig.backend_info.bSupportsDepthClamp)
-  {
-    glEnable(GL_CLIP_DISTANCE0);
-    glEnable(GL_CLIP_DISTANCE1);
     glEnable(GL_DEPTH_CLAMP);
-  }
 
   glPixelStorei(GL_UNPACK_ALIGNMENT, 4);  // 4-byte pixel alignment
 
@@ -789,22 +787,9 @@ Renderer::Renderer(std::unique_ptr<GLContext> main_gl_context, float backbuffer_
 
   UpdateActiveConfig();
 
-  // Set current state. This should match the default values in m_current_state.
-  glDisable(GL_CULL_FACE);
-  glDisable(GL_DEPTH_TEST);
-  glDepthMask(GL_FALSE);
-  glDisable(GL_BLEND);
-  glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-  glFrontFace(GL_CW);
-  glCullFace(GL_BACK);
-  glDepthFunc(GL_LESS);
-  glBlendEquationSeparate(GL_FUNC_ADD, GL_FUNC_ADD);
-  glBlendFuncSeparate(GL_ONE, GL_ONE, GL_ONE, GL_ONE);
-  if (g_ActiveConfig.backend_info.bSupportsLogicOp)
-  {
-    glDisable(GL_COLOR_LOGIC_OP);
-    glLogicOp(GL_COPY);
-  }
+  // Sync default GL state with default Dolphin state.
+  m_dirty_state = ~static_cast<u64>(0);
+  ApplyState();
 }
 
 Renderer::~Renderer() = default;
@@ -869,7 +854,12 @@ std::unique_ptr<AbstractPipeline> Renderer::CreatePipeline(const AbstractPipelin
 
 void Renderer::SetScissorRect(const MathUtil::Rectangle<int>& rc)
 {
-  glScissor(rc.left, rc.top, rc.GetWidth(), rc.GetHeight());
+  const GLState::Scissor scissor{rc.left, rc.top, rc.GetWidth(), rc.GetHeight()};
+  if (scissor == m_pending_state.scissor)
+    return;
+
+  m_pending_state.scissor = scissor;
+  m_dirty_state |= GLState::DirtyScissor;
 }
 
 u16 Renderer::BBoxRead(int index)
@@ -903,27 +893,33 @@ void Renderer::BBoxWrite(int index, u16 value)
 void Renderer::SetViewport(float x, float y, float width, float height, float near_depth,
                            float far_depth)
 {
-  if (g_ogl_config.bSupportViewportFloat)
+  const GLState::Viewport vp = {x, y, width, height};
+  if (vp != m_pending_state.viewport)
   {
-    glViewportIndexedf(0, x, y, width, height);
-  }
-  else
-  {
-    auto iceilf = [](float f) { return static_cast<GLint>(std::ceil(f)); };
-    glViewport(iceilf(x), iceilf(y), iceilf(width), iceilf(height));
+    m_pending_state.viewport = vp;
+    m_dirty_state |= GLState::DirtyViewport;
   }
 
-  glDepthRangef(near_depth, far_depth);
+  if (near_depth != m_pending_state.near_depth || far_depth != m_pending_state.far_depth)
+  {
+    m_pending_state.near_depth = near_depth;
+    m_pending_state.far_depth = far_depth;
+    m_dirty_state |= GLState::DirtyDepthRange;
+  }
 }
 
 void Renderer::Draw(u32 base_vertex, u32 num_vertices)
 {
+  ApplyState();
+
   glDrawArrays(static_cast<const OGLPipeline*>(m_current_pipeline)->GetGLPrimitive(), base_vertex,
                num_vertices);
 }
 
 void Renderer::DrawIndexed(u32 base_index, u32 num_indices, u32 base_vertex)
 {
+  ApplyState();
+
   if (g_ogl_config.bSupportsGLBaseVertex)
   {
     glDrawElementsBaseVertex(static_cast<const OGLPipeline*>(m_current_pipeline)->GetGLPrimitive(),
@@ -940,13 +936,20 @@ void Renderer::DrawIndexed(u32 base_index, u32 num_indices, u32 base_vertex)
 void Renderer::DispatchComputeShader(const AbstractShader* shader, u32 groups_x, u32 groups_y,
                                      u32 groups_z)
 {
-  glUseProgram(static_cast<const OGLShader*>(shader)->GetGLComputeProgramID());
+  const OGLShader* gl_shader = static_cast<const OGLShader*>(shader);
+  if (m_current_state.program != gl_shader->GetGLComputeProgramID())
+  {
+    glUseProgram(gl_shader->GetGLComputeProgramID());
+    m_current_state.program = gl_shader->GetGLComputeProgramID();
+    m_dirty_state &= ~GLState::DirtyProgram;
+  }
+
+  ApplyState();
+
   glDispatchCompute(groups_x, groups_y, groups_z);
 
-  // We messed up the program binding, so restore it.
-  ProgramShaderCache::InvalidateLastProgram();
-  if (m_current_pipeline)
-    static_cast<const OGLPipeline*>(m_current_pipeline)->GetProgram()->shader.Bind();
+  // Restore the old non-compute program next draw.
+  m_dirty_state |= GLState::DirtyProgram;
 
   // Barrier to texture can be used for reads.
   if (m_bound_image_texture)
@@ -962,9 +965,11 @@ void Renderer::ClearScreen(const MathUtil::Rectangle<int>& rc, bool colorEnable,
   u32 clear_mask = 0;
   if (colorEnable || alphaEnable)
   {
-    if (colorEnable != m_current_state.color_mask_enable ||
-        alphaEnable != m_current_state.alpha_mask_enable)
+    if (colorEnable != m_current_state.color_mask || alphaEnable != m_current_state.alpha_mask)
     {
+      m_current_state.color_mask = colorEnable;
+      m_current_state.alpha_mask = alphaEnable;
+      m_dirty_state |= GLState::DirtyColorAlphaMask;
       glColorMask(colorEnable, colorEnable, colorEnable, alphaEnable);
     }
     glClearColor(float((color >> 16) & 0xFF) / 255.0f, float((color >> 8) & 0xFF) / 255.0f,
@@ -973,7 +978,13 @@ void Renderer::ClearScreen(const MathUtil::Rectangle<int>& rc, bool colorEnable,
   }
   if (zEnable)
   {
-    glDepthMask(GL_TRUE);
+    if (!m_current_state.depth_mask)
+    {
+      m_current_state.depth_mask = true;
+      m_dirty_state |= GLState::DirtyDepthMask;
+      glDepthMask(GL_TRUE);
+    }
+
     glClearDepthf(float(z & 0xFFFFFF) / 16777216.0f);
     clear_mask |= GL_DEPTH_BUFFER_BIT;
   }
@@ -982,22 +993,16 @@ void Renderer::ClearScreen(const MathUtil::Rectangle<int>& rc, bool colorEnable,
   // glColorMask/glDepthMask/glScissor affect glClear (glViewport does not)
   const auto converted_target_rc =
       ConvertFramebufferRectangle(ConvertEFBRectangle(rc), m_current_framebuffer);
-  SetScissorRect(converted_target_rc);
+  const GLState::Scissor scissor{converted_target_rc.left, converted_target_rc.top,
+                                 converted_target_rc.GetWidth(), converted_target_rc.GetHeight()};
+  if (m_current_state.scissor != scissor)
+  {
+    m_current_state.scissor = scissor;
+    m_dirty_state |= GLState::DirtyScissor;
+    glScissor(scissor.x, scissor.y, scissor.width, scissor.height);
+  }
 
   glClear(clear_mask);
-
-  // Restore color/depth mask.
-  if (colorEnable != m_current_state.color_mask_enable ||
-      alphaEnable != m_current_state.alpha_mask_enable)
-  {
-    glColorMask(m_current_state.color_mask_enable, m_current_state.color_mask_enable,
-                m_current_state.color_mask_enable, m_current_state.alpha_mask_enable);
-  }
-  if (!m_current_state.depth_mask_enabled)
-    glDepthMask(m_current_state.depth_mask_enabled);
-
-  // Scissor rect must be restored.
-  BPFunctions::SetScissor();
 }
 
 void Renderer::RenderXFBToScreen(const MathUtil::Rectangle<int>& target_rc,
@@ -1037,36 +1042,36 @@ void Renderer::SetAndClearFramebuffer(AbstractFramebuffer* framebuffer,
 {
   SetFramebuffer(framebuffer);
 
-  glDisable(GL_SCISSOR_TEST);
   GLbitfield clear_mask = 0;
   if (framebuffer->HasColorBuffer())
   {
-    if (!m_current_state.color_mask_enable || !m_current_state.alpha_mask_enable)
+    if (!m_current_state.color_mask || !m_current_state.alpha_mask)
+    {
+      m_current_state.color_mask = true;
+      m_current_state.alpha_mask = true;
+      m_dirty_state |= GLState::DirtyColorAlphaMask;
       glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    }
 
     glClearColor(color_value[0], color_value[1], color_value[2], color_value[3]);
     clear_mask |= GL_COLOR_BUFFER_BIT;
   }
   if (framebuffer->HasDepthBuffer())
   {
-    if (!m_current_state.depth_mask_enabled)
+    if (!m_current_state.depth_mask)
+    {
+      m_current_state.depth_mask = true;
+      m_dirty_state |= GLState::DirtyDepthMask;
       glDepthMask(GL_TRUE);
+    }
 
     glClearDepthf(depth_value);
     clear_mask |= GL_DEPTH_BUFFER_BIT;
   }
+
+  glDisable(GL_SCISSOR_TEST);
   glClear(clear_mask);
   glEnable(GL_SCISSOR_TEST);
-
-  // Restore color/depth mask.
-  if (framebuffer->HasColorBuffer() &&
-      (!m_current_state.color_mask_enable || !m_current_state.alpha_mask_enable))
-  {
-    glColorMask(m_current_state.color_mask_enable, m_current_state.color_mask_enable,
-                m_current_state.color_mask_enable, m_current_state.alpha_mask_enable);
-  }
-  if (framebuffer->HasDepthBuffer() && !m_current_state.depth_mask_enabled)
-    glDepthMask(GL_FALSE);
 }
 
 void Renderer::BindBackbuffer(const ClearColor& clear_color)
@@ -1080,10 +1085,13 @@ void Renderer::PresentBackbuffer()
 {
   if (g_ogl_config.bSupportsDebug)
   {
-    if (LogManager::GetInstance()->IsEnabled(LogTypes::HOST_GPU, LogTypes::LERROR))
-      glEnable(GL_DEBUG_OUTPUT);
-    else
-      glDisable(GL_DEBUG_OUTPUT);
+    const bool debug_output_enabled =
+        LogManager::GetInstance()->IsEnabled(LogTypes::HOST_GPU, LogTypes::LERROR);
+    if (debug_output_enabled != m_debug_output_enabled)
+    {
+      m_debug_output_enabled = debug_output_enabled;
+      m_debug_output_enabled ? glEnable(GL_DEBUG_OUTPUT) : glDisable(GL_DEBUG_OUTPUT);
+    }
   }
 
   // Swap the back and front buffers, presenting the image.
@@ -1141,8 +1149,8 @@ void Renderer::BeginUtilityDrawing()
   ::Renderer::BeginUtilityDrawing();
   if (g_ActiveConfig.backend_info.bSupportsDepthClamp)
   {
-    glDisable(GL_CLIP_DISTANCE0);
-    glDisable(GL_CLIP_DISTANCE1);
+    m_pending_state.clip_distance_enabled = false;
+    m_dirty_state |= GLState::DirtyClipDistanceEnabled;
   }
 }
 
@@ -1151,69 +1159,63 @@ void Renderer::EndUtilityDrawing()
   ::Renderer::EndUtilityDrawing();
   if (g_ActiveConfig.backend_info.bSupportsDepthClamp)
   {
-    glEnable(GL_CLIP_DISTANCE0);
-    glEnable(GL_CLIP_DISTANCE1);
+    m_pending_state.clip_distance_enabled = true;
+    m_dirty_state |= GLState::DirtyClipDistanceEnabled;
   }
 }
 
-void Renderer::ApplyRasterizationState(const RasterizationState state)
+void Renderer::SetRasterizationState(const RasterizationState state)
 {
   static constexpr std::array<GLenum, 4> gl_cull_faces = {
       {GL_BACK, GL_BACK, GL_FRONT, GL_FRONT_AND_BACK}};
 
   const bool cull_face_enabled = state.cullmode != GenMode::CULL_NONE;
-  if (cull_face_enabled != m_current_state.cull_face_enabled)
+  if (cull_face_enabled != m_pending_state.cull_face_enabled)
   {
-    m_current_state.cull_face_enabled = cull_face_enabled;
-    if (cull_face_enabled)
-      glEnable(GL_CULL_FACE);
-    else
-      glDisable(GL_CULL_FACE);
+    m_pending_state.cull_face_enabled = cull_face_enabled;
+    m_dirty_state |= GLState::DirtyCullFaceEnabled;
   }
   if (cull_face_enabled)
   {
     const GLenum cull_face = gl_cull_faces[state.cullmode];
-    if (m_current_state.cull_face != cull_face)
+    if (m_pending_state.cull_face != cull_face)
     {
-      m_current_state.cull_face = cull_face;
-      glCullFace(cull_face);
+      m_pending_state.cull_face = cull_face;
+      m_dirty_state |= GLState::DirtyCullFace;
     }
   }
 }
 
-void Renderer::ApplyDepthState(const DepthState state)
+void Renderer::SetDepthState(const DepthState state)
 {
   static constexpr std::array<GLenum, 8> gl_funcs = {
       {GL_NEVER, GL_LESS, GL_EQUAL, GL_LEQUAL, GL_GREATER, GL_NOTEQUAL, GL_GEQUAL, GL_ALWAYS}};
   const bool test_enabled = state.testenable;
-  // if (test_enabled != m_current_state.depth_test_enabled)
+  if (test_enabled != m_pending_state.depth_test_enabled)
   {
-    m_current_state.depth_test_enabled = test_enabled;
-    if (test_enabled)
-      glEnable(GL_DEPTH_TEST);
-    else
-      glDisable(GL_DEPTH_TEST);
+    m_pending_state.depth_test_enabled = test_enabled;
+    m_dirty_state |= GLState::DirtyDepthTestEnabled;
   }
 
   if (test_enabled)
   {
     const GLenum func = gl_funcs[state.func];
-    // if (m_current_state.depth_func != func)
+    if (m_pending_state.depth_func != func)
     {
-      m_current_state.depth_func = func;
-      glDepthFunc(func);
+      m_pending_state.depth_func = func;
+      m_dirty_state |= GLState::DirtyDepthFunc;
     }
   }
 
   const bool write_enabled = test_enabled && state.updateenable;
-  // if (write_enabled != m_current_state.depth_mask_enabled)
+  if (write_enabled != m_pending_state.depth_mask)
   {
-    m_current_state.depth_mask_enabled = write_enabled;
-    glDepthMask(write_enabled);
+    m_pending_state.depth_mask = write_enabled;
+    m_dirty_state |= GLState::DirtyDepthMask;
   }
 }
 
-void Renderer::ApplyBlendingState(const BlendingState state)
+void Renderer::SetBlendingState(const BlendingState state)
 {
   static constexpr std::array<GLenum, 8> gl_src_factors = {GL_ZERO,      GL_ONE,
                                                            GL_DST_COLOR, GL_ONE_MINUS_DST_COLOR,
@@ -1241,25 +1243,22 @@ void Renderer::ApplyBlendingState(const BlendingState state)
                                 !use_dual_source && state.usedualsrc && state.dstalpha;
   const bool blend_enable = state.blendenable && !use_shader_blend;
 
-  if (m_current_state.blend_enabled != blend_enable)
+  if (m_pending_state.blend_enabled != blend_enable)
   {
-    m_current_state.blend_enabled = blend_enable;
-    if (blend_enable)
-      glEnable(GL_BLEND);
-    else
-      glDisable(GL_BLEND);
+    m_pending_state.blend_enabled = blend_enable;
+    m_dirty_state |= GLState::DirtyBlendEnabled;
   }
 
   if (blend_enable)
   {
     const GLenum blend_func = state.subtract ? GL_FUNC_REVERSE_SUBTRACT : GL_FUNC_ADD;
     const GLenum blend_func_alpha = state.subtractAlpha ? GL_FUNC_REVERSE_SUBTRACT : GL_FUNC_ADD;
-    if (blend_func != m_current_state.blend_func ||
-        blend_func_alpha != m_current_state.blend_func_alpha)
+    if (blend_func != m_pending_state.blend_func ||
+        blend_func_alpha != m_pending_state.blend_func_alpha)
     {
-      m_current_state.blend_func = blend_func;
-      m_current_state.blend_func_alpha = blend_func_alpha;
-      glBlendEquationSeparate(blend_func, blend_func_alpha);
+      m_pending_state.blend_func = blend_func;
+      m_pending_state.blend_func_alpha = blend_func_alpha;
+      m_dirty_state |= GLState::DirtyBlendFunc;
     }
 
     GLenum src_factor_rgb, dst_factor_rgb, src_factor_alpha, dst_factor_alpha;
@@ -1278,47 +1277,225 @@ void Renderer::ApplyBlendingState(const BlendingState state)
       dst_factor_alpha = gl_src_factors[state.dstfactoralpha];
     }
 
-    if (src_factor_rgb != m_current_state.blend_src_factor_rgb ||
-        dst_factor_rgb != m_current_state.blend_dst_factor_rgb ||
-        src_factor_alpha != m_current_state.blend_src_factor_alpha ||
-        dst_factor_alpha != m_current_state.blend_dst_factor_alpha)
+    if (src_factor_rgb != m_pending_state.blend_src_factor_rgb ||
+        dst_factor_rgb != m_pending_state.blend_dst_factor_rgb ||
+        src_factor_alpha != m_pending_state.blend_src_factor_alpha ||
+        dst_factor_alpha != m_pending_state.blend_dst_factor_alpha)
     {
-      m_current_state.blend_src_factor_rgb = src_factor_rgb;
-      m_current_state.blend_dst_factor_rgb = dst_factor_rgb;
-      m_current_state.blend_src_factor_alpha = src_factor_alpha;
-      m_current_state.blend_dst_factor_alpha = dst_factor_alpha;
-      glBlendFuncSeparate(src_factor_rgb, dst_factor_rgb, src_factor_alpha, dst_factor_alpha);
+      m_pending_state.blend_src_factor_rgb = src_factor_rgb;
+      m_pending_state.blend_dst_factor_rgb = dst_factor_rgb;
+      m_pending_state.blend_src_factor_alpha = src_factor_alpha;
+      m_pending_state.blend_dst_factor_alpha = dst_factor_alpha;
+      m_dirty_state |= GLState::DirtyBlendFactor;
     }
   }
 
   const bool color_mask_enable = state.colorupdate;
   const bool alpha_mask_enable = state.alphaupdate;
-  if (color_mask_enable != m_current_state.color_mask_enable ||
-      alpha_mask_enable != m_current_state.alpha_mask_enable)
+  if (color_mask_enable != m_pending_state.color_mask ||
+      alpha_mask_enable != m_pending_state.alpha_mask)
   {
-    m_current_state.color_mask_enable = color_mask_enable;
-    m_current_state.alpha_mask_enable = alpha_mask_enable;
-    glColorMask(color_mask_enable, color_mask_enable, color_mask_enable, alpha_mask_enable);
+    m_pending_state.color_mask = color_mask_enable;
+    m_pending_state.alpha_mask = alpha_mask_enable;
+    m_dirty_state |= GLState::DirtyColorAlphaMask;
   }
 
-  const bool logic_op_enable =
-      state.logicopenable && !blend_enable && g_ActiveConfig.backend_info.bSupportsLogicOp;
-  if (m_current_state.logic_op_enabled != logic_op_enable)
+  if (g_ActiveConfig.backend_info.bSupportsLogicOp)
   {
-    m_current_state.logic_op_enabled = logic_op_enable;
-    if (logic_op_enable)
-      glEnable(GL_COLOR_LOGIC_OP);
-    else
-      glDisable(GL_COLOR_LOGIC_OP);
-  }
-
-  if (logic_op_enable)
-  {
-    const GLenum gl_logic_op = gl_logic_ops[state.logicmode];
-    if (m_current_state.logic_op != gl_logic_op)
+    const bool logic_op_enable = state.logicopenable && !blend_enable;
+    if (m_pending_state.logic_op_enabled != logic_op_enable)
     {
-      m_current_state.logic_op = gl_logic_op;
-      glLogicOp(gl_logic_op);
+      m_pending_state.logic_op_enabled = logic_op_enable;
+      m_dirty_state |= GLState::DirtyLogicOpEnabled;
+    }
+
+    if (logic_op_enable)
+    {
+      const GLenum gl_logic_op = gl_logic_ops[state.logicmode];
+      if (m_pending_state.logic_op != gl_logic_op)
+      {
+        m_pending_state.logic_op = gl_logic_op;
+        m_dirty_state |= GLState::DirtyLogicOp;
+      }
+    }
+  }
+}
+
+void Renderer::ApplyState()
+{
+  const u64 dirty = m_dirty_state;
+  m_dirty_state = 0;
+
+  if (dirty & GLState::DirtyCullFaceEnabled &&
+      m_pending_state.cull_face_enabled != m_current_state.cull_face_enabled)
+  {
+    m_current_state.cull_face_enabled = m_pending_state.cull_face_enabled;
+    m_current_state.cull_face_enabled ? glEnable(GL_CULL_FACE) : glDisable(GL_CULL_FACE);
+  }
+
+  if (dirty & GLState::DirtyCullFace && m_pending_state.cull_face != m_current_state.cull_face)
+  {
+    m_current_state.cull_face = m_pending_state.cull_face;
+    glCullFace(m_current_state.cull_face);
+  }
+
+  if (dirty & GLState::DirtyClipDistanceEnabled &&
+      m_pending_state.clip_distance_enabled != m_current_state.clip_distance_enabled)
+  {
+    m_current_state.clip_distance_enabled = m_pending_state.clip_distance_enabled;
+    if (m_current_state.clip_distance_enabled)
+    {
+      glEnable(GL_CLIP_DISTANCE0);
+      glEnable(GL_CLIP_DISTANCE1);
+    }
+    else
+    {
+      glDisable(GL_CLIP_DISTANCE0);
+      glDisable(GL_CLIP_DISTANCE1);
+    }
+  }
+
+  if (dirty & GLState::DirtyDepthTestEnabled &&
+      m_pending_state.depth_test_enabled != m_current_state.depth_test_enabled)
+  {
+    m_current_state.depth_test_enabled = m_pending_state.depth_test_enabled;
+    m_current_state.depth_test_enabled ? glEnable(GL_DEPTH_TEST) : glDisable(GL_DEPTH_TEST);
+  }
+
+  if (dirty & GLState::DirtyDepthFunc && m_pending_state.depth_func != m_current_state.depth_func)
+  {
+    m_current_state.depth_func = m_pending_state.depth_func;
+    glDepthFunc(m_current_state.depth_func);
+  }
+
+  if (dirty & GLState::DirtyDepthMask && m_pending_state.depth_mask != m_current_state.depth_mask)
+  {
+    m_current_state.depth_mask = m_pending_state.depth_mask;
+    glDepthMask(m_current_state.depth_mask);
+  }
+
+  if (dirty & GLState::DirtyColorAlphaMask &&
+      (m_pending_state.color_mask != m_current_state.color_mask ||
+       m_pending_state.alpha_mask != m_current_state.color_mask))
+  {
+    m_current_state.color_mask = m_pending_state.color_mask;
+    m_current_state.alpha_mask = m_pending_state.alpha_mask;
+    glColorMask(m_current_state.color_mask, m_current_state.color_mask, m_current_state.color_mask,
+                m_current_state.alpha_mask);
+  }
+
+  if (dirty & GLState::DirtyBlendEnabled &&
+      m_pending_state.blend_enabled != m_current_state.blend_enabled)
+  {
+    m_current_state.blend_enabled = m_pending_state.blend_enabled;
+    m_current_state.blend_enabled ? glEnable(GL_BLEND) : glDisable(GL_BLEND);
+  }
+
+  if (dirty & GLState::DirtyBlendFunc &&
+      (m_pending_state.blend_func != m_current_state.blend_func ||
+       m_pending_state.blend_func_alpha != m_current_state.blend_func_alpha))
+  {
+    m_current_state.blend_func = m_pending_state.blend_func;
+    m_current_state.blend_func_alpha = m_pending_state.blend_func_alpha;
+    glBlendEquationSeparate(m_current_state.blend_func, m_current_state.blend_func_alpha);
+  }
+
+  if (dirty & GLState::DirtyBlendFactor &&
+      (m_pending_state.blend_src_factor_rgb != m_current_state.blend_src_factor_rgb ||
+       m_pending_state.blend_dst_factor_rgb != m_current_state.blend_dst_factor_rgb ||
+       m_pending_state.blend_src_factor_alpha != m_current_state.blend_src_factor_alpha ||
+       m_pending_state.blend_dst_factor_alpha != m_current_state.blend_dst_factor_alpha))
+  {
+    m_current_state.blend_src_factor_rgb = m_pending_state.blend_src_factor_rgb;
+    m_current_state.blend_dst_factor_rgb = m_pending_state.blend_dst_factor_rgb;
+    m_current_state.blend_src_factor_alpha = m_pending_state.blend_src_factor_alpha;
+    m_current_state.blend_dst_factor_alpha = m_pending_state.blend_dst_factor_alpha;
+
+    glBlendFuncSeparate(m_current_state.blend_src_factor_rgb, m_current_state.blend_dst_factor_rgb,
+                        m_current_state.blend_src_factor_alpha,
+                        m_current_state.blend_dst_factor_alpha);
+  }
+
+  if (g_ActiveConfig.backend_info.bSupportsLogicOp)
+  {
+    if (dirty & GLState::DirtyLogicOpEnabled &&
+        m_pending_state.logic_op_enabled != m_current_state.logic_op_enabled)
+    {
+      m_current_state.logic_op_enabled = m_pending_state.logic_op_enabled;
+      m_current_state.logic_op_enabled ? glEnable(GL_COLOR_LOGIC_OP) : glDisable(GL_COLOR_LOGIC_OP);
+    }
+    if (dirty & GLState::DirtyLogicOp && m_pending_state.logic_op != m_current_state.logic_op)
+    {
+      m_current_state.logic_op = m_pending_state.logic_op;
+      glLogicOp(m_current_state.logic_op);
+    }
+  }
+
+  if (dirty & GLState::DirtyProgram && m_pending_state.program != m_current_state.program)
+  {
+    m_current_state.program = m_pending_state.program;
+    glUseProgram(m_current_state.program);
+    INCSTAT(g_stats.this_frame.num_shader_changes);
+  }
+
+  if (dirty & GLState::DirtyViewport && m_pending_state.viewport != m_current_state.viewport)
+  {
+    m_current_state.viewport = m_pending_state.viewport;
+    if (g_ogl_config.bSupportViewportFloat)
+    {
+      glViewportIndexedf(0, m_current_state.viewport.x, m_current_state.viewport.y,
+                         m_current_state.viewport.width, m_current_state.viewport.height);
+    }
+    else
+    {
+      glViewport(static_cast<GLint>(m_current_state.viewport.x),
+                 static_cast<GLint>(m_current_state.viewport.y),
+                 static_cast<GLint>(m_current_state.viewport.width),
+                 static_cast<GLint>(m_current_state.viewport.height));
+    }
+  }
+
+  if (dirty & GLState::DirtyDepthRange &&
+      (m_pending_state.near_depth != m_current_state.near_depth ||
+       m_pending_state.far_depth != m_current_state.far_depth))
+  {
+    m_current_state.near_depth = m_pending_state.near_depth;
+    m_current_state.far_depth = m_pending_state.far_depth;
+    glDepthRangef(m_current_state.near_depth, m_current_state.far_depth);
+  }
+
+  if (dirty & GLState::DirtyScissor && m_pending_state.scissor != m_current_state.scissor)
+  {
+    m_current_state.scissor = m_pending_state.scissor;
+    glScissor(m_current_state.scissor.x, m_current_state.scissor.y, m_current_state.scissor.width,
+              m_current_state.scissor.height);
+  }
+
+  // TODO: Use ARB_multi_bind here
+
+  for (u32 i = 0; i < NUM_TEXTURE_UNITS; i++)
+  {
+    if (dirty & (GLState::DirtyTexture0 << i) &&
+        m_pending_state.textures[i] != m_current_state.textures[i])
+    {
+      m_current_state.textures[i] = m_pending_state.textures[i];
+
+      const OGLTexture* tex = m_current_state.textures[i];
+      glActiveTexture(GL_TEXTURE0 + i);
+      if (tex)
+        glBindTexture(tex->GetGLTarget(), tex->GetGLTextureId());
+      else
+        glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
+    }
+  }
+
+  for (u32 i = 0; i < NUM_TEXTURE_UNITS; i++)
+  {
+    if (dirty & (GLState::DirtySampler0 << i) &&
+        m_pending_state.samplers[i] != m_current_state.samplers[i])
+    {
+      m_current_state.samplers[i] = m_pending_state.samplers[i];
+      glBindSampler(i, m_current_state.samplers[i]);
     }
   }
 }
@@ -1328,27 +1505,36 @@ void Renderer::SetPipeline(const AbstractPipeline* pipeline)
   if (m_current_pipeline == pipeline)
     return;
 
+  m_current_pipeline = pipeline;
+  const OGLPipeline* gl_pipeline = static_cast<const OGLPipeline*>(pipeline);
+
   if (pipeline)
   {
-    ApplyRasterizationState(static_cast<const OGLPipeline*>(pipeline)->GetRasterizationState());
-    ApplyDepthState(static_cast<const OGLPipeline*>(pipeline)->GetDepthState());
-    ApplyBlendingState(static_cast<const OGLPipeline*>(pipeline)->GetBlendingState());
-    ProgramShaderCache::BindVertexFormat(
-        static_cast<const OGLPipeline*>(pipeline)->GetVertexFormat());
-    static_cast<const OGLPipeline*>(pipeline)->GetProgram()->shader.Bind();
+    SetRasterizationState(gl_pipeline->GetRasterizationState());
+    SetDepthState(gl_pipeline->GetDepthState());
+    SetBlendingState(gl_pipeline->GetBlendingState());
+    ProgramShaderCache::BindVertexFormat(gl_pipeline->GetVertexFormat());
+
+    if (m_pending_state.program != gl_pipeline->GetProgram()->shader.glprogid)
+    {
+      m_pending_state.program = gl_pipeline->GetProgram()->shader.glprogid;
+      m_dirty_state |= GLState::DirtyProgram;
+    }
   }
   else
   {
-    ProgramShaderCache::InvalidateLastProgram();
-    glUseProgram(0);
+    if (m_pending_state.program != 0)
+    {
+      m_pending_state.program = 0;
+      m_dirty_state |= GLState::DirtyProgram;
+    }
   }
-  m_current_pipeline = pipeline;
 }
 
 void Renderer::SetTexture(u32 index, const AbstractTexture* texture)
 {
   const OGLTexture* gl_texture = static_cast<const OGLTexture*>(texture);
-  if (m_bound_textures[index] == gl_texture)
+  if (m_current_state.textures[index] == gl_texture)
     return;
 
   glActiveTexture(GL_TEXTURE0 + index);
@@ -1356,7 +1542,7 @@ void Renderer::SetTexture(u32 index, const AbstractTexture* texture)
     glBindTexture(gl_texture->GetGLTarget(), gl_texture->GetGLTextureId());
   else
     glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
-  m_bound_textures[index] = gl_texture;
+  m_current_state.textures[index] = gl_texture;
 }
 
 void Renderer::SetSamplerState(u32 index, const SamplerState& state)
@@ -1385,14 +1571,19 @@ void Renderer::SetComputeImageTexture(AbstractTexture* texture, bool read, bool 
 
 void Renderer::UnbindTexture(const AbstractTexture* texture)
 {
-  for (size_t i = 0; i < m_bound_textures.size(); i++)
+  for (u32 i = 0; i < NUM_TEXTURE_UNITS; i++)
   {
-    if (m_bound_textures[i] != texture)
-      continue;
-
-    glActiveTexture(static_cast<GLenum>(GL_TEXTURE0 + i));
-    glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
-    m_bound_textures[i] = nullptr;
+    if (m_current_state.textures[i] == texture)
+    {
+      glActiveTexture(static_cast<GLenum>(GL_TEXTURE0 + i));
+      glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
+      m_current_state.textures[i] = nullptr;
+    }
+    if (m_pending_state.textures[i] == texture)
+    {
+      m_pending_state.textures[i] = nullptr;
+      m_dirty_state &= ~(GLState::DirtyTexture0 << i);
+    }
   }
 
   if (m_bound_image_texture == texture)
