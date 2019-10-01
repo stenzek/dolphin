@@ -2,10 +2,10 @@
 // Licensed under GPLv2+
 // Refer to the license.txt file included.
 
+#include <glad/glad.h>
 #include <memory>
 
 #include "Common/GL/GLContext.h"
-#include "Common/GL/GLUtil.h"
 #include "Common/Logging/Log.h"
 #include "Common/MsgHandler.h"
 
@@ -32,6 +32,91 @@ bool SWOGLWindow::IsHeadless() const
   return m_gl_context->IsHeadless();
 }
 
+static GLuint CompileProgram(const std::string& vertexShader, const std::string& fragmentShader)
+{
+  // generate objects
+  GLuint vertexShaderID = glCreateShader(GL_VERTEX_SHADER);
+  GLuint fragmentShaderID = glCreateShader(GL_FRAGMENT_SHADER);
+  GLuint programID = glCreateProgram();
+
+  // compile vertex shader
+  const char* shader = vertexShader.c_str();
+  glShaderSource(vertexShaderID, 1, &shader, nullptr);
+  glCompileShader(vertexShaderID);
+#if defined(_DEBUG) || defined(DEBUGFAST)
+  GLint Result = GL_FALSE;
+  char stringBuffer[1024];
+  GLsizei stringBufferUsage = 0;
+  glGetShaderiv(vertexShaderID, GL_COMPILE_STATUS, &Result);
+  glGetShaderInfoLog(vertexShaderID, 1024, &stringBufferUsage, stringBuffer);
+
+  if (Result && stringBufferUsage)
+  {
+    ERROR_LOG(VIDEO, "GLSL vertex shader warnings:\n%s%s", stringBuffer, vertexShader.c_str());
+  }
+  else if (!Result)
+  {
+    ERROR_LOG(VIDEO, "GLSL vertex shader error:\n%s%s", stringBuffer, vertexShader.c_str());
+  }
+  else
+  {
+    INFO_LOG(VIDEO, "GLSL vertex shader compiled:\n%s", vertexShader.c_str());
+  }
+
+  bool shader_errors = !Result;
+#endif
+
+  // compile fragment shader
+  shader = fragmentShader.c_str();
+  glShaderSource(fragmentShaderID, 1, &shader, nullptr);
+  glCompileShader(fragmentShaderID);
+#if defined(_DEBUG) || defined(DEBUGFAST)
+  glGetShaderiv(fragmentShaderID, GL_COMPILE_STATUS, &Result);
+  glGetShaderInfoLog(fragmentShaderID, 1024, &stringBufferUsage, stringBuffer);
+
+  if (Result && stringBufferUsage)
+  {
+    ERROR_LOG(VIDEO, "GLSL fragment shader warnings:\n%s%s", stringBuffer, fragmentShader.c_str());
+  }
+  else if (!Result)
+  {
+    ERROR_LOG(VIDEO, "GLSL fragment shader error:\n%s%s", stringBuffer, fragmentShader.c_str());
+  }
+  else
+  {
+    INFO_LOG(VIDEO, "GLSL fragment shader compiled:\n%s", fragmentShader.c_str());
+  }
+
+  shader_errors |= !Result;
+#endif
+
+  // link them
+  glAttachShader(programID, vertexShaderID);
+  glAttachShader(programID, fragmentShaderID);
+  glLinkProgram(programID);
+#if defined(_DEBUG) || defined(DEBUGFAST)
+  glGetProgramiv(programID, GL_LINK_STATUS, &Result);
+  glGetProgramInfoLog(programID, 1024, &stringBufferUsage, stringBuffer);
+
+  if (Result && stringBufferUsage)
+  {
+    ERROR_LOG(VIDEO, "GLSL linker warnings:\n%s%s%s", stringBuffer, vertexShader.c_str(),
+              fragmentShader.c_str());
+  }
+  else if (!Result && !shader_errors)
+  {
+    ERROR_LOG(VIDEO, "GLSL linker error:\n%s%s%s", stringBuffer, vertexShader.c_str(),
+              fragmentShader.c_str());
+  }
+#endif
+
+  // cleanup
+  glDeleteShader(vertexShaderID);
+  glDeleteShader(fragmentShaderID);
+
+  return programID;
+}
+
 bool SWOGLWindow::Initialize(const WindowSystemInfo& wsi)
 {
   m_gl_context = GLContext::Create(wsi);
@@ -39,15 +124,10 @@ bool SWOGLWindow::Initialize(const WindowSystemInfo& wsi)
     return false;
 
   // Init extension support.
-  if (!GLExtensions::Init(m_gl_context.get()))
+  if (!gladLoadGL() || !GLAD_GL_VERSION_3_1 && !GLAD_GL_ES_VERSION_3_0)
   {
-    ERROR_LOG(VIDEO, "GLExtensions::Init failed!Does your video card support OpenGL 2.0?");
-    return false;
-  }
-  else if (GLExtensions::Version() < 310)
-  {
-    ERROR_LOG(VIDEO, "OpenGL Version %d detected, but at least 3.1 is required.",
-              GLExtensions::Version());
+    ERROR_LOG(VIDEO,
+              "GL extension initialization failed. Does your video card support OpenGL 3.1?");
     return false;
   }
 
@@ -69,7 +149,7 @@ bool SWOGLWindow::Initialize(const WindowSystemInfo& wsi)
                                                 "precision highp float;\n" :
                                                 "#version 140\n";
 
-  m_image_program = GLUtil::CompileProgram(header + vertex_shader, header + frag_shader);
+  m_image_program = CompileProgram(header + vertex_shader, header + frag_shader);
 
   glUseProgram(m_image_program);
 
