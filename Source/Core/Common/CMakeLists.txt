@@ -210,10 +210,6 @@ endif()
 target_sources(common PRIVATE
   GL/GLContext.cpp
   GL/GLContext.h
-  GL/GLUtil.cpp
-  GL/GLUtil.h
-  GL/GLExtensions/GLExtensions.cpp
-  GL/GLExtensions/GLExtensions.h
 )
 
 if(ENABLE_EGL AND EGL_FOUND)
