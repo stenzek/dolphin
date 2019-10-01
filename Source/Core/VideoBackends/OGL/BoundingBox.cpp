@@ -3,8 +3,7 @@
 // Refer to the license.txt file included.
 
 #include <cstring>
-
-#include "Common/GL/GLUtil.h"
+#include <glad/glad.h>
 
 #include "VideoBackends/OGL/BoundingBox.h"
 #include "VideoBackends/OGL/Render.h"

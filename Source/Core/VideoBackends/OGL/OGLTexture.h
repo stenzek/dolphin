@@ -4,10 +4,9 @@
 
 #pragma once
 
+#include <glad/glad.h>
 #include <memory>
 #include <vector>
-
-#include "Common/GL/GLUtil.h"
 
 #include "VideoCommon/AbstractFramebuffer.h"
 #include "VideoCommon/AbstractStagingTexture.h"

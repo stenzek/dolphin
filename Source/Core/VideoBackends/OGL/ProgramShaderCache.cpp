@@ -868,7 +868,7 @@ bool SharedContextAsyncShaderCompiler::WorkerThreadInitWorkerThread(void* param)
     glEnable(GL_DEPTH_CLAMP);
   }
   if (g_ActiveConfig.backend_info.bSupportsPrimitiveRestart)
-    GLUtil::EnablePrimitiveRestart(context);
+    Renderer::EnablePrimitiveRestart(context);
 
   return true;
 }

@@ -11,7 +11,6 @@
 
 #include "Common/Align.h"
 #include "Common/CommonTypes.h"
-#include "Common/GL/GLExtensions/GLExtensions.h"
 
 #include "VideoBackends/OGL/OGLPipeline.h"
 #include "VideoBackends/OGL/ProgramShaderCache.h"

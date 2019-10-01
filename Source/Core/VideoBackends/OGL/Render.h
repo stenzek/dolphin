@@ -5,10 +5,10 @@
 #pragma once
 
 #include <array>
+#include <glad/glad.h>
 #include <string>
 
 #include "Common/GL/GLContext.h"
-#include "Common/GL/GLExtensions/GLExtensions.h"
 #include "VideoCommon/RenderBase.h"
 
 namespace OGL
@@ -79,6 +79,12 @@ struct VideoConfig
 };
 extern VideoConfig g_ogl_config;
 
+// Texture which we use to not disturb the other bindings.
+enum : GLenum
+{
+  GL_MUTABLE_TEXTURE_INDEX = GL_TEXTURE10
+};
+
 class Renderer : public ::Renderer
 {
 public:
@@ -86,6 +92,7 @@ public:
   ~Renderer() override;
 
   static Renderer* GetInstance() { return static_cast<Renderer*>(g_renderer.get()); }
+  static void EnablePrimitiveRestart(const GLContext* context);
 
   bool IsHeadless() const override;
 

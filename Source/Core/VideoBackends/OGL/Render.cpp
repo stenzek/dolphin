@@ -17,7 +17,6 @@
 #include "Common/Atomic.h"
 #include "Common/CommonTypes.h"
 #include "Common/GL/GLContext.h"
-#include "Common/GL/GLUtil.h"
 #include "Common/Logging/LogManager.h"
 #include "Common/MathUtil.h"
 #include "Common/MsgHandler.h"
@@ -219,7 +218,7 @@ static void InitDriverInfo()
     // r4p0 - Supports 'GL_EXT_shader_pixel_local_storage' extension.
 
     driver = DriverDetails::DRIVER_ARM;
-    if (GLExtensions::Supports("GL_EXT_shader_pixel_local_storage"))
+    if (GLAD_GL_EXT_shader_pixel_local_storage)
       version = 400;
     else
       version = 300;
@@ -360,7 +359,7 @@ Renderer::Renderer(std::unique_ptr<GLContext> main_gl_context, float backbuffer_
 
   if (!m_main_gl_context->IsGLES())
   {
-    if (!GLExtensions::Supports("GL_ARB_framebuffer_object"))
+    if (!GLAD_GL_ARB_framebuffer_object)
     {
       // We want the ogl3 framebuffer instead of the ogl2 one for better blitting support.
       // It's also compatible with the gles3 one.
@@ -369,7 +368,7 @@ Renderer::Renderer(std::unique_ptr<GLContext> main_gl_context, float backbuffer_
       bSuccess = false;
     }
 
-    if (!GLExtensions::Supports("GL_ARB_vertex_array_object"))
+    if (!GLAD_GL_ARB_vertex_array_object)
     {
       // This extension is used to replace lots of pointer setting function.
       // Also gles3 requires to use it.
@@ -378,7 +377,7 @@ Renderer::Renderer(std::unique_ptr<GLContext> main_gl_context, float backbuffer_
       bSuccess = false;
     }
 
-    if (!GLExtensions::Supports("GL_ARB_map_buffer_range"))
+    if (!GLAD_GL_ARB_map_buffer_range)
     {
       // ogl3 buffer mapping for better streaming support.
       // The ogl2 one also isn't in gles3.
@@ -387,7 +386,7 @@ Renderer::Renderer(std::unique_ptr<GLContext> main_gl_context, float backbuffer_
       bSuccess = false;
     }
 
-    if (!GLExtensions::Supports("GL_ARB_uniform_buffer_object"))
+    if (!GLAD_GL_ARB_uniform_buffer_object)
     {
       // ubo allow us to keep the current constants on shader switches
       // we also can stream them much nicer and pack into it whatever we want to
@@ -403,7 +402,7 @@ Renderer::Renderer(std::unique_ptr<GLContext> main_gl_context, float backbuffer_
       bSuccess = false;
     }
 
-    if (!GLExtensions::Supports("GL_ARB_sampler_objects"))
+    if (!GLAD_GL_ARB_sampler_objects)
     {
       // Our sampler cache uses this extension. It could easyly be workaround and it's by far the
       // highest requirement, but it seems that no driver lacks support for it.
@@ -415,7 +414,7 @@ Renderer::Renderer(std::unique_ptr<GLContext> main_gl_context, float backbuffer_
     // OpenGL 3 doesn't provide GLES like float functions for depth.
     // They are in core in OpenGL 4.1, so almost every driver should support them.
     // But for the oldest ones, we provide fallbacks to the old double functions.
-    if (!GLExtensions::Supports("GL_ARB_ES2_compatibility"))
+    if (!GLAD_GL_ARB_ES2_compatibility)
     {
       glDepthRangef = DepthRangef;
       glClearDepthf = ClearDepthf;
@@ -426,87 +425,69 @@ Renderer::Renderer(std::unique_ptr<GLContext> main_gl_context, float backbuffer_
   g_Config.backend_info.AdapterName = g_ogl_config.gl_renderer;
 
   g_Config.backend_info.bSupportsDualSourceBlend =
-      (GLExtensions::Supports("GL_ARB_blend_func_extended") ||
-       GLExtensions::Supports("GL_EXT_blend_func_extended"));
+      (GLAD_GL_ARB_blend_func_extended || GLAD_GL_EXT_blend_func_extended);
   g_Config.backend_info.bSupportsPrimitiveRestart =
       !DriverDetails::HasBug(DriverDetails::BUG_PRIMITIVE_RESTART) &&
-      ((GLExtensions::Version() >= 310) || GLExtensions::Supports("GL_NV_primitive_restart"));
+      (GLAD_GL_VERSION_3_1 || GLAD_GL_NV_primitive_restart);
   g_Config.backend_info.bSupportsFragmentStoresAndAtomics =
-      GLExtensions::Supports("GL_ARB_shader_storage_buffer_object");
+      GLAD_GL_ARB_shader_storage_buffer_object;
   g_Config.backend_info.bSupportsBBox = g_Config.backend_info.bSupportsFragmentStoresAndAtomics;
-  g_Config.backend_info.bSupportsGSInstancing = GLExtensions::Supports("GL_ARB_gpu_shader5");
-  g_Config.backend_info.bSupportsSSAA = GLExtensions::Supports("GL_ARB_gpu_shader5") &&
-                                        GLExtensions::Supports("GL_ARB_sample_shading");
+  g_Config.backend_info.bSupportsGSInstancing = GLAD_GL_ARB_gpu_shader5;
+  g_Config.backend_info.bSupportsSSAA = GLAD_GL_ARB_gpu_shader5 && GLAD_GL_ARB_sample_shading;
   g_Config.backend_info.bSupportsGeometryShaders =
-      GLExtensions::Version() >= 320 &&
-      !DriverDetails::HasBug(DriverDetails::BUG_BROKEN_GEOMETRY_SHADERS);
+      GLAD_GL_VERSION_3_2 && !DriverDetails::HasBug(DriverDetails::BUG_BROKEN_GEOMETRY_SHADERS);
   g_Config.backend_info.bSupportsPaletteConversion =
-      GLExtensions::Supports("GL_ARB_texture_buffer_object") ||
-      GLExtensions::Supports("GL_OES_texture_buffer") ||
-      GLExtensions::Supports("GL_EXT_texture_buffer");
-  g_Config.backend_info.bSupportsClipControl = GLExtensions::Supports("GL_ARB_clip_control");
-  g_ogl_config.bSupportsCopySubImage =
-      (GLExtensions::Supports("GL_ARB_copy_image") || GLExtensions::Supports("GL_NV_copy_image") ||
-       GLExtensions::Supports("GL_EXT_copy_image") ||
-       GLExtensions::Supports("GL_OES_copy_image")) &&
-      !DriverDetails::HasBug(DriverDetails::BUG_BROKEN_COPYIMAGE);
-  g_ogl_config.bSupportsTextureSubImage = GLExtensions::Supports("ARB_get_texture_sub_image");
+      GLAD_GL_ARB_texture_buffer_object || GLAD_GL_OES_texture_buffer || GLAD_GL_EXT_texture_buffer;
+  g_Config.backend_info.bSupportsClipControl = GLAD_GL_ARB_clip_control;
+  g_ogl_config.bSupportsCopySubImage = (GLAD_GL_ARB_copy_image || GLAD_GL_NV_copy_image ||
+                                        GLAD_GL_EXT_copy_image || GLAD_GL_OES_copy_image) &&
+                                       !DriverDetails::HasBug(DriverDetails::BUG_BROKEN_COPYIMAGE);
+  g_ogl_config.bSupportsTextureSubImage = GLAD_GL_ARB_get_texture_sub_image;
 
   // Desktop OpenGL supports the binding layout if it supports 420pack
   // OpenGL ES 3.1 supports it implicitly without an extension
-  g_Config.backend_info.bSupportsBindingLayout =
-      GLExtensions::Supports("GL_ARB_shading_language_420pack");
+  g_Config.backend_info.bSupportsBindingLayout = GLAD_GL_ARB_shading_language_420pack;
 
   // Clip distance support is useless without a method to clamp the depth range
-  g_Config.backend_info.bSupportsDepthClamp = GLExtensions::Supports("GL_ARB_depth_clamp");
+  g_Config.backend_info.bSupportsDepthClamp = GLAD_GL_ARB_depth_clamp;
 
   // Desktop OpenGL supports bitfield manulipation and dynamic sampler indexing if it supports
   // shader5. OpenGL ES 3.1 supports it implicitly without an extension
-  g_Config.backend_info.bSupportsBitfield = GLExtensions::Supports("GL_ARB_gpu_shader5");
-  g_Config.backend_info.bSupportsDynamicSamplerIndexing =
-      GLExtensions::Supports("GL_ARB_gpu_shader5");
+  g_Config.backend_info.bSupportsBitfield = GLAD_GL_ARB_gpu_shader5;
+  g_Config.backend_info.bSupportsDynamicSamplerIndexing = GLAD_GL_ARB_gpu_shader5;
 
   g_ogl_config.bIsES = m_main_gl_context->IsGLES();
-  supports_glsl_cache = GLExtensions::Supports("GL_ARB_get_program_binary");
-  g_ogl_config.bSupportsGLPinnedMemory = GLExtensions::Supports("GL_AMD_pinned_memory");
-  g_ogl_config.bSupportsGLSync = GLExtensions::Supports("GL_ARB_sync");
-  g_ogl_config.bSupportsGLBaseVertex = GLExtensions::Supports("GL_ARB_draw_elements_base_vertex") ||
-                                       GLExtensions::Supports("GL_EXT_draw_elements_base_vertex") ||
-                                       GLExtensions::Supports("GL_OES_draw_elements_base_vertex");
-  g_ogl_config.bSupportsGLBufferStorage = GLExtensions::Supports("GL_ARB_buffer_storage") ||
-                                          GLExtensions::Supports("GL_EXT_buffer_storage");
-  g_ogl_config.bSupportsMSAA = GLExtensions::Supports("GL_ARB_texture_multisample");
-  g_ogl_config.bSupportViewportFloat = GLExtensions::Supports("GL_ARB_viewport_array");
-  g_ogl_config.bSupportsDebug =
-      GLExtensions::Supports("GL_KHR_debug") || GLExtensions::Supports("GL_ARB_debug_output");
-  g_ogl_config.bSupportsTextureStorage = GLExtensions::Supports("GL_ARB_texture_storage");
+  supports_glsl_cache = GLAD_GL_ARB_get_program_binary;
+  g_ogl_config.bSupportsGLPinnedMemory = GLAD_GL_AMD_pinned_memory;
+  g_ogl_config.bSupportsGLSync = GLAD_GL_ARB_sync;
+  g_ogl_config.bSupportsGLBaseVertex = GLAD_GL_ARB_draw_elements_base_vertex ||
+                                       GLAD_GL_EXT_draw_elements_base_vertex ||
+                                       GLAD_GL_OES_draw_elements_base_vertex;
+  g_ogl_config.bSupportsGLBufferStorage = GLAD_GL_ARB_buffer_storage || GLAD_GL_EXT_buffer_storage;
+  g_ogl_config.bSupportsMSAA = GLAD_GL_ARB_texture_multisample;
+  g_ogl_config.bSupportViewportFloat = GLAD_GL_ARB_viewport_array;
+  g_ogl_config.bSupportsDebug = GLAD_GL_KHR_debug || GLAD_GL_ARB_debug_output;
+  g_ogl_config.bSupportsTextureStorage = GLAD_GL_ARB_texture_storage;
   g_ogl_config.bSupports3DTextureStorageMultisample =
-      GLExtensions::Supports("GL_ARB_texture_storage_multisample") ||
-      GLExtensions::Supports("GL_OES_texture_storage_multisample_2d_array");
-  g_ogl_config.bSupports2DTextureStorageMultisample =
-      GLExtensions::Supports("GL_ARB_texture_storage_multisample");
-  g_ogl_config.bSupportsImageLoadStore = GLExtensions::Supports("GL_ARB_shader_image_load_store");
-  g_ogl_config.bSupportsConservativeDepth = GLExtensions::Supports("GL_ARB_conservative_depth");
-  g_ogl_config.bSupportsAniso = GLExtensions::Supports("GL_EXT_texture_filter_anisotropic");
-  g_Config.backend_info.bSupportsComputeShaders = GLExtensions::Supports("GL_ARB_compute_shader");
-  g_Config.backend_info.bSupportsST3CTextures =
-      GLExtensions::Supports("GL_EXT_texture_compression_s3tc");
-  g_Config.backend_info.bSupportsBPTCTextures =
-      GLExtensions::Supports("GL_ARB_texture_compression_bptc");
+      GLAD_GL_ARB_texture_storage_multisample || GLAD_GL_OES_texture_storage_multisample_2d_array;
+  g_ogl_config.bSupports2DTextureStorageMultisample = GLAD_GL_ARB_texture_storage_multisample;
+  g_ogl_config.bSupportsImageLoadStore = GLAD_GL_ARB_shader_image_load_store;
+  g_ogl_config.bSupportsConservativeDepth = GLAD_GL_ARB_conservative_depth;
+  g_ogl_config.bSupportsAniso = GLAD_GL_EXT_texture_filter_anisotropic;
+  g_Config.backend_info.bSupportsComputeShaders = GLAD_GL_ARB_compute_shader;
+  g_Config.backend_info.bSupportsST3CTextures = GLAD_GL_EXT_texture_compression_s3tc;
+  g_Config.backend_info.bSupportsBPTCTextures = GLAD_GL_ARB_texture_compression_bptc;
 
   if (m_main_gl_context->IsGLES())
   {
     g_ogl_config.SupportedESPointSize =
-        GLExtensions::Supports("GL_OES_geometry_point_size") ?
-            1 :
-            GLExtensions::Supports("GL_EXT_geometry_point_size") ? 2 : 0;
-    g_ogl_config.SupportedESTextureBuffer = GLExtensions::Supports("VERSION_GLES_3_2") ?
-                                                EsTexbufType::TexbufCore :
-                                                GLExtensions::Supports("GL_OES_texture_buffer") ?
-                                                EsTexbufType::TexbufOes :
-                                                GLExtensions::Supports("GL_EXT_texture_buffer") ?
-                                                EsTexbufType::TexbufExt :
-                                                EsTexbufType::TexbufNone;
+        GLAD_GL_OES_geometry_point_size ? 1 : GLAD_GL_EXT_geometry_point_size ? 2 : 0;
+    g_ogl_config.SupportedESTextureBuffer =
+        GLAD_GL_ES_VERSION_3_2 ?
+            EsTexbufType::TexbufCore :
+            GLAD_GL_OES_texture_buffer ?
+            EsTexbufType::TexbufOes :
+            GLAD_GL_EXT_texture_buffer ? EsTexbufType::TexbufExt : EsTexbufType::TexbufNone;
 
     supports_glsl_cache = true;
     g_ogl_config.bSupportsGLSync = true;
@@ -518,11 +499,11 @@ Renderer::Renderer(std::unique_ptr<GLContext> main_gl_context, float backbuffer_
     // GLES does not support logic op.
     g_Config.backend_info.bSupportsLogicOp = false;
 
-    if (GLExtensions::Supports("GL_EXT_shader_framebuffer_fetch"))
+    if (GLAD_GL_EXT_shader_framebuffer_fetch)
     {
       g_ogl_config.SupportedFramebufferFetch = EsFbFetchType::FbFetchExt;
     }
-    else if (GLExtensions::Supports("GL_ARM_shader_framebuffer_fetch"))
+    else if (GLAD_GL_ARM_shader_framebuffer_fetch)
     {
       g_ogl_config.SupportedFramebufferFetch = EsFbFetchType::FbFetchArm;
     }
@@ -533,17 +514,32 @@ Renderer::Renderer(std::unique_ptr<GLContext> main_gl_context, float backbuffer_
     g_Config.backend_info.bSupportsFramebufferFetch =
         g_ogl_config.SupportedFramebufferFetch != EsFbFetchType::FbFetchNone;
 
-    if (GLExtensions::Version() == 300)
+    if (GLAD_GL_ES_VERSION_3_2)
     {
-      g_ogl_config.eSupportedGLSLVersion = GlslEs300;
-      g_ogl_config.bSupportsAEP = false;
+      g_ogl_config.eSupportedGLSLVersion = GlslEs320;
+      g_ogl_config.bSupportsAEP = GLAD_GL_ANDROID_extension_pack_es31a;
+      g_Config.backend_info.bSupportsBindingLayout = true;
+      g_ogl_config.bSupportsImageLoadStore = true;
+      g_Config.backend_info.bSupportsGeometryShaders = true;
+      g_Config.backend_info.bSupportsComputeShaders = true;
+      g_Config.backend_info.bSupportsGSInstancing = g_ogl_config.SupportedESPointSize > 0;
+      g_Config.backend_info.bSupportsPaletteConversion = true;
+      g_Config.backend_info.bSupportsSSAA = true;
+      g_Config.backend_info.bSupportsFragmentStoresAndAtomics = true;
+      g_ogl_config.bSupportsCopySubImage = true;
+      g_ogl_config.bSupportsGLBaseVertex = true;
+      g_ogl_config.bSupportsDebug = true;
+      g_ogl_config.bSupportsMSAA = true;
       g_ogl_config.bSupportsTextureStorage = true;
-      g_Config.backend_info.bSupportsGeometryShaders = false;
+      g_ogl_config.bSupports2DTextureStorageMultisample = true;
+      g_ogl_config.bSupports3DTextureStorageMultisample = true;
+      g_Config.backend_info.bSupportsBitfield = true;
+      g_Config.backend_info.bSupportsDynamicSamplerIndexing = true;
     }
-    else if (GLExtensions::Version() == 310)
+    else if (GLAD_GL_ES_VERSION_3_1)
     {
       g_ogl_config.eSupportedGLSLVersion = GlslEs310;
-      g_ogl_config.bSupportsAEP = GLExtensions::Supports("GL_ANDROID_extension_pack_es31a");
+      g_ogl_config.bSupportsAEP = GLAD_GL_ANDROID_extension_pack_es31a;
       g_Config.backend_info.bSupportsBindingLayout = true;
       g_ogl_config.bSupportsImageLoadStore = true;
       g_Config.backend_info.bSupportsGeometryShaders = g_ogl_config.bSupportsAEP;
@@ -565,66 +561,17 @@ Renderer::Renderer(std::unique_ptr<GLContext> main_gl_context, float backbuffer_
         Config::SetCurrent(Config::GFX_MSAA, UINT32_C(1));
       }
     }
-    else
+    else  // GLAD_GL_ES_VERSION_3_0
     {
-      g_ogl_config.eSupportedGLSLVersion = GlslEs320;
-      g_ogl_config.bSupportsAEP = GLExtensions::Supports("GL_ANDROID_extension_pack_es31a");
-      g_Config.backend_info.bSupportsBindingLayout = true;
-      g_ogl_config.bSupportsImageLoadStore = true;
-      g_Config.backend_info.bSupportsGeometryShaders = true;
-      g_Config.backend_info.bSupportsComputeShaders = true;
-      g_Config.backend_info.bSupportsGSInstancing = g_ogl_config.SupportedESPointSize > 0;
-      g_Config.backend_info.bSupportsPaletteConversion = true;
-      g_Config.backend_info.bSupportsSSAA = true;
-      g_Config.backend_info.bSupportsFragmentStoresAndAtomics = true;
-      g_ogl_config.bSupportsCopySubImage = true;
-      g_ogl_config.bSupportsGLBaseVertex = true;
-      g_ogl_config.bSupportsDebug = true;
-      g_ogl_config.bSupportsMSAA = true;
+      g_ogl_config.eSupportedGLSLVersion = GlslEs300;
+      g_ogl_config.bSupportsAEP = false;
       g_ogl_config.bSupportsTextureStorage = true;
-      g_ogl_config.bSupports2DTextureStorageMultisample = true;
-      g_ogl_config.bSupports3DTextureStorageMultisample = true;
-      g_Config.backend_info.bSupportsBitfield = true;
-      g_Config.backend_info.bSupportsDynamicSamplerIndexing = true;
+      g_Config.backend_info.bSupportsGeometryShaders = false;
     }
   }
   else
   {
-    if (GLExtensions::Version() < 300)
-    {
-      PanicAlert("GPU: OGL ERROR: Need at least GLSL 1.30\n"
-                 "GPU: Does your video card support OpenGL 3.0?\n"
-                 "GPU: Your driver supports GLSL %s",
-                 (const char*)glGetString(GL_SHADING_LANGUAGE_VERSION));
-      bSuccess = false;
-    }
-    else if (GLExtensions::Version() == 300)
-    {
-      g_ogl_config.eSupportedGLSLVersion = Glsl130;
-      g_ogl_config.bSupportsImageLoadStore = false;  // layout keyword is only supported on glsl150+
-      g_ogl_config.bSupportsConservativeDepth =
-          false;  // layout keyword is only supported on glsl150+
-      g_Config.backend_info.bSupportsGeometryShaders =
-          false;  // geometry shaders are only supported on glsl150+
-    }
-    else if (GLExtensions::Version() == 310)
-    {
-      g_ogl_config.eSupportedGLSLVersion = Glsl140;
-      g_ogl_config.bSupportsImageLoadStore = false;  // layout keyword is only supported on glsl150+
-      g_ogl_config.bSupportsConservativeDepth =
-          false;  // layout keyword is only supported on glsl150+
-      g_Config.backend_info.bSupportsGeometryShaders =
-          false;  // geometry shaders are only supported on glsl150+
-    }
-    else if (GLExtensions::Version() == 320)
-    {
-      g_ogl_config.eSupportedGLSLVersion = Glsl150;
-    }
-    else if (GLExtensions::Version() == 330)
-    {
-      g_ogl_config.eSupportedGLSLVersion = Glsl330;
-    }
-    else if (GLExtensions::Version() >= 430)
+    if (GLAD_GL_VERSION_4_3)
     {
       // TODO: We should really parse the GL_SHADING_LANGUAGE_VERSION token.
       g_ogl_config.eSupportedGLSLVersion = Glsl430;
@@ -634,20 +581,48 @@ Renderer::Renderer(std::unique_ptr<GLContext> main_gl_context, float backbuffer_
 
       // Compute shaders are core in GL4.3.
       g_Config.backend_info.bSupportsComputeShaders = true;
-      if (GLExtensions::Version() >= 450)
+      if (GLAD_GL_VERSION_4_5)
         g_ogl_config.bSupportsTextureSubImage = true;
     }
-    else
+    else if (GLAD_GL_VERSION_4_2)
     {
       g_ogl_config.eSupportedGLSLVersion = Glsl400;
       g_Config.backend_info.bSupportsSSAA = true;
 
-      if (GLExtensions::Version() == 420)
-      {
-        // Texture storage and shader image load/store are core in GL4.2.
-        g_ogl_config.bSupportsTextureStorage = true;
-        g_ogl_config.bSupportsImageLoadStore = true;
-      }
+      // Texture storage and shader image load/store are core in GL4.2.
+      g_ogl_config.bSupportsTextureStorage = true;
+      g_ogl_config.bSupportsImageLoadStore = true;
+    }
+    else if (GLAD_GL_VERSION_4_0)
+    {
+      g_ogl_config.eSupportedGLSLVersion = Glsl400;
+      g_Config.backend_info.bSupportsSSAA = true;
+    }
+    else if (GLAD_GL_VERSION_3_3)
+    {
+      g_ogl_config.eSupportedGLSLVersion = Glsl330;
+    }
+    else if (GLAD_GL_VERSION_3_2)
+    {
+      g_ogl_config.eSupportedGLSLVersion = Glsl150;
+    }
+    else if (GLAD_GL_VERSION_3_1)
+    {
+      g_ogl_config.eSupportedGLSLVersion = Glsl140;
+      g_ogl_config.bSupportsImageLoadStore = false;  // layout keyword is only supported on glsl150+
+      g_ogl_config.bSupportsConservativeDepth =
+          false;  // layout keyword is only supported on glsl150+
+      g_Config.backend_info.bSupportsGeometryShaders =
+          false;  // geometry shaders are only supported on glsl150+
+    }
+    else  // GLAD_GL_VERSION_3_0
+    {
+      g_ogl_config.eSupportedGLSLVersion = Glsl130;
+      g_ogl_config.bSupportsImageLoadStore = false;  // layout keyword is only supported on glsl150+
+      g_ogl_config.bSupportsConservativeDepth =
+          false;  // layout keyword is only supported on glsl150+
+      g_Config.backend_info.bSupportsGeometryShaders =
+          false;  // geometry shaders are only supported on glsl150+
     }
 
     // Desktop OpenGL can't have the Android Extension Pack
@@ -666,8 +641,7 @@ Renderer::Renderer(std::unique_ptr<GLContext> main_gl_context, float backbuffer_
   if (g_ogl_config.max_samples < 1 || !g_ogl_config.bSupportsMSAA)
     g_ogl_config.max_samples = 1;
 
-  g_ogl_config.bSupportsShaderThreadShuffleNV =
-      GLExtensions::Supports("GL_NV_shader_thread_shuffle");
+  g_ogl_config.bSupportsShaderThreadShuffleNV = GLAD_GL_NV_shader_thread_shuffle;
 
   // We require texel buffers, image load store, and compute shaders to enable GPU texture decoding.
   // If the driver doesn't expose the extensions, but supports GL4.3/GLES3.1, it will still be
@@ -692,7 +666,7 @@ Renderer::Renderer(std::unique_ptr<GLContext> main_gl_context, float backbuffer_
 
   if (g_ogl_config.bSupportsDebug)
   {
-    if (GLExtensions::Supports("GL_KHR_debug"))
+    if (GLAD_GL_KHR_debug)
     {
       glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, true);
       glDebugMessageCallback(ErrorCallback, nullptr);
@@ -785,13 +759,36 @@ Renderer::Renderer(std::unique_ptr<GLContext> main_gl_context, float backbuffer_
   glGenFramebuffers(1, &m_shared_draw_framebuffer);
 
   if (g_ActiveConfig.backend_info.bSupportsPrimitiveRestart)
-    GLUtil::EnablePrimitiveRestart(m_main_gl_context.get());
+    EnablePrimitiveRestart(m_main_gl_context.get());
   IndexGenerator::Init();
 
   UpdateActiveConfig();
 }
 
 Renderer::~Renderer() = default;
+
+void Renderer::EnablePrimitiveRestart(const GLContext* context)
+{
+  constexpr GLuint PRIMITIVE_RESTART_INDEX = 65535;
+
+  if (context->IsGLES())
+  {
+    glEnable(GL_PRIMITIVE_RESTART_FIXED_INDEX);
+  }
+  else
+  {
+    if (GLAD_GL_VERSION_3_1)
+    {
+      glEnable(GL_PRIMITIVE_RESTART);
+      glPrimitiveRestartIndex(PRIMITIVE_RESTART_INDEX);
+    }
+    else
+    {
+      glEnableClientState(GL_PRIMITIVE_RESTART_NV);
+      glPrimitiveRestartIndexNV(PRIMITIVE_RESTART_INDEX);
+    }
+  }
+}
 
 bool Renderer::IsHeadless() const
 {

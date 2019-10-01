@@ -4,9 +4,9 @@
 
 #pragma once
 
+#include <glad/glad.h>
 #include <memory>
 
-#include "Common/GL/GLUtil.h"
 #include "VideoBackends/OGL/ProgramShaderCache.h"
 #include "VideoCommon/AbstractPipeline.h"
 #include "VideoCommon/RenderState.h"

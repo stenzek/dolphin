@@ -40,7 +40,6 @@ Make AA apply instantly during gameplay if possible
 
 #include "Common/Common.h"
 #include "Common/GL/GLContext.h"
-#include "Common/GL/GLUtil.h"
 #include "Common/MsgHandler.h"
 
 #include "Core/Config/GraphicsSettings.h"
@@ -116,16 +115,13 @@ void VideoBackend::InitBackendInfo()
 
 bool VideoBackend::InitializeGLExtensions(GLContext* context)
 {
-  // Init extension support.
-  if (!GLExtensions::Init(context))
+  if (!gladLoadGL())
   {
-    // OpenGL 2.0 is required for all shader based drawings. There is no way to get this by
-    // extensions
-    PanicAlert("GPU: OGL ERROR: Does your video card support OpenGL 2.0?");
+    PanicAlert("Failed to retrieve OpenGL function pointers.");
     return false;
   }
 
-  if (GLExtensions::Version() < 300)
+  if (!GLAD_GL_VERSION_3_0 && !GLAD_GL_ES_VERSION_3_0)
   {
     // integer vertex attributes require a gl3 only function
     PanicAlert("GPU: OGL ERROR: Need OpenGL version 3.\n"

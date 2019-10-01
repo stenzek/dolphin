@@ -5,11 +5,11 @@
 #pragma once
 
 #include <array>
+#include <glad/glad.h>
 #include <memory>
 #include <utility>
 
 #include "Common/CommonTypes.h"
-#include "Common/GL/GLUtil.h"
 
 namespace OGL
 {

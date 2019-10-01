@@ -7,7 +7,6 @@
 #include <memory>
 
 #include "Common/CommonTypes.h"
-#include "Common/GL/GLExtensions/GLExtensions.h"
 
 #include "VideoBackends/OGL/Render.h"
 #include "VideoCommon/VideoCommon.h"
@@ -18,9 +17,14 @@ namespace OGL
 std::unique_ptr<PerfQueryBase> GetPerfQuery()
 {
   const bool is_gles = static_cast<Renderer*>(g_renderer.get())->IsGLES();
+#if 0
+  // TODO: FIXME
   if (is_gles && GLExtensions::Supports("GL_NV_occlusion_query_samples"))
     return std::make_unique<PerfQueryGLESNV>();
-  else if (is_gles)
+  else
+#endif
+
+  if (is_gles)
     return std::make_unique<PerfQueryGL>(GL_ANY_SAMPLES_PASSED);
   else
     return std::make_unique<PerfQueryGL>(GL_SAMPLES_PASSED);

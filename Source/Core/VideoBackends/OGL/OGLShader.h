@@ -5,11 +5,11 @@
 #pragma once
 
 #include <cstddef>
+#include <glad/glad.h>
 #include <memory>
 #include <string_view>
 
 #include "Common/CommonTypes.h"
-#include "Common/GL/GLUtil.h"
 #include "VideoCommon/AbstractShader.h"
 
 namespace OGL

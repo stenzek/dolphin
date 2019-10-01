@@ -3,7 +3,6 @@
 // Refer to the license.txt file included.
 
 #include "Common/CommonTypes.h"
-#include "Common/GL/GLUtil.h"
 #include "Common/MsgHandler.h"
 
 #include "VideoBackends/OGL/ProgramShaderCache.h"

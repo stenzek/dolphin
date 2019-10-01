@@ -5,9 +5,8 @@
 #pragma once
 
 #include <array>
+#include <glad/glad.h>
 #include <memory>
-
-#include "Common/GL/GLExtensions/GLExtensions.h"
 
 #include "VideoCommon/PerfQueryBase.h"
 

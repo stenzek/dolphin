@@ -5,12 +5,12 @@
 #pragma once
 
 #include <atomic>
+#include <glad/glad.h>
 #include <memory>
 #include <mutex>
 #include <string_view>
 #include <unordered_map>
 
-#include "Common/GL/GLUtil.h"
 #include "VideoCommon/AsyncShaderCompiler.h"
 
 namespace OGL

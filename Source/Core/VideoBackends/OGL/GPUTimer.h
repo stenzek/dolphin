@@ -4,11 +4,7 @@
 
 #pragma once
 
-#include "Common/GL/GLExtensions/GLExtensions.h"
-
-#ifndef GL_TIME_ELAPSED
-#define GL_TIME_ELAPSED 0x88BF
-#endif
+#include <glad/glad.h>
 
 namespace OGL
 {
