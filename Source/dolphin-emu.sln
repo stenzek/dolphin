@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 15
-VisualStudioVersion = 15.0.26430.14
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.29306.81
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Dolphin", "Core\DolphinQt\DolphinQt.vcxproj", "{FA3FA62B-6F58-4B86-9453-4D149940A066}"
 EndProject
@@ -96,6 +96,8 @@ EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "D3D12", "Core\VideoBackends\D3D12\D3D12.vcxproj", "{570215B7-E32F-4438-95AE-C8D955F9FCA3}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "D3DCommon", "Core\VideoBackends\D3DCommon\D3DCommon.vcxproj", "{DEA96CF2-F237-4A1A-B32F-C916769EFB50}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "glad", "..\Externals\glad\glad.vcxproj", "{17678677-5747-4447-B009-F5983F6DB597}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -369,6 +371,12 @@ Global
 		{DEA96CF2-F237-4A1A-B32F-C916769EFB50}.Release|x64.ActiveCfg = Release|x64
 		{DEA96CF2-F237-4A1A-B32F-C916769EFB50}.Release|x64.Build.0 = Release|x64
 		{DEA96CF2-F237-4A1A-B32F-C916769EFB50}.Release|x86.ActiveCfg = Release|x64
+		{17678677-5747-4447-B009-F5983F6DB597}.Debug|x64.ActiveCfg = Debug|x64
+		{17678677-5747-4447-B009-F5983F6DB597}.Debug|x64.Build.0 = Debug|x64
+		{17678677-5747-4447-B009-F5983F6DB597}.Debug|x86.ActiveCfg = Debug|x64
+		{17678677-5747-4447-B009-F5983F6DB597}.Release|x64.ActiveCfg = Release|x64
+		{17678677-5747-4447-B009-F5983F6DB597}.Release|x64.Build.0 = Release|x64
+		{17678677-5747-4447-B009-F5983F6DB597}.Release|x86.ActiveCfg = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -412,6 +420,7 @@ Global
 		{4C3B2264-EA73-4A7B-9CFE-65B0FD635EBB} = {87ADDFF9-5768-4DA2-A33B-2477593D6677}
 		{570215B7-E32F-4438-95AE-C8D955F9FCA3} = {AAD1BCD6-9804-44A5-A5FC-4782EA00E9D4}
 		{DEA96CF2-F237-4A1A-B32F-C916769EFB50} = {AAD1BCD6-9804-44A5-A5FC-4782EA00E9D4}
+		{17678677-5747-4447-B009-F5983F6DB597} = {87ADDFF9-5768-4DA2-A33B-2477593D6677}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {710976F2-1BC7-4F2A-B32D-5DD2BBCB44E1}

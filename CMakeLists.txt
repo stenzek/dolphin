@@ -534,6 +534,7 @@ add_subdirectory(Externals/cpp-optparse)
 add_subdirectory(Externals/fmt EXCLUDE_FROM_ALL)
 add_subdirectory(Externals/glslang)
 add_subdirectory(Externals/imgui)
+add_subdirectory(Externals/glad)
 
 find_package(pugixml)
 if(NOT pugixml_FOUND)
