@@ -46,8 +46,12 @@ void JitArm64::fp_arith(UGeckoInstruction inst)
     VA = reg_encoder(fpr.R(a, type));
     if (use_b)
       VB = reg_encoder(fpr.R(b, type));
+    else
+      VB = {};
     if (use_c)
       VC = reg_encoder(fpr.R(c, type));
+    else
+      VC = {};
     VD = reg_encoder(fpr.RW(d, type));
 
     switch (op5)
@@ -79,8 +83,12 @@ void JitArm64::fp_arith(UGeckoInstruction inst)
     VA = reg_encoder(fpr.R(a, type));
     if (use_b)
       VB = reg_encoder(fpr.R(b, type));
+    else
+      VB = {};
     if (use_c)
       VC = reg_encoder(fpr.R(c, type));
+    else
+      VC = {};
     VD = reg_encoder(fpr.RW(d, type_out));
 
     switch (op5)
