@@ -52,10 +52,10 @@
       <AdditionalLibraryDirectories Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">$(ExternalsDir)ffmpeg\lib;$(IntDir)..\discord-rpc\bin;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalLibraryDirectories Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(ExternalsDir)ffmpeg\lib;$(IntDir)..\discord-rpc\bin;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalLibraryDirectories Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">$(ExternalsDir)ffmpeg\lib;$(IntDir)..\discord-rpc\bin;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <SubSystem Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Windows</SubSystem>
-      <SubSystem Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">Windows</SubSystem>
-      <SubSystem Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Windows</SubSystem>
-      <SubSystem Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">Windows</SubSystem>
+      <SubSystem Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Console</SubSystem>
+      <SubSystem Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">Console</SubSystem>
+      <SubSystem Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Console</SubSystem>
+      <SubSystem Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">Console</SubSystem>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>

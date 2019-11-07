@@ -244,26 +244,3 @@ int main(int argc, char* argv[])
 
   return 0;
 }
-
-#ifdef _WIN32
-int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
-{
-#if 0
-  auto args = SplitString(UTF16ToUTF8(GetCommandLineW()), ' ');
-  std::vector<char*> argv;
-  for (std::string& arg : args)
-    argv.push_back(arg.data());
-
-  const bool console_attached = AttachConsole(ATTACH_PARENT_PROCESS) != FALSE;
-  if (console_attached && ::GetStdHandle(STD_OUTPUT_HANDLE))
-  {
-    freopen("CONOUT$", "w", stdout);
-    freopen("CONOUT$", "w", stderr);
-  }
-
-  return main(static_cast<int>(argv.size()), argv.data());
-#else
-  return main(__argc, __argv);
-#endif
-}
-#endif
