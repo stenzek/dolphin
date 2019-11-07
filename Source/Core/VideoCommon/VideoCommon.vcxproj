@@ -97,6 +97,10 @@
     <ClCompile Include="TextureConverterShaderGen.cpp" />
     <ClCompile Include="UberShaderVertex.cpp" />
     <ClCompile Include="VertexLoader.cpp" />
+    <ClCompile Include="VertexLoaderARM64.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="VertexLoaderBase.cpp" />
     <ClCompile Include="VertexLoaderX64.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">true</ExcludedFromBuild>
@@ -175,6 +179,10 @@
     <ClInclude Include="TextureDecoder.h" />
     <ClInclude Include="UberShaderVertex.h" />
     <ClInclude Include="VertexLoader.h" />
+    <ClInclude Include="VertexLoaderARM64.h">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </ClInclude>
     <ClInclude Include="VertexLoaderBase.h" />
     <ClInclude Include="VertexLoaderManager.h" />
     <ClInclude Include="VertexLoaderUtils.h" />
