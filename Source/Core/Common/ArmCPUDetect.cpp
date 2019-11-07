@@ -2,19 +2,24 @@
 // Licensed under GPLv2+
 // Refer to the license.txt file included.
 
-#include <asm/hwcap.h>
 #include <cstring>
 #include <fstream>
 #include <sstream>
 #include <string>
+
+#ifndef _WIN32
+#include <asm/hwcap.h>
 #include <sys/auxv.h>
 #include <unistd.h>
+#endif
 
 #include <fmt/format.h>
 
 #include "Common/CPUDetect.h"
 #include "Common/CommonTypes.h"
 #include "Common/FileUtil.h"
+
+#ifndef WIN32
 
 const char procfile[] = "/proc/cpuinfo";
 
@@ -42,6 +47,8 @@ static std::string GetCPUString()
   return cpu_string;
 }
 
+#endif
+
 CPUInfo cpu_info;
 
 CPUInfo::CPUInfo()
@@ -60,6 +67,16 @@ void CPUInfo::Detect()
   Mode64bit = true;
   vendor = CPUVendor::ARM;
 
+#ifdef _WIN32
+  // TODO: FIXME
+  num_cores = 1;
+  bFP = true;
+  bASIMD = true;
+  bAES = true;
+  bCRC32 = true;
+  bSHA1 = true;
+  bSHA2 = true;
+#else
   // Get the information about the CPU
   num_cores = sysconf(_SC_NPROCESSORS_CONF);
   strncpy(cpu_string, GetCPUString().c_str(), sizeof(cpu_string));
@@ -71,6 +88,7 @@ void CPUInfo::Detect()
   bCRC32 = hwcaps & HWCAP_CRC32;
   bSHA1 = hwcaps & HWCAP_SHA1;
   bSHA2 = hwcaps & HWCAP_SHA2;
+#endif
 }
 
 // Turn the CPU info into a string we can show

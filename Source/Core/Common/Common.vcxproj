@@ -46,6 +46,14 @@
   <ItemGroup>
     <ClInclude Include="Align.h" />
     <ClInclude Include="Analytics.h" />
+    <ClInclude Include="Arm64Emitter.h">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </ClInclude>
+    <ClInclude Include="ArmCommon.h">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </ClInclude>
     <ClInclude Include="Assert.h" />
     <ClInclude Include="Atomic.h" />
     <ClInclude Include="Atomic_GCC.h" />
@@ -130,9 +138,18 @@
     <ClInclude Include="GL\GLExtensions\NV_depth_buffer_float.h" />
     <ClInclude Include="GL\GLExtensions\NV_occlusion_query_samples.h" />
     <ClInclude Include="GL\GLExtensions\NV_primitive_restart.h" />
-    <ClInclude Include="GL\GLContext.h" />
-    <ClInclude Include="GL\GLInterface\WGL.h" />
-    <ClInclude Include="GL\GLUtil.h" />
+    <ClInclude Include="GL\GLContext.h">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">true</ExcludedFromBuild>
+    </ClInclude>
+    <ClInclude Include="GL\GLInterface\WGL.h">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">true</ExcludedFromBuild>
+    </ClInclude>
+    <ClInclude Include="GL\GLUtil.h">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">true</ExcludedFromBuild>
+    </ClInclude>
     <ClInclude Include="FloatUtils.h" />
     <ClInclude Include="Hash.h" />
     <ClInclude Include="HttpRequest.h" />
@@ -194,6 +211,14 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Analytics.cpp" />
+    <ClCompile Include="Arm64Emitter.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="ArmCPUDetect.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="CDUtils.cpp" />
     <ClCompile Include="ColorUtil.cpp" />
     <ClCompile Include="CommonFuncs.cpp" />
@@ -210,10 +235,23 @@
     <ClCompile Include="FileUtil.cpp" />
     <ClCompile Include="FloatUtils.cpp" />
     <ClCompile Include="GekkoDisassembler.cpp" />
+    <ClCompile Include="GenericFPURoundMode.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="GL\GLExtensions\GLExtensions.cpp" />
-    <ClCompile Include="GL\GLContext.cpp" />
-    <ClCompile Include="GL\GLInterface\WGL.cpp" />
-    <ClCompile Include="GL\GLUtil.cpp" />
+    <ClCompile Include="GL\GLContext.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="GL\GLInterface\WGL.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="GL\GLUtil.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="Hash.cpp" />
     <ClCompile Include="HttpRequest.cpp" />
     <ClCompile Include="Image.cpp" />
