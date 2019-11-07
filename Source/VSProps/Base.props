@@ -95,6 +95,8 @@
       <AdditionalOptions>/Zo %(AdditionalOptions)</AdditionalOptions>
       <!--Treat sources as utf-8-->
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+      <!--Treat sources as utf-8-->
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <DebugInformationFormat>OldStyle</DebugInformationFormat>
       <DiagnosticsFormat>Caret</DiagnosticsFormat>
       <!--
@@ -113,8 +115,9 @@
       4121  'symbol' : alignment of a member was sensitive to packing
       4324  Padding was added at the end of a structure because you specified a __declspec(align) value.
       4714  function 'function' marked as __forceinline not inlined
+      5054  operator '+': deprecated between enumerations of different types
       -->
-      <DisableSpecificWarnings>4201;4127;4100;4244;4121;4324;4714;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <DisableSpecificWarnings>4201;4127;4100;4244;4121;4324;4714;5054;%(DisableSpecificWarnings)</DisableSpecificWarnings>
       <!-- Level4 warnings which should eventually be enabled
       4245  'conversion' : conversion from 'type1' to 'type2', signed/unsigned mismatch
                 Currently jits use some annoying code patterns which makes this common
