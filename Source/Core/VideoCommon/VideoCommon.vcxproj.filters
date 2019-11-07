@@ -203,6 +203,9 @@
     <ClCompile Include="NetPlayGolfUI.cpp">
       <Filter>Util</Filter>
     </ClCompile>
+    <ClCompile Include="TextureDecoder_Generic.cpp">
+      <Filter>Decoding</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CommandProcessor.h" />
