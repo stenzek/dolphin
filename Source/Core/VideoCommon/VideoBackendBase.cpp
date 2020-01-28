@@ -86,20 +86,19 @@ void VideoBackendBase::Video_ExitLoop()
 void VideoBackendBase::Video_BeginField(u32 xfb_addr, u32 fb_width, u32 fb_stride, u32 fb_height,
                                         u64 ticks)
 {
-  if (m_initialized && g_renderer && !g_Config.bImmediateXFB)
-  {
-    Fifo::SyncGPU(Fifo::SyncGPUReason::Swap);
+  if (g_Config.bImmediateXFB)
+    return;
 
-    AsyncRequests::Event e;
-    e.time = ticks;
-    e.type = AsyncRequests::Event::SWAP_EVENT;
+  Fifo::SyncGPU(Fifo::SyncGPUReason::Swap);
 
-    e.swap_event.xfbAddr = xfb_addr;
-    e.swap_event.fbWidth = fb_width;
-    e.swap_event.fbStride = fb_stride;
-    e.swap_event.fbHeight = fb_height;
-    AsyncRequests::GetInstance()->PushEvent(e, false);
-  }
+  AsyncRequests::Event e;
+  e.time = ticks;
+  e.type = AsyncRequests::Event::SWAP_EVENT;
+  e.swap_event.xfbAddr = xfb_addr;
+  e.swap_event.fbWidth = fb_width;
+  e.swap_event.fbStride = fb_stride;
+  e.swap_event.fbHeight = fb_height;
+  AsyncRequests::GetInstance()->PushEvent(e, false);
 }
 
 u32 VideoBackendBase::Video_AccessEFB(EFBAccessType type, u32 x, u32 y, u32 data)
@@ -281,9 +280,6 @@ void VideoBackendBase::InitializeShared()
   memset(&g_preprocess_cp_state, 0, sizeof(g_preprocess_cp_state));
   memset(texMem, 0, TMEM_SIZE);
 
-  // do not initialize again for the config window
-  m_initialized = true;
-
   CommandProcessor::Init();
   Fifo::Init();
   OpcodeDecoder::Init();
@@ -300,8 +296,6 @@ void VideoBackendBase::InitializeShared()
 
 void VideoBackendBase::ShutdownShared()
 {
-  m_initialized = false;
-
   VertexLoaderManager::Clear();
   Fifo::Shutdown();
 }

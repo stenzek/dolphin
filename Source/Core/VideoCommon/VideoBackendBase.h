@@ -73,8 +73,6 @@ public:
 protected:
   void InitializeShared();
   void ShutdownShared();
-
-  bool m_initialized = false;
 };
 
 extern std::vector<std::unique_ptr<VideoBackendBase>> g_available_video_backends;
