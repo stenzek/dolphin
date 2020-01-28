@@ -86,7 +86,7 @@ void VideoBackendBase::Video_ExitLoop()
 void VideoBackendBase::Video_BeginField(u32 xfb_addr, u32 fb_width, u32 fb_stride, u32 fb_height,
                                         u64 ticks)
 {
-  if (m_initialized && g_renderer && !g_ActiveConfig.bImmediateXFB)
+  if (m_initialized && g_renderer && !g_Config.bImmediateXFB)
   {
     Fifo::SyncGPU(Fifo::SyncGPUReason::Swap);
 
