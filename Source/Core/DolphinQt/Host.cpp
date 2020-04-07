@@ -52,6 +52,23 @@ void Host::SetRenderHandle(void* handle, int width, int height)
   }
 }
 
+void Host::BlockForSurfaceDestroy()
+{
+  if (g_renderer)
+    g_renderer->BlockHostForSurfaceDestroy();
+}
+
+void Host::UnblockWithNewSurface(void* surface, int width, int height)
+{
+  m_render_handle = surface;
+  if (g_renderer)
+  {
+    g_renderer->UnblockRendererWithNewSurface(surface, width, height);
+    if (g_controller_interface.IsInit())
+      g_controller_interface.ChangeWindow(surface, width, height);
+  }
+}
+
 bool Host::GetRenderFocus()
 {
   return m_render_focus;

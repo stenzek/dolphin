@@ -32,6 +32,7 @@
 #include "VideoCommon/FPSCounter.h"
 #include "VideoCommon/FrameDump.h"
 #include "VideoCommon/RenderState.h"
+#include "VideoCommon/SurfaceChangeInterlock.h"
 #include "VideoCommon/TextureConfig.h"
 
 class AbstractFramebuffer;
@@ -234,6 +235,11 @@ public:
   // Final surface changing
   // This is called when the surface is resized (WX) or the window changes (Android).
   void ChangeSurface(void* new_surface_handle, int new_width, int new_height);
+  // Three methods for statefully synchronizing a new surface with the renderer
+  void BlockHostForSurfaceDestroy();  // host thread
+  void UnblockRendererWithNewSurface(void* new_surface_handle, int new_width,
+                                     int new_height);  // host thread
+  std::tuple<void*, int, int> WaitForNewSurface();     // renderer thread
   void ResizeSurface(int new_width, int new_height);
   bool UseVertexDepthRange() const;
   void DoState(PointerWrap& p);
@@ -324,6 +330,7 @@ protected:
   Common::Flag m_surface_changed;
   Common::Flag m_surface_resized;
   std::mutex m_swap_mutex;
+  SurfaceChangeInterlock m_surface_change_interlock;
 
   // ImGui resources.
   std::unique_ptr<NativeVertexFormat> m_imgui_vertex_format;

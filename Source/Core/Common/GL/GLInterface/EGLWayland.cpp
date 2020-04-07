@@ -3,6 +3,8 @@
 // Refer to the license.txt file included.
 
 #include "Common/GL/GLInterface/EGLWayland.h"
+#include "VideoCommon/RenderBase.h"
+
 #include <wayland-egl.h>
 
 GLContextEGLWayland::~GLContextEGLWayland()
@@ -13,7 +15,9 @@ GLContextEGLWayland::~GLContextEGLWayland()
 
 EGLDisplay GLContextEGLWayland::OpenEGLDisplay()
 {
-  return eglGetDisplay(reinterpret_cast<EGLNativeDisplayType>(m_wsi.display_connection));
+  return eglGetPlatformDisplay(EGL_PLATFORM_WAYLAND_KHR,
+                               reinterpret_cast<EGLNativeDisplayType>(m_wsi.display_connection),
+                               nullptr);
 }
 
 void GLContextEGLWayland::UpdateDimensions(int window_width, int window_height)
@@ -26,6 +30,15 @@ void GLContextEGLWayland::UpdateDimensions(int window_width, int window_height)
 
 EGLNativeWindowType GLContextEGLWayland::GetEGLNativeWindow(EGLConfig config)
 {
+  if (m_native_window)
+    wl_egl_window_destroy(reinterpret_cast<wl_egl_window*>(m_native_window));
+
+  // If passed handle is null (Wayland), use the interlock to mutually synchronize host and
+  // renderer.
+  if (m_wsi.render_surface == nullptr)
+    std::tie(m_wsi.render_surface, m_wsi.render_surface_width, m_wsi.render_surface_height) =
+        g_renderer->WaitForNewSurface();
+
   wl_egl_window* window =
       wl_egl_window_create(static_cast<wl_surface*>(m_wsi.render_surface),
                            m_wsi.render_surface_width, m_wsi.render_surface_height);

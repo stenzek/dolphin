@@ -77,6 +77,8 @@ add_library(videocommon
   ShaderGenCommon.h
   Statistics.cpp
   Statistics.h
+  SurfaceChangeInterlock.cpp
+  SurfaceChangeInterlock.h
   TextureCacheBase.cpp
   TextureCacheBase.h
   TextureConfig.cpp

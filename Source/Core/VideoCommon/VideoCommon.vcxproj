@@ -87,6 +87,7 @@
     <ClCompile Include="UberShaderCommon.cpp" />
     <ClCompile Include="UberShaderPixel.cpp" />
     <ClCompile Include="Statistics.cpp" />
+    <ClCompile Include="SurfaceChangeInterlock.cpp" />
     <ClCompile Include="GeometryShaderGen.cpp" />
     <ClCompile Include="GeometryShaderManager.cpp" />
     <ClCompile Include="TextureCacheBase.cpp" />
@@ -165,6 +166,7 @@
     <ClInclude Include="SamplerCommon.h" />
     <ClInclude Include="ShaderGenCommon.h" />
     <ClInclude Include="Statistics.h" />
+    <ClInclude Include="SurfaceChangeInterlock.h" />
     <ClInclude Include="GeometryShaderGen.h" />
     <ClInclude Include="GeometryShaderManager.h" />
     <ClInclude Include="TextureCacheBase.h" />

@@ -627,6 +627,25 @@ void Renderer::ChangeSurface(void* new_surface_handle, int new_width, int new_he
   m_surface_changed.Set();
 }
 
+void Renderer::BlockHostForSurfaceDestroy()
+{
+  m_new_surface_handle = nullptr;
+  m_surface_changed.Set();
+  m_surface_change_interlock.BlockHostForSurfaceDestroy();
+}
+
+void Renderer::UnblockRendererWithNewSurface(void* new_surface_handle, int new_width,
+                                             int new_height)
+{
+  m_surface_change_interlock.UnblockRendererWithNewSurface(new_surface_handle, new_width,
+                                                           new_height);
+}
+
+std::tuple<void*, int, int> Renderer::WaitForNewSurface()
+{
+  return m_surface_change_interlock.WaitForNewSurface();
+}
+
 void Renderer::ResizeSurface(int new_width, int new_height)
 {
   std::lock_guard<std::mutex> lock(m_swap_mutex);
