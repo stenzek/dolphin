@@ -17,6 +17,8 @@
 #include "VideoBackends/Vulkan/VKTexture.h"
 #include "VideoBackends/Vulkan/VulkanContext.h"
 
+#include "VideoCommon/RenderBase.h"
+
 #if defined(VK_USE_PLATFORM_XLIB_KHR)
 #include <X11/Xlib.h>
 #endif
@@ -562,6 +564,11 @@ bool SwapChain::RecreateSurface(void* native_handle, int window_width, int windo
   DestroySwapChainImages();
   DestroySwapChain();
   DestroySurface();
+
+  // If passed handle is null (Wayland), use the interlock to mutually synchronize host and
+  // renderer.
+  if (native_handle == nullptr)
+    std::tie(native_handle, window_width, window_height) = g_renderer->WaitForNewSurface();
 
   // Re-create the surface with the new native handle
   m_wsi.render_surface = native_handle;

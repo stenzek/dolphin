@@ -7,6 +7,8 @@
 #include <QEvent>
 #include <QWidget>
 
+#include "Common/WindowSystemInfo.h"
+
 class QMouseEvent;
 class QTimer;
 
@@ -15,7 +17,7 @@ class RenderWidget final : public QWidget
   Q_OBJECT
 
 public:
-  explicit RenderWidget(QWidget* parent = nullptr);
+  explicit RenderWidget(WindowSystemType wsi_type, QWidget* parent = nullptr);
 
   bool event(QEvent* event) override;
   void showFullScreen();
@@ -27,6 +29,8 @@ signals:
   void EscapePressed();
   void Closed();
   void HandleChanged(void* handle, int new_width, int new_height);
+  void SurfaceAboutToBeDestroyed();
+  void SurfaceCreated(void* handle, int new_width, int new_height);
   void StateChanged(bool fullscreen);
   void SizeChanged(int new_width, int new_height);
   void FocusChanged(bool focus);
@@ -44,4 +48,5 @@ private:
   static constexpr int MOUSE_HIDE_DELAY = 3000;
   QTimer* m_mouse_timer;
   QPoint m_last_mouse{};
+  WindowSystemType m_wsi_type;
 };

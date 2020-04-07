@@ -7,6 +7,8 @@
 #include <QMainWindow>
 #include <QStringList>
 
+#include "Common/WindowSystemInfo.h"
+
 #include <memory>
 #include <optional>
 #include <string>
@@ -193,6 +195,7 @@ private:
   std::unique_ptr<X11Utils::XRRConfiguration> m_xrr_config;
 #endif
 
+  WindowSystemType m_wsi_type;
   QProgressDialog* m_progress_dialog = nullptr;
   QStackedWidget* m_stack;
   ToolBar* m_tool_bar;

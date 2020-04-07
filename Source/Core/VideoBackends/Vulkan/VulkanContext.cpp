@@ -206,7 +206,7 @@ bool VulkanContext::SelectInstanceExtensions(std::vector<const char*>* extension
 #endif
 #if defined(VK_USE_PLATFORM_WAYLAND_KHR)
   if (wstype == WindowSystemType::Wayland &&
-      !SupportsExtension(VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME, true))
+      !AddExtension(VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME, true))
   {
     return false;
   }

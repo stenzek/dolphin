@@ -34,7 +34,6 @@
 
 #include "Common/ScopeGuard.h"
 #include "Common/Version.h"
-#include "Common/WindowSystemInfo.h"
 
 #include "Core/Boot/Boot.h"
 #include "Core/BootManager.h"
@@ -172,19 +171,19 @@ static WindowSystemInfo GetWindowSystemInfo(QWidget* widget)
 
 #if defined(WIN32) || defined(__APPLE__)
   // Our Win32 Qt external doesn't have the private API.
-  wsi.render_surface = widget ? reinterpret_cast<void*>(widget->windowHandle()->winId()) : nullptr;
+  wsi.render_surface = reinterpret_cast<void*>(widget->windowHandle()->winId());
   wsi.render_surface = wsi.render_window;
 #else
   QPlatformNativeInterface* pni = QGuiApplication::platformNativeInterface();
   wsi.display_connection = pni->nativeResourceForWindow("display", widget->windowHandle());
   if (wsi.type == WindowSystemType::Wayland)
   {
-    wsi.render_window =
-        widget ? pni->nativeResourceForWindow("surface", widget->windowHandle()) : nullptr;
+    wsi.render_surface = wsi.render_window =
+        pni->nativeResourceForWindow("surface", widget->windowHandle());
   }
   else
   {
-    wsi.render_window = widget ? reinterpret_cast<void*>(widget->windowHandle()->winId()) : nullptr;
+    wsi.render_window = reinterpret_cast<void*>(widget->windowHandle()->winId());
   }
 #endif
   const int screen_number = QApplication::desktop()->screenNumber(widget);
@@ -210,7 +209,7 @@ static std::vector<std::string> StringListToStdVector(QStringList list)
 
 MainWindow::MainWindow(std::unique_ptr<BootParameters> boot_parameters,
                        const std::string& movie_path)
-    : QMainWindow(nullptr)
+    : QMainWindow(nullptr), m_wsi_type(GetWindowSystemType())
 {
   setWindowTitle(QString::fromStdString(Common::scm_rev_str));
   setWindowIcon(Resources::GetAppIcon());
@@ -386,7 +385,7 @@ void MainWindow::CreateComponents()
   m_tool_bar = new ToolBar(this);
   m_search_bar = new SearchBar(this);
   m_game_list = new GameList(this);
-  m_render_widget = new RenderWidget;
+  m_render_widget = new RenderWidget(m_wsi_type);
   m_stack = new QStackedWidget(this);
 
   for (int i = 0; i < 4; i++)
@@ -1073,7 +1072,7 @@ void MainWindow::HideRenderWidget(bool reinit)
     m_render_widget->removeEventFilter(this);
     m_render_widget->deleteLater();
 
-    m_render_widget = new RenderWidget;
+    m_render_widget = new RenderWidget(m_wsi_type);
 
     m_render_widget->installEventFilter(this);
     connect(m_render_widget, &RenderWidget::Closed, this, &MainWindow::ForceStop);
@@ -1156,7 +1155,7 @@ void MainWindow::ShowGraphicsWindow()
   if (!m_graphics_window)
   {
 #if defined(HAVE_XRANDR) && HAVE_XRANDR
-    if (GetWindowSystemType() == WindowSystemType::X11)
+    if (m_wsi_type == WindowSystemType::X11)
     {
       m_xrr_config = std::make_unique<X11Utils::XRRConfiguration>(
           static_cast<Display*>(QGuiApplication::platformNativeInterface()->nativeResourceForWindow(
@@ -1432,7 +1431,7 @@ void MainWindow::NetPlayQuit()
 void MainWindow::EnableScreenSaver(bool enable)
 {
 #if defined(HAVE_XRANDR) && HAVE_XRANDR
-  if (GetWindowSystemType() == WindowSystemType::X11)
+  if (m_wsi_type == WindowSystemType::X11)
     UICommon::EnableScreenSaver(winId(), enable);
 #else
   UICommon::EnableScreenSaver(enable);
